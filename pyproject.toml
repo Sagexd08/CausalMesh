@@ -89,7 +89,13 @@ src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "RUF"]
-ignore = ["E501"]
+ignore = [
+    "E501",
+    # isinstance(x, (A, B)) is kept over the X | Y form: canonicalization runs
+    # it on every value of every event, and the tuple form avoids constructing
+    # a union object per call. Deliberate, not an oversight.
+    "UP038",
+]
 
 [tool.mypy]
 python_version = "3.11"

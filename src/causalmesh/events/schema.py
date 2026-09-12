@@ -25,12 +25,12 @@ from .canonical import canonicalize, normalize_text
 
 __all__ = [
     "SCHEMA_VERSION",
-    "EventType",
-    "EventIdentity",
     "Event",
+    "EventIdentity",
+    "EventType",
     "EventValidationError",
-    "utc_now_micros",
     "micros_to_rfc3339",
+    "utc_now_micros",
 ]
 
 

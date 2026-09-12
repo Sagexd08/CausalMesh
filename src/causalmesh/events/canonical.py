@@ -35,11 +35,11 @@ import unicodedata
 from typing import Any
 
 __all__ = [
-    "CanonicalizationError",
-    "canonicalize",
-    "canonical_json",
-    "normalize_text",
     "MAX_NESTING_DEPTH",
+    "CanonicalizationError",
+    "canonical_json",
+    "canonicalize",
+    "normalize_text",
 ]
 
 
