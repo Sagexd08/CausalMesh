@@ -5,9 +5,9 @@ it does not, and which test demonstrates each claim. Everything listed under
 "Protected" corresponds to a passing test; anything not demonstrated by a test
 appears under "Not protected", even where a stronger claim would sound better.
 
-Status: describes the implementation as of the crypto/chain layer
-(Step 2 of `docs/PLAN.md`). The full attack battery (§58) arrives with the
-offline verifier in Step 3; this document will be extended, not rewritten.
+Status: describes the implementation as of the offline verifier and its
+attack battery (Steps 2–3 of `docs/PLAN.md`). Every row in the tables below
+corresponds to a test that runs in CI.
 
 ## What the chain is
 
@@ -41,19 +41,49 @@ Two distinct properties, deliberately kept apart:
 
 Each row is demonstrated by a passing test.
 
-| Attack | Detected by | Test |
+| Attack (§58) | Detected as | Test |
 |---|---|---|
-| Event mutation | recomputed digest no longer matches | `test_mutating_the_event_breaks_the_hash`, `test_altering_any_event_invalidates_that_link` (property) |
-| Digest forgery after mutation | signature does not verify over the new digest | `test_mutating_the_chain_hash_breaks_the_signature` |
-| Relinking to a different predecessor | `previous_hash` is inside the digest | `test_relinking_to_a_different_predecessor_breaks_the_hash` |
-| Actor substitution | signature does not verify under the substituted key | `test_substituting_another_actors_public_key_breaks_the_signature` |
-| Misattribution at signing time | signing refuses when keypair and `agent_id` disagree | `test_signing_a_peers_event_is_refused` |
-| Cross-chain replay | signature covers history, not just the event | `test_signature_covers_history_not_just_the_event` |
-| Malformed or garbage records | verification returns `False` rather than raising | `test_corrupt_chain_hash_hex_is_a_failure_not_a_crash`, malformed key/signature cases |
+| Event mutation | `chain_break` | `test_changing_a_path_is_detected`, `test_changing_an_event_type_is_detected`, `test_changing_a_timestamp_is_detected` |
+| Mutation with recomputed digests | `signature_invalid` | `test_mutation_with_recomputed_digest_is_still_detected` |
+| Event insertion | `chain_break` / `ordering_invalid` | `test_inserting_a_forged_event_is_detected` |
+| Replay of a genuinely signed event | `chain_break` / `ordering_invalid` | `test_inserting_a_validly_signed_event_from_elsewhere_is_detected` |
+| Duplicate replay | `duplicate_event_id` | `test_duplicate_replay_is_detected` |
+| Event deletion | `chain_break` / `ordering_invalid` | `test_deleting_any_interior_event_is_detected` (all interior positions) |
+| Event reordering | `chain_break` / `ordering_invalid` | `test_swapping_two_adjacent_events_is_detected`, `test_reversing_the_whole_chain_is_detected` |
+| Non-consensual attribution | `chain_break` / `key_mismatch` | `test_reassigning_an_event_to_another_actor_is_detected` |
+| Attribution with a swapped key | `signature_invalid` | `test_reassigning_with_a_swapped_public_key_is_detected` |
+| Signature substitution | `signature_invalid` | `test_signature_substitution_is_detected` |
+| Event from an unjoined actor | `unknown_actor` | `test_an_event_from_an_unknown_actor_is_detected` |
+| Prefix removal | `chain_break` | `test_a_chain_not_starting_at_genesis_is_detected` |
+| Anchor mismatch | `anchor_mismatch` | `test_anchor_mismatch_is_detected` |
+| Malformed or garbage records | `malformed_record`, never a crash | `test_malformed_records_are_reported_not_crashed` |
 
-Insertion, deletion and reordering are consequences of the same mechanism —
-each shifts the digests of every subsequent link — and are covered end-to-end
-by the §58 battery once the offline verifier lands.
+Mutation is worth spelling out, because it forces the attacker into a choice
+with no third branch:
+
+- keep the recorded digest, and recomputation exposes the edited content
+  (`chain_break`);
+- recompute the digest to match, and the signature no longer verifies
+  (`signature_invalid`), which requires the actor's private key to repair.
+
+Both branches are covered above, which is why a single reported failure is
+sufficient detection rather than a partial one.
+
+### Attribution is checked against the key ring, not the record
+
+Each record carries the signer's public key, but the verifier never trusts
+it. It looks the actor up in the supplied key ring and verifies against
+*that* key, reporting `key_mismatch` when the two disagree. Trusting the
+embedded key would be circular: an attacker re-signing an event with their
+own key would simply rewrite that field too, and the log would verify
+perfectly while crediting the wrong actor.
+
+### Damage is localized, not cascaded
+
+The verifier advances on each record's recorded digest, so a single edited
+event is reported once at its own index rather than invalidating every later
+link. How much of a log survived is itself a finding
+(`test_one_corrupt_link_does_not_cascade`).
 
 ## Not protected
 
@@ -63,13 +93,24 @@ Stated plainly, because §87 forbids overclaiming.
 
 Dropping events from the **end** of a log leaves a shorter chain that is
 internally consistent and fully verifiable. Nothing inside the chain can
-detect this. The property test
-`test_truncating_a_suffix_leaves_a_self_consistent_chain` asserts the
-limitation explicitly rather than leaving it undocumented.
+detect this. Two tests assert the limitation rather than leaving it
+undocumented: `test_truncating_a_suffix_leaves_a_self_consistent_chain`
+(property) and `test_truncation_is_undetected_without_an_anchor`
+(adversarial).
 
-This is the reason anchors (§28) exist: an externally recorded chain head at
-sequence *n* makes any truncation below *n* detectable. Until anchoring is
-implemented, **maximum unanchored suffix exposure is the entire log.**
+Anchors (§28) close the gap. An externally recorded chain head at sequence
+*n* makes any truncation below *n* detectable, reported as
+`anchor_missing_event` (`test_truncation_is_detected_with_an_anchor`).
+
+Every verification result therefore reports `unanchored_suffix`: the number
+of trailing events no anchor protects. With no anchors it equals the whole
+log; with a mid-chain anchor it is the count after the highest matching one
+(`test_partial_anchoring_reports_the_exposed_suffix`). The exposure is
+measured and reported rather than assumed to be zero.
+
+Note the asymmetry: removing events from the **start** of a log *is* caught,
+because the first link no longer joins to genesis. Only the suffix is
+vulnerable.
 
 ### Compromised private key
 
@@ -104,6 +145,19 @@ makes no judgement about whether it should have.
 An operator controlling the relay and the master seed can construct any log
 they wish before it is anchored. An agent that never joins the relay produces
 no events, and its absence is not detectable from the log alone.
+
+## Verification is offline by construction
+
+§26 and §82 require that evidence be checkable without the system that
+produced it. The verifier's entire input is a chain file, a public key ring
+and optional anchors — three files. It imports only `causalmesh.events` and
+`causalmesh.crypto`, and never the relay, the scheduler or the storage layer.
+
+Both halves are enforced mechanically rather than by convention:
+`test_the_verifier_does_not_import_the_relay` asserts the import boundary in
+a clean interpreter, and the clean-room suite verifies real exported files
+from a **separate process in an unrelated working directory**, including
+detecting an on-disk tamper introduced there.
 
 ## Threat model
 
