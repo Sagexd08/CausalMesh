@@ -1,0 +1,294 @@
+"""The deterministic mock agent (spec §9).
+
+§9 is explicit that this is not a throwaway test double. It is the
+laboratory in which C0 through C3 are verified before any model inference is
+paid for, so it must be able to produce every behaviour the experiment needs
+to observe:
+
+    reading, writing and modifying files      responding to coordination events
+    running tests                             creating deliberate conflicts
+    emitting intents                          simulating stale reads
+    crashing, stalling, retrying              delayed deliberation
+
+Determinism is the point. Given the same script, the same seed and the same
+delivered events, the agent takes exactly the same actions — so a
+difference between two runs is attributable to the manipulated factors and
+nothing else.
+
+The agent does not decide *whether* it may write. It asks, through the
+lifecycle boundary, and records what came back. Putting the decision here
+would move enforcement out of the layer the experiment manipulates.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+from ..channels.base import CoordinationChannel
+from ..hooks.lifecycle import ToolOutcome, ToolResult
+from ..tools.executor import ToolExecutor
+from .base import AgentContext, AgentIdentity, CodingAgent, TurnResult
+from .script import Action, ActionKind, AgentScript
+
+__all__ = ["MockAgent", "MockAgentCrashError"]
+
+
+class MockAgentCrashError(RuntimeError):
+    """Raised by a scripted `crash` action.
+
+    A distinct type so the harness can tell an *induced* crash — part of the
+    experiment (§22) — from a genuine defect in the runtime. Treating the two
+    alike would let a real bug hide inside a fault-injection scenario.
+    """
+
+
+class MockAgent(CodingAgent):
+    """Executes a declarative script through the real tool path.
+
+    Every action goes through `ToolExecutor`, so the mock exercises the same
+    gate, hooks, events and relay a model-backed agent would. A mock that
+    called the filesystem directly would validate nothing about the
+    coordination infrastructure.
+    """
+
+    def __init__(
+        self,
+        identity: AgentIdentity,
+        *,
+        script: AgentScript,
+        executor: ToolExecutor,
+        channel: CoordinationChannel,
+        clock_us: int = 0,
+        tick_us: int = 1_000_000,
+    ) -> None:
+        super().__init__(identity)
+        self.script = script
+        self.executor = executor
+        self.channel = channel
+        self.clock_us = clock_us
+        self.tick_us = tick_us
+
+        self._cursor = 0
+        self._initialized = False
+        self._finalized = False
+        self.turns: list[TurnResult] = []
+        self.tool_results: list[ToolResult] = []
+        # Peer events observed, per turn. The stale-read analysis (§23) needs
+        # to know what an agent had seen at the moment it acted.
+        self.observations: list[tuple[int, tuple[str, ...]]] = []
+        self._pending_retries: dict[int, int] = {}
+
+    # -- lifecycle --------------------------------------------------------
+
+    async def initialize(self) -> None:
+        self._initialized = True
+
+    async def observe(self, context: AgentContext) -> None:
+        """Take delivered peer events through the channel.
+
+        The channel is the only route in. Under C0 it raises if anything is
+        offered, so a contaminated run fails here rather than completing and
+        looking valid.
+
+        The inbox is drained exactly once per turn: a second drain would
+        return nothing and the events would be lost, so the executor hands
+        back the events themselves rather than only their ids.
+        """
+        delivered = self.executor.observe(context.now_us)
+        context.injection = self.channel.offer(delivered, turn=context.turn)
+        self.observations.append(
+            (context.turn, tuple(event.event_id for event in delivered))
+        )
+
+    async def plan(self, context: AgentContext) -> None:
+        """Decide this turn's action.
+
+        The script already fixes the sequence, so planning is a no-op beyond
+        recording that the phase happened. It stays in the interface because
+        a model-backed adapter does real work here, and the harness measures
+        the phases separately.
+        """
+        context.notes["planned_action"] = (
+            str(self.script.actions[self._cursor].kind)
+            if self._cursor < len(self.script.actions)
+            else None
+        )
+
+    async def act(self, context: AgentContext) -> TurnResult:
+        """Perform the next scripted action."""
+        if self._cursor >= len(self.script.actions):
+            result = TurnResult(turn=context.turn, finished=True)
+            self.turns.append(result)
+            return result
+
+        action = self.script.actions[self._cursor]
+        self._cursor += 1
+
+        try:
+            result = self._perform(action, context)
+        except MockAgentCrashError as crash:
+            # An induced crash is data: the run records it and stops this
+            # agent, rather than the exception escaping and losing the
+            # surrounding evidence (§81).
+            result = TurnResult(
+                turn=context.turn, crashed=True, finished=True, error=str(crash)
+            )
+
+        self.clock_us += self.tick_us
+        self.turns.append(result)
+        return result
+
+    async def finalize(self) -> dict[str, Any]:
+        self._finalized = True
+        return self.summary()
+
+    # -- action dispatch --------------------------------------------------
+
+    def _perform(self, action: Action, context: AgentContext) -> TurnResult:
+        now = context.now_us
+
+        if action.kind is ActionKind.CRASH:
+            raise MockAgentCrashError(action.note or "scripted crash")
+
+        if action.kind in {ActionKind.WAIT, ActionKind.STALL}:
+            # A wait advances the agent's clock without acting. This is how
+            # §23's deliberation window is induced: the agent read something,
+            # then took time before writing, during which a peer may have
+            # invalidated it.
+            self.clock_us += action.duration_us
+            return TurnResult(
+                turn=context.turn,
+                stalled=action.kind is ActionKind.STALL,
+                notes={"waited_us": action.duration_us},
+            )
+
+        if action.kind is ActionKind.INTENT:
+            result = self.executor.call(
+                "list_files", now_us=now, paths=(), subdirectory=None
+            )
+            self.tool_results.append(result)
+            return TurnResult(turn=context.turn, actions=1, notes={"intent": action.note})
+
+        return self._perform_tool_action(action, context)
+
+    def _perform_tool_action(self, action: Action, context: AgentContext) -> TurnResult:
+        """Run a file or test action, honouring any scripted retries."""
+        attempts = action.retries + 1
+        result: ToolResult | None = None
+
+        for attempt in range(attempts):
+            result = self._invoke(action, context.now_us + attempt)
+            self.tool_results.append(result)
+            if result.outcome != ToolOutcome.DENIED:
+                break
+            # Retrying a denied write is realistic behaviour and is what
+            # produces lease-wait time (§21). The retry itself is recorded,
+            # so the wait is measured rather than inferred.
+
+        assert result is not None
+        return TurnResult(
+            turn=context.turn,
+            actions=1,
+            notes={
+                "attempts": attempt + 1,
+                "outcome": str(result.outcome),
+                "tool": result.call.tool,
+            },
+        )
+
+    def _invoke(self, action: Action, now_us: int) -> ToolResult:
+        """Translate one scripted action into a tool call."""
+        path = action.path or ""
+
+        if action.kind is ActionKind.READ:
+            return self.executor.call("read_file", now_us=now_us, paths=(path,), path=path)
+
+        if action.kind is ActionKind.WRITE:
+            return self.executor.call(
+                "write_file",
+                now_us=now_us,
+                paths=(path,),
+                path=path,
+                content=self._content_for(action),
+            )
+
+        if action.kind is ActionKind.CREATE:
+            return self.executor.call(
+                "create_file",
+                now_us=now_us,
+                paths=(path,),
+                path=path,
+                content=self._content_for(action),
+            )
+
+        if action.kind is ActionKind.MODIFY:
+            return self.executor.call(
+                "modify_file",
+                now_us=now_us,
+                paths=(path,),
+                path=path,
+                old=action.old,
+                new=action.new,
+            )
+
+        if action.kind is ActionKind.DELETE:
+            return self.executor.call("delete_file", now_us=now_us, paths=(path,), path=path)
+
+        if action.kind is ActionKind.RENAME:
+            destination = action.destination or ""
+            return self.executor.call(
+                "rename_file",
+                now_us=now_us,
+                paths=(path, destination),
+                source=path,
+                destination=destination,
+            )
+
+        if action.kind is ActionKind.LIST:
+            return self.executor.call(
+                "list_files", now_us=now_us, paths=(), subdirectory=action.path
+            )
+
+        if action.kind is ActionKind.TEST:
+            return self.executor.call("run_tests", now_us=now_us, paths=(), target=action.path)
+
+        raise ScriptDispatchError(
+            f"action {action.kind} has no tool mapping; claims are taken by the "
+            "harness, not by the agent"
+        )
+
+    def _content_for(self, action: Action) -> str:
+        """The bytes a write action produces.
+
+        Deterministic and self-describing: the content names the agent and
+        the action index, so a file's final state says which agent's write
+        survived a conflict without needing the event log.
+        """
+        if action.content is not None:
+            return action.content
+        return f"# written by {self.agent_id} (action {self._cursor})\n"
+
+    # -- reporting --------------------------------------------------------
+
+    def summary(self) -> dict[str, Any]:
+        denied = sum(1 for r in self.tool_results if r.outcome == ToolOutcome.DENIED)
+        failed = sum(1 for r in self.tool_results if r.outcome == ToolOutcome.FAILED)
+        return {
+            "actions_executed": sum(
+                1 for r in self.tool_results if r.outcome == ToolOutcome.EXECUTED
+            ),
+            "actions_scripted": len(self.script.actions),
+            "agent_id": self.agent_id,
+            "coordination": self.channel.accounting.to_dict(),
+            "crashed": any(turn.crashed for turn in self.turns),
+            "denied": denied,
+            "failed": failed,
+            "observations": [
+                {"turn": turn, "event_ids": list(ids)} for turn, ids in self.observations
+            ],
+            "turns": len(self.turns),
+        }
+
+
+class ScriptDispatchError(RuntimeError):
+    """Raised when a scripted action has no corresponding tool call."""

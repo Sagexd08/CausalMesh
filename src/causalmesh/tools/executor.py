@@ -20,7 +20,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from ..events.schema import EventIdentity, EventType
+from ..events.schema import Event, EventIdentity, EventType
 from ..hooks.lifecycle import (
     TOOL_EVENT_TYPES,
     LifecycleBoundary,
@@ -98,7 +98,9 @@ class ToolExecutor:
             event_type = TOOL_EVENT_TYPES[result.call.tool]
             payload: dict[str, Any] = {"tool": result.call.tool, "outcome": "executed"}
             if isinstance(result.value, CommandResult):
-                payload.update(result.value.to_dict())
+                # to_event_payload, not to_dict: command output is not
+                # reproducible and must not enter the signed chain.
+                payload.update(result.value.to_event_payload())
             elif isinstance(result.value, int):
                 payload["bytes_written"] = result.value
         else:
@@ -116,7 +118,14 @@ class ToolExecutor:
                 payload["holder_agent"] = result.decision.holder_agent
                 payload["blocked_path"] = result.decision.blocked_path
 
-        payload["duration_us"] = result.duration_us
+        # Wall-clock duration is deliberately NOT written into the payload.
+        # It varies between runs, and the payload is inside the signed hash
+        # chain, so including it would make two identical runs produce
+        # different chains and §84's reproducibility requirement
+        # unsatisfiable. Timing is still measured — the lifecycle boundary
+        # records it, and the metrics layer reads it from there (§85) — but
+        # a performance measurement must not contaminate the integrity
+        # record.
 
         ingested = self.relay.ingest(
             event_id=self._event_id_factory(),
@@ -136,14 +145,20 @@ class ToolExecutor:
                 f"relay refused an event for {result.call.tool}: {ingested.reason}"
             )
 
-    def observe(self, now_us: int) -> tuple[str, ...]:
+    def observe(self, now_us: int) -> tuple[Event, ...]:
         """Drain delivered peer events and record the causal parent.
 
-        Returns the observed event ids. Under C0 this is always empty, which
-        is the isolation guarantee showing up at the point where information
-        would otherwise enter.
+        Returns the events themselves rather than their ids: the caller must
+        hand them to its coordination channel, and ids alone would not be
+        enough to render them. Draining twice is not an option — the second
+        drain returns nothing — so this method is the single point at which
+        delivered information becomes available.
+
+        Under C0 the result is always empty, which is the isolation
+        guarantee showing up at the point where information would otherwise
+        enter.
         """
         delivered = self.relay.drain(self.agent_id)
         if delivered:
             self.last_observed_event_id = delivered[-1].event_id
-        return tuple(event.event_id for event in delivered)
+        return delivered

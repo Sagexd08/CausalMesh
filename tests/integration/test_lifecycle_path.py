@@ -324,7 +324,7 @@ class TestCausalParents:
         )
 
         records = c2.relay.records()
-        assert records[1]["event"]["parent_id"] == observed[0]
+        assert records[1]["event"]["parent_id"] == observed[0].event_id
 
     def test_c0_agents_observe_nothing(self, tmp_path: Path) -> None:
         harness = Harness("C0", tmp_path)

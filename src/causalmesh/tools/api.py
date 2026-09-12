@@ -21,6 +21,7 @@ user token permits, which would silently void every isolation claim in
 
 from __future__ import annotations
 
+import hashlib
 import os
 import subprocess
 from collections.abc import Sequence
@@ -73,12 +74,43 @@ class CommandResult:
     stderr: str
     timed_out: bool = False
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_event_payload(self) -> dict[str, Any]:
+        """The deterministic subset that may enter the signed event chain.
+
+        Command output is deliberately excluded. It is not reproducible —
+        `pytest -q` prints "1 passed in 0.73s", and the elapsed time differs
+        every run — so putting it in the payload would change the chain hash
+        between two otherwise identical runs and make §84's reproducibility
+        requirement unsatisfiable.
+
+        What remains is everything the analysis actually needs: which
+        command ran, whether it succeeded, and whether it timed out. Task
+        success is decided from the exit code (§38), never from parsing
+        output, so nothing downstream depends on the text.
+
+        A digest of the output is included instead, so a run's output can
+        still be *checked* against a separately stored copy without the
+        volatile bytes entering the integrity record.
+        """
+        combined = f"{self.stdout}\n{self.stderr}".encode()
         return {
             "command": list(self.command),
             "exit_code": self.exit_code,
-            # Truncated for the record: full output can be megabytes, and the
-            # event log is evidence, not a build log.
+            "output_sha256": hashlib.sha256(combined).hexdigest(),
+            "timed_out": self.timed_out,
+        }
+
+    def to_dict(self) -> dict[str, Any]:
+        """The full result, including output, for run artifacts and debugging.
+
+        This goes to `data/raw/<run>/commands/`, never into the event
+        payload — see `to_event_payload`.
+        """
+        return {
+            "command": list(self.command),
+            "exit_code": self.exit_code,
+            # Truncated: full output can be megabytes, and a run artifact is
+            # evidence, not a build log.
             "stderr": self.stderr[-4000:],
             "stdout": self.stdout[-4000:],
             "timed_out": self.timed_out,
