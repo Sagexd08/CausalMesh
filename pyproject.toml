@@ -98,6 +98,10 @@ ignore = [
     # it on every value of every event, and the tuple form avoids constructing
     # a union object per call. Deliberate, not an oversight.
     "UP038",
+    # Docstrings quote the specification's own notation (mu, nu, lambda,
+    # delta) and its section signs. Transliterating them would make the code
+    # harder to check against the spec, which is the point of citing it.
+    "RUF002",
 ]
 
 [tool.mypy]
