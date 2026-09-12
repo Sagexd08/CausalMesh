@@ -136,12 +136,16 @@ class TestPayloadDeterminism:
         assert "command" in payload
         assert "timed_out" in payload
 
-    def test_the_payload_carries_a_digest_of_the_output(self, tmp_path: Path) -> None:
-        # Output can still be checked against a separately stored copy
-        # without the volatile bytes entering the record.
+    def test_the_payload_carries_no_digest_of_the_output(self, tmp_path: Path) -> None:
+        """A digest of non-reproducible bytes is still non-reproducible.
+
+        An earlier version included `output_sha256` and reintroduced the
+        very failure it was meant to fix, hidden behind a hash rather than
+        visible as text. The full output lives in the run artifact instead.
+        """
         relay, executor = build_runtime(tmp_path, "digest")
         executor.call("run_tests", now_us=BASE_TIME, paths=())
-        assert len(relay.records()[0]["event"]["payload"]["output_sha256"]) == 64
+        assert "output_sha256" not in relay.records()[0]["event"]["payload"]
 
     def test_a_failing_command_still_records_its_exit_code(
         self, tmp_path: Path
@@ -170,18 +174,16 @@ class TestCommandResultSeparation:
         assert result.to_dict()["stdout"] == "F"
         assert result.to_dict()["stderr"] == "boom"
 
-    def test_differing_output_yields_the_same_event_payload_shape(self) -> None:
-        # Two runs of the same command differing only in reported timing must
-        # agree on everything except the digest.
+    def test_differing_output_yields_an_identical_event_payload(self) -> None:
+        """The property the chain depends on, stated directly.
+
+        Two runs of the same command differing only in reported timing must
+        produce byte-identical payloads. Anything derived from the output —
+        including a digest — would break this.
+        """
         first = CommandResult(("pytest", "-q"), 0, "1 passed in 0.73s", "")
         second = CommandResult(("pytest", "-q"), 0, "1 passed in 0.76s", "")
-        a, b = first.to_event_payload(), second.to_event_payload()
-        assert a["command"] == b["command"]
-        assert a["exit_code"] == b["exit_code"]
-        assert a["timed_out"] == b["timed_out"]
-        # The digest differs, which is why it is a digest and not the text:
-        # it is checkable evidence, not an input to the chain's stability.
-        assert a["output_sha256"] != b["output_sha256"]
+        assert first.to_event_payload() == second.to_event_payload()
 
 
 class TestEventOrdering:

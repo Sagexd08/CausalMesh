@@ -132,12 +132,26 @@ class Action:
     duration_us: int = 0
     retries: int = 0
     note: str | None = None
+    # Guard: perform this action only if the agent has observed a peer event
+    # touching this path. This is how a mock agent "responds to coordination
+    # events" (§9) while staying deterministic — same observations, same
+    # behaviour. Without it a scripted agent acts identically in every arm
+    # and information could never change an outcome, making the C0 to C2
+    # contrast unmeasurable with mock agents.
+    if_informed_about: str | None = None
+    # The mirror: perform this action only if the agent has NOT been told.
+    # Together the two let one script express both the informed and the
+    # uninformed path, so the arms diverge on behaviour rather than on
+    # having been given different scripts.
+    if_uninformed_about: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "content": self.content,
             "destination": self.destination,
             "duration_us": self.duration_us,
+            "if_informed_about": self.if_informed_about,
+            "if_uninformed_about": self.if_uninformed_about,
             "kind": str(self.kind),
             "new": self.new,
             "note": self.note,
@@ -226,6 +240,8 @@ def _parse_action(raw: Any, *, index: int, agent_id: str) -> Action:
         duration_us=parse_duration_us(duration) if duration else 0,
         retries=int(options.pop("retries", 0)),
         note=options.pop("note", None),
+        if_informed_about=options.pop("if_informed_about", None),
+        if_uninformed_about=options.pop("if_uninformed_about", None),
     )
 
     if options:
@@ -239,6 +255,11 @@ def _parse_action(raw: Any, *, index: int, agent_id: str) -> Action:
         raise ScriptError(f"{where}: rename requires a destination ('to:')")
     if kind is ActionKind.MODIFY and (action.old is None or action.new is None):
         raise ScriptError(f"{where}: modify requires both 'old' and 'new'")
+    if action.if_informed_about and action.if_uninformed_about:
+        raise ScriptError(
+            f"{where}: an action cannot require both being informed and "
+            "being uninformed about a path"
+        )
 
     return action
 

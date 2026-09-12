@@ -1,0 +1,116 @@
+# Task: widen the record schema, keeping the handler consistent.
+#
+# The coordination dependency (spec §35, family schema_handler):
+#   agent_a owns src/schema.py and widens FIELDS to add "email".
+#   agent_b owns src/handler.py, depends on the schema, and must follow.
+#
+# agent_b reads the schema, deliberates (the `wait`), then writes the
+# handler. During that window agent_a changes what agent_b read — the §23
+# stale-read case.
+#
+# What makes the arms differ: agent_b's handler write is CONDITIONAL on
+# whether it was told about agent_a's change to src/schema.py.
+#   - informed   -> writes the updated handler; tests pass, no divergence
+#   - uninformed -> writes the stale handler; the divergence marker remains
+#
+# The agent stays deterministic: the same observations always produce the
+# same behaviour. What varies between arms is what it was told, which is
+# exactly the factor the experiment manipulates.
+
+task_id: schema_handler_widen
+version: "1.0.0"
+family: schema_handler
+description: >
+  agent_a widens the record schema while agent_b, which depends on it,
+  updates the handler. agent_b acts on information about agent_a's change
+  if it receives any; without it the handler is left stale.
+
+fixture: schema_handler
+
+roles:
+  - agent_id: agent_a
+    owns: [src/schema.py]
+    description: Widens the schema with a new field.
+  - agent_id: agent_b
+    owns: [src/handler.py]
+    depends_on: [src/schema.py]
+    description: Keeps the handler consistent with the schema.
+
+success:
+  integration_test: [python, -m, pytest, -q, tests/]
+  # A stale handler leaves the original two-field list behind after the
+  # schema was widened.
+  divergence_file: src/handler.py
+  divergence_marker: 'HANDLED_FIELDS = ["id", "name"]'
+
+contested_paths: []
+
+scenario:
+  agent_a:
+    owns: [src/schema.py]
+    actions:
+      - read: src/schema.py
+      - write:
+          path: src/schema.py
+          content: |
+            """The record schema both agents depend on."""
+
+            FIELDS = ["id", "name", "email"]
+
+
+            def validate(record):
+                """Return True when a record has exactly the declared fields."""
+                return set(record) == set(FIELDS)
+
+  agent_b:
+    owns: [src/handler.py]
+    depends_on: [src/schema.py]
+    actions:
+      # Reads the schema before agent_a's change lands.
+      - read: src/schema.py
+      # Deliberation window: agent_a's write happens during this (§23).
+      - wait: 2s
+      # Informed path: agent_b learned the schema changed and updates the
+      # handler it owns. It does NOT touch src/schema.py — that file
+      # belongs to agent_a, and the integrated workspace takes each file
+      # from its owner.
+      - write:
+          if_informed_about: src/schema.py
+          path: src/handler.py
+          content: |
+            """Consumes the schema. Kept consistent with src/schema.py by hand."""
+
+            from schema import FIELDS
+
+            HANDLED_FIELDS = ["id", "name", "email"]
+
+
+            def build(**values):
+                """Build a record from the fields this handler knows about."""
+                return {field: values.get(field) for field in HANDLED_FIELDS}
+
+
+            def declared_fields():
+                """What the schema currently declares."""
+                return list(FIELDS)
+      # Uninformed path: agent_b never heard, so it writes the handler based
+      # on the schema it read before the change. The stale marker remains.
+      - write:
+          if_uninformed_about: src/schema.py
+          path: src/handler.py
+          content: |
+            """Consumes the schema. Kept consistent with src/schema.py by hand."""
+
+            from schema import FIELDS
+
+            HANDLED_FIELDS = ["id", "name"]
+
+
+            def build(**values):
+                """Build a record from the fields this handler knows about."""
+                return {field: values.get(field) for field in HANDLED_FIELDS}
+
+
+            def declared_fields():
+                """What the schema currently declares."""
+                return list(FIELDS)

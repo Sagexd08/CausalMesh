@@ -33,6 +33,37 @@ from .script import Action, ActionKind, AgentScript
 __all__ = ["MockAgent", "MockAgentCrashError"]
 
 
+def _was_injected(event_id: str, injection: Any) -> bool:
+    """Whether the channel placed this event in the agent's context.
+
+    Only injected events count as known. An event the relay delivered but
+    the window dropped (§18) never reached the agent's context, and
+    treating it as known would credit an arm with information it did not
+    receive.
+
+    Channels describe their selection differently, so the discriminator is
+    whether the reasons carry per-event ids at all:
+
+    - C0 injects nothing, so this is always false — the isolation guarantee
+      reaching the agent's decision-making.
+    - C1 records a single policy entry with no event id, because an
+      unbounded transcript selects nothing: everything delivered is
+      injected.
+    - C2 and C3 record one scored entry per injected event, so the id
+      lookup is meaningful and a dropped event is correctly excluded.
+    """
+    if injection.events_injected == 0:
+        return False
+
+    per_event = [
+        reason for reason in injection.selection_reasons if "event_id" in reason
+    ]
+    if not per_event:
+        # No per-event selection was performed, so nothing was filtered out.
+        return True
+    return any(reason["event_id"] == event_id for reason in per_event)
+
+
 class MockAgentCrashError(RuntimeError):
     """Raised by a scripted `crash` action.
 
@@ -76,7 +107,14 @@ class MockAgent(CodingAgent):
         # Peer events observed, per turn. The stale-read analysis (§23) needs
         # to know what an agent had seen at the moment it acted.
         self.observations: list[tuple[int, tuple[str, ...]]] = []
-        self._pending_retries: dict[int, int] = {}
+        # Paths this agent has been told a peer touched. Populated only from
+        # events the channel actually injected, so it reflects what reached
+        # the agent's context rather than what the relay delivered.
+        self.informed_paths: set[str] = set()
+        # Actions skipped because their guard was not satisfied. Retained so
+        # a run's evidence shows the agent chose not to act, rather than the
+        # action silently vanishing.
+        self.skipped_actions: list[tuple[int, str]] = []
 
     # -- lifecycle --------------------------------------------------------
 
@@ -95,7 +133,18 @@ class MockAgent(CodingAgent):
         back the events themselves rather than only their ids.
         """
         delivered = self.executor.observe(context.now_us)
-        context.injection = self.channel.offer(delivered, turn=context.turn)
+        injection = self.channel.offer(delivered, turn=context.turn)
+        context.injection = injection
+
+        # Record which paths this agent has actually been *told about*, so a
+        # conditional action can depend on it. Only events the channel
+        # injected count: an event that was delivered but dropped by the
+        # window (§18) never reached the agent's context, and treating it as
+        # known would credit C2 with information it did not receive.
+        for event in delivered:
+            if _was_injected(event.event_id, injection):
+                self.informed_paths.update(event.paths)
+
         self.observations.append(
             (context.turn, tuple(event.event_id for event in delivered))
         )
@@ -147,6 +196,17 @@ class MockAgent(CodingAgent):
     def _perform(self, action: Action, context: AgentContext) -> TurnResult:
         now = context.now_us
 
+        skip_reason = self._guard_blocks(action)
+        if skip_reason is not None:
+            # The agent deliberately does not act. Recorded rather than
+            # silently dropped: "chose not to act because it was told" is a
+            # finding, and it is the mechanism by which information changes
+            # an outcome.
+            self.skipped_actions.append((context.turn, skip_reason))
+            return TurnResult(
+                turn=context.turn, actions=0, notes={"skipped": skip_reason}
+            )
+
         if action.kind is ActionKind.CRASH:
             raise MockAgentCrashError(action.note or "scripted crash")
 
@@ -170,6 +230,19 @@ class MockAgent(CodingAgent):
             return TurnResult(turn=context.turn, actions=1, notes={"intent": action.note})
 
         return self._perform_tool_action(action, context)
+
+    def _guard_blocks(self, action: Action) -> str | None:
+        """Whether a conditional action should be skipped, and why.
+
+        This is the only place an agent's behaviour depends on what it was
+        told. Keeping it in one predicate means the dependence is auditable
+        rather than scattered through the dispatch.
+        """
+        if action.if_informed_about and action.if_informed_about not in self.informed_paths:
+            return f"not informed about {action.if_informed_about}"
+        if action.if_uninformed_about and action.if_uninformed_about in self.informed_paths:
+            return f"already informed about {action.if_uninformed_about}"
+        return None
 
     def _perform_tool_action(self, action: Action, context: AgentContext) -> TurnResult:
         """Run a file or test action, honouring any scripted retries."""
@@ -283,8 +356,12 @@ class MockAgent(CodingAgent):
             "crashed": any(turn.crashed for turn in self.turns),
             "denied": denied,
             "failed": failed,
+            "informed_paths": sorted(self.informed_paths),
             "observations": [
                 {"turn": turn, "event_ids": list(ids)} for turn, ids in self.observations
+            ],
+            "skipped_actions": [
+                {"reason": reason, "turn": turn} for turn, reason in self.skipped_actions
             ],
             "turns": len(self.turns),
         }

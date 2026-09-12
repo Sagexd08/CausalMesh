@@ -21,7 +21,6 @@ user token permits, which would silently void every isolation claim in
 
 from __future__ import annotations
 
-import hashlib
 import os
 import subprocess
 from collections.abc import Sequence
@@ -56,6 +55,31 @@ TOOL_NAMES = (
 # promise this project can keep.
 ALLOWED_COMMANDS = frozenset({"python", "pytest", "git"})
 
+# Environment variables a subprocess inherits. An allowlist, so an operator's
+# API keys and proxy settings cannot reach an agent and runs do not depend on
+# whose shell launched them (§3).
+#
+# APPDATA and LOCALAPPDATA are here for a concrete reason found by running the
+# suite: on Windows, user-site packages live under %APPDATA%\Python, and
+# dropping it makes `python -m pytest` fail with "No module named pytest".
+# Every task's integration test would then fail identically in every arm, and
+# the experiment would report uniform failure while looking like it ran.
+_INHERITED_ENVIRONMENT = (
+    "PATH",
+    "SYSTEMROOT",
+    "COMSPEC",
+    "TEMP",
+    "TMP",
+    "LANG",
+    "LC_ALL",
+    "APPDATA",
+    "LOCALAPPDATA",
+    # Needed by some Windows Python builds to locate the interpreter's own
+    # installation when PATH alone is insufficient.
+    "PATHEXT",
+)
+
+
 # Bounded so a hung or runaway command cannot stall a run indefinitely (§22).
 DEFAULT_COMMAND_TIMEOUT_SECONDS = 120
 
@@ -77,26 +101,25 @@ class CommandResult:
     def to_event_payload(self) -> dict[str, Any]:
         """The deterministic subset that may enter the signed event chain.
 
-        Command output is deliberately excluded. It is not reproducible —
-        `pytest -q` prints "1 passed in 0.73s", and the elapsed time differs
-        every run — so putting it in the payload would change the chain hash
-        between two otherwise identical runs and make §84's reproducibility
-        requirement unsatisfiable.
+        Command output is excluded, and so is any digest of it. `pytest -q`
+        prints "1 passed in 0.73s" and the elapsed time differs every run,
+        so the text is not reproducible — and **a digest of
+        non-reproducible bytes is just as non-reproducible**. An earlier
+        version of this method included `output_sha256` and reintroduced
+        exactly the failure it was meant to fix, hidden behind a hash
+        rather than visible as text.
 
         What remains is everything the analysis actually needs: which
         command ran, whether it succeeded, and whether it timed out. Task
         success is decided from the exit code (§38), never from parsing
         output, so nothing downstream depends on the text.
 
-        A digest of the output is included instead, so a run's output can
-        still be *checked* against a separately stored copy without the
-        volatile bytes entering the integrity record.
+        The full output is still kept, as a run artifact via `to_dict`. It
+        is evidence a human can read, not an input to the integrity record.
         """
-        combined = f"{self.stdout}\n{self.stderr}".encode()
         return {
             "command": list(self.command),
             "exit_code": self.exit_code,
-            "output_sha256": hashlib.sha256(combined).hexdigest(),
             "timed_out": self.timed_out,
         }
 
@@ -294,8 +317,9 @@ class Toolbox:
         make runs depend on the operator's shell, breaking the §3 requirement
         that everything but the manipulated factors be held constant.
         """
-        keep = ("PATH", "SYSTEMROOT", "COMSPEC", "TEMP", "TMP", "LANG", "LC_ALL")
-        environment = {name: os.environ[name] for name in keep if name in os.environ}
+        environment = {
+            name: os.environ[name] for name in _INHERITED_ENVIRONMENT if name in os.environ
+        }
         # Deterministic hashing and no stray .pyc files in the workspace.
         environment["PYTHONHASHSEED"] = "0"
         environment["PYTHONDONTWRITEBYTECODE"] = "1"
