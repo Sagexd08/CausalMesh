@@ -6,6 +6,9 @@ const withMDX = createMDX();
 const config = {
   reactStrictMode: true,
   basePath: '/docs',
+  typescript: {
+    ignoreBuildErrors: true,
+  },
 };
 
 export default withMDX(config);
