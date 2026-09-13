@@ -85,6 +85,12 @@ timeout = 300
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+# Fixtures are experimental material, not project source: they are copied
+# into agent workspaces and edited by agents under test. Linting them would
+# let tooling silently rewrite the thing being studied — `ruff --fix` did
+# exactly that once, stripping `noqa` directives the fixture needs when it
+# runs as a standalone repository inside a workspace.
+extend-exclude = ["fixtures"]
 # Test-support modules (e.g. tests/adversarial/chain_fixtures.py) are imported
 # by bare name because pytest puts each test directory on sys.path; listing
 # those directories here keeps them classified as first-party.

@@ -120,8 +120,12 @@ Deterministic and YAML-scripted: read, write, modify, emit intents, respond to c
 ### Step 9 — Task system and first task (§35–38)
 Declarative tasks with fixture, roles, dependency graph, integration tests and divergence checks. The §37 quality gate requires a deterministic validation run to *empirically demonstrate* that the coordination dependency exists — a task is not coordination-sensitive merely because its YAML says so. Success requires integration tests passing **and** induced divergence being absent; no subjective labels.
 
-### Step 10 — Run loop, arms and scheduler (§39–42, §79–81)
+### Step 10 — Run loop, arms and scheduler (§39–42, §79–81) — **done**
 The §79 execution loop with the §63 state machine, reproducible randomization from `master_seed + task_id`, resume support and idempotency. Failed runs still produce full evidence (§81): a failed run is evidence, not garbage.
+
+Executed: the smoke profile against `schema_handler_widen`, 4 runs, order **C3, C1, C2, C0** (randomized, not blocked). All four chains verify offline from their persisted artifacts. C0 recorded zero coordination bytes and a single unique turn digest across all turns; C2 and C3 spent identically. See `docs/scheduler.md`.
+
+Three guarantees were mutation-tested rather than assumed: replacing the atomic claim transaction produced 19 claims for 12 runs; forcing every run to execute as C0 while the index recorded the planned arm was caught; corrupting one exported event was caught by offline verification.
 
 ### Step 11 — Metrics and staleness (§23, §44, §45)
 Per-turn coordination-token accounting that separates task-reasoning cost from coordination cost. Staleness instrumentation estimating λ̂, δ̂ and Δ̂, keeping **observed** values strictly distinct from **predicted** curves.
