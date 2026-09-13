@@ -1,4 +1,5 @@
 import { Mark, Reveal, Section } from "./Primitives.jsx";
+import { ChevronRight } from "./Icons.jsx";
 
 /**
  * The four layers, as a specification list rather than a card grid.
@@ -41,6 +42,63 @@ const LAYERS = [
   },
 ];
 
+function LayerDiagram() {
+  return (
+    <div className="mt-14 border-y border-rule-soft bg-paper-sunk/40 px-5 py-8 sm:px-8 sm:py-10">
+      <div className="flex items-center justify-between gap-4 font-mono text-[10px] uppercase tracking-[0.16em] text-ink-500">
+        <span>fleet</span>
+        <span className="text-marker-deep">every call is accounted for</span>
+        <span>repo</span>
+      </div>
+
+      <div className="relative mt-7">
+        <div
+          aria-hidden="true"
+          className="absolute left-0 right-0 top-1/2 hidden border-t border-dashed border-rule-soft lg:block"
+        />
+        <div className="relative grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {LAYERS.map((layer, i) => (
+            <div
+              key={layer.name}
+              className="group relative border border-rule-soft bg-paper p-4 transition-colors duration-300 hover:border-ink-900"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <span className="flex h-8 w-8 items-center justify-center border border-ink-900 bg-ink-900 font-mono text-xs text-paper">
+                  {i + 1}
+                </span>
+                <span className="mt-1 h-2 w-2 rounded-full bg-marker-deep shadow-[0_0_0_3px_rgba(215,239,90,0.3)]" />
+              </div>
+              <h3 className="mt-8 text-[15px] font-medium leading-snug text-ink-900">
+                {layer.name}
+              </h3>
+              <p className="mt-2 text-[12.5px] leading-relaxed text-ink-600">
+                {layer.claim}
+              </p>
+              <p className="mt-5 font-mono text-[10px] uppercase tracking-[0.12em] text-marker-deep">
+                {layer.proof}
+              </p>
+              {i < LAYERS.length - 1 && (
+                <span
+                  aria-hidden="true"
+                  className="absolute -right-3 top-1/2 z-10 hidden h-5 w-5 -translate-y-1/2 items-center justify-center border border-rule-soft bg-paper text-ink-500 lg:flex"
+                >
+                  <ChevronRight className="h-3 w-3" />
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-8 flex items-center justify-center gap-3 text-center font-mono text-[10px] uppercase tracking-[0.16em] text-ink-500">
+        <span className="h-px w-10 bg-rule-soft" />
+        <span>structural, not a runtime flag</span>
+        <span className="h-px w-10 bg-rule-soft" />
+      </div>
+    </div>
+  );
+}
+
 export default function Architecture() {
   return (
     <Section id="architecture" className="py-24 md:py-32">
@@ -49,6 +107,8 @@ export default function Architecture() {
           Four <Mark>layers</Mark> between the fleet and the repo
         </h2>
       </div>
+
+      <LayerDiagram />
 
       <div className="mt-16">
         {LAYERS.map((layer, i) => (
