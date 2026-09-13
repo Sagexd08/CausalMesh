@@ -20,6 +20,14 @@
       "handle": "filesystem"
     },
     {
+      "src": "/docs",
+      "dest": "/docs-site"
+    },
+    {
+      "src": "/docs/(.*)",
+      "dest": "/docs-site/$1"
+    },
+    {
       "src": "/(.*)",
       "dest": "/frontend/$1"
     }
