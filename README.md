@@ -245,6 +245,20 @@ frontend/     landing page (React + Vite + Tailwind)
 | [`docs/tasks.md`](docs/tasks.md) | Task definitions and the §37 sensitivity gate |
 | [`docs/backlog.md`](docs/backlog.md) | Every known gap, with its reason |
 
+## Vercel deployment
+
+This repository contains two web applications deployed together as one Vercel
+project. Import the repository with the **root directory left as `.`**:
+
+| App | URL | Framework | Output directory |
+|---|---|---|---|
+| Landing page | `/` | Vite | `frontend/dist` |
+| Documentation | `/docs` | Next.js | Managed by Next.js |
+
+The root [`vercel.json`](vercel.json) builds and routes both applications.
+The landing page's **Docs** link points to `/docs`, so both surfaces stay on
+the same deployment and domain. Use Node.js 20 or newer.
+
 ## Requirements
 
 Python 3.11+ and Git. The analysis stack uses numpy, scipy, pandas, statsmodels and matplotlib; the runtime core deliberately stays lighter, leaning on the standard library and `cryptography` for Ed25519. No Kafka, Redis, Kubernetes, Prometheus or Grafana.

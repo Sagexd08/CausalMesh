@@ -14,7 +14,7 @@ const NAV = [
     ],
   },
   { label: "Evidence", href: "#integrity" },
-  { label: "Docs", href: "https://github.com/Sagexd08/CausalMesh" },
+  { label: "Docs", href: "/docs" },
 ];
 
 /** The wordmark is text. No logo — the name is the mark. */
