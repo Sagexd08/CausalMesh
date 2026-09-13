@@ -1,4 +1,4 @@
-import { AGENT_MARKS } from "./AgentIcons.jsx";
+import agentMarks from "../agent-marks.json";
 import { Check } from "./Icons.jsx";
 
 /**
@@ -142,12 +142,17 @@ export default function Footer() {
             Drives any OpenAI-compatible client
           </div>
           <ul className="mt-4 flex flex-wrap items-center gap-x-7 gap-y-4">
-            {AGENT_MARKS.map(([name, Icon]) => (
+            {agentMarks.map(({ name, src }) => (
               <li
                 key={name}
                 className="group flex items-center gap-2 text-ink-400 transition-colors hover:text-ink-900"
               >
-                <Icon className="h-[18px] w-[18px]" />
+                <img
+                  src={src}
+                  alt=""
+                  aria-hidden="true"
+                  className="h-[18px] w-[18px] object-contain opacity-75 grayscale transition-all group-hover:opacity-100 group-hover:grayscale-0"
+                />
                 <span className="text-[13px] text-ink-600 transition-colors group-hover:text-ink-900">
                   {name}
                 </span>
