@@ -1,10 +1,13 @@
 """The controlled tool API (spec §12).
 
-Exactly twelve operations, and no unrestricted host shell:
+Exactly eleven operations, and no unrestricted host shell:
 
     read_file    write_file   create_file  modify_file
     delete_file  rename_file  list_files   run_command
     run_tests    git_status   git_diff
+
+`TOOL_NAMES` is the single source of truth for this list, and a test pins
+its length so the count in this docstring cannot drift away from the code.
 
 Every one resolves its paths through the agent's `Workspace`, so L2
 containment applies uniformly rather than being remembered at each call site.

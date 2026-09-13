@@ -73,3 +73,65 @@ class TestVerificationStack:
         assert not offending(
             loaded, ("relay", "scheduler", "agents", "adapters", "analysis", "reporting")
         )
+
+    def test_the_verifier_does_not_import_the_relay(self) -> None:
+        """§26: the verifier must run with the relay permanently offline.
+
+        This file's docstring has always named this boundary, but for
+        several steps nothing enforced it — and `docs/IDEA.md` claimed it
+        was "enforced by a test" when it was not. Offline verification is
+        the entire audit story: if the verifier pulled in the relay, an
+        auditor would need the very component whose output they are
+        checking, and "verifiable independently" would be false.
+        """
+        loaded = modules_loaded_by("causalmesh.verifier")
+        assert not offending(
+            loaded,
+            (
+                "relay",
+                "claims",
+                "scheduler",
+                "storage",
+                "agents",
+                "adapters",
+                "channels",
+                "hooks",
+                "tools",
+                "isolation",
+                "tasks",
+            ),
+        )
+
+    def test_the_verifier_needs_only_events_and_crypto(self) -> None:
+        # Stated positively as well: an auditor needs the canonical byte
+        # definition and the signature scheme, and nothing else.
+        loaded = modules_loaded_by("causalmesh.verifier")
+        unexpected = {
+            m
+            for m in loaded
+            if not (
+                m == "causalmesh"
+                or m.startswith("causalmesh.events")
+                or m.startswith("causalmesh.crypto")
+                or m.startswith("causalmesh.verifier")
+            )
+        }
+        assert not unexpected, f"verifier gained dependencies: {sorted(unexpected)}"
+
+
+class TestDesignBoundary:
+    """§5: the design must be readable without the runtime."""
+
+    def test_experiments_does_not_import_the_runtime(self) -> None:
+        """The analysis layer reads the arm table; it must not drag in agents.
+
+        `experiments/arms.py` describes the design and deliberately does
+        not construct anything. If importing it pulled in the runtime, the
+        analysis layer could not read the design without loading the
+        machinery that produced the data.
+        """
+        loaded = modules_loaded_by("causalmesh.experiments")
+        assert not offending(
+            loaded,
+            ("relay", "agents", "adapters", "tools", "hooks", "isolation", "channels"),
+        )

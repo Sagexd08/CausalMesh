@@ -65,6 +65,18 @@ class TestToolSurface:
     def test_every_declared_tool_exists(self, toolbox: Toolbox) -> None:
         assert all(hasattr(toolbox, name) for name in TOOL_NAMES)
 
+    def test_the_tool_count_is_pinned(self) -> None:
+        """The documented surface must match the implemented one.
+
+        `api.py`, `docs/PLAN.md` and `docs/IDEA.md` all state this number,
+        and all three once said twelve while eleven were implemented — the
+        docstring even listed eleven under the word "twelve". Pinning it
+        here means adding or removing a tool forces the documentation to be
+        updated in the same change rather than drifting silently.
+        """
+        assert len(TOOL_NAMES) == 11
+        assert len(set(TOOL_NAMES)) == 11, "a tool name is duplicated"
+
     def test_every_tool_maps_to_an_event_type(self) -> None:
         # An unmapped tool would execute without being recordable.
         assert set(TOOL_NAMES) == set(TOOL_EVENT_TYPES)

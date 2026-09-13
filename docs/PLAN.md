@@ -75,7 +75,7 @@ Repository root is the project root, with the package at `src/causalmesh/`. Ever
 | `channels/` | `NullChannel` (C0), `TranscriptChannel` (C1), `MetadataChannel` (C2/C3) | hooks |
 | `relevance/` | Deterministic scorer with stored reasons | metadata channel |
 | `hooks/` | Pre/post tool lifecycle boundary | tools |
-| `tools/` | The 12 controlled tools (§12) with L2 path validation | agents |
+| `tools/` | The 11 controlled tools (§12) with L2 path validation | agents |
 | `isolation/` | Workspace construction, process spawn, path jail | scheduler |
 | `agents/`, `adapters/` | `CodingAgent` interface and scripted MockAgent | scheduler |
 | `experiments/`, `scheduler/`, `tasks/` | Arms, randomization, run loop, task validation | CLI |
@@ -109,7 +109,7 @@ SQLite with `BEGIN IMMEDIATE` transactions for genuine atomicity. Operations: `a
 Ingestion, monotonic sequence assignment, signing, chaining, claim gate, fan-out, observer stream and export. The relay must not judge task correctness or rewrite events.
 
 ### Step 6 — Isolation, tools and hooks (§11–13)
-The three-layer sandbox described above, with all 12 tools behind the lifecycle boundary. A dedicated leakage test attempts peer-workspace access by relative path, absolute path, symlink, junction and `..` traversal; every attempt must be denied and logged.
+The three-layer sandbox described above, with all 11 tools behind the lifecycle boundary. A dedicated leakage test attempts peer-workspace access by relative path, absolute path, symlink, junction and `..` traversal; every attempt must be denied and logged.
 
 ### Step 7 — Channels, relevance and information window (§15–18)
 `NullChannel` raises on any injection attempt (C0). The transcript channel measures token growth with no silent truncation. The metadata channel uses a configurable window (default `w = 8`) and records `events_available / selected / injected / dropped` plus per-event selection reasons. Every injection records a context digest and coordination-byte delta feeding the §14 proof.
