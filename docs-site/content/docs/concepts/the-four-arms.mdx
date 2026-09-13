@@ -1,0 +1,71 @@
+---
+title: The four arms
+description: C0 through C3 — what each installs, and what each is for.
+---
+
+Four conditions, manipulating exactly two factors.
+
+| Arm | Information | Enforcement | What it installs |
+|---|---|---|---|
+| **C0** | none | none | `NullChannel`, `AllowAllGate` |
+| **C1** | unbounded transcript | none | `TranscriptChannel`, `AllowAllGate` |
+| **C2** | bounded metadata | none | `MetadataChannel`, `AllowAllGate` |
+| **C3** | bounded metadata | write claims | `MetadataChannel`, `ClaimGate` |
+
+## C0 — Isolated
+
+No peer visibility at all. The `NullChannel` **raises** if anything is
+offered to it rather than silently dropping, so a contaminated run fails
+loudly instead of completing and looking valid.
+
+This is the arm the isolation proof is about. A C0 run records zero
+coordination bytes and a single unique context digest across every turn —
+the digest of the empty string, repeated. That is evidence that nothing
+entered, not an assertion that nothing should have.
+
+## C1 — Transcript
+
+Every peer event, in full. Complete information whose cost grows
+quadratically with the number of turns: `μ·T(T+1)/2`.
+
+C1 exists as the upper bound on information. It is what a naive
+implementation does.
+
+## C2 — Metadata
+
+Typed events chosen by a deterministic relevance scorer inside a fixed
+window (default `w = 8`). Partial information, linear cost: `ν·w·T`.
+
+The channel records, per turn: events available, selected, injected and
+dropped, plus a stored reason for every selection decision. Nothing is
+silently truncated — §18 requires "not delivered" and "delivered but not
+injected" to stay distinguishable.
+
+## C3 — Metadata + claims
+
+**Identical information to C2, through the same channel object.** The only
+difference is that a mutating tool call must pass `ClaimGate`, which refuses
+a write to a path another agent holds a lease on.
+
+<Callout type="warn" title="Why C2 and C3 must share the channel">
+If C3 received even slightly different information, the C2→C3 comparison
+would confound enforcement with information and the central result would be
+uninterpretable. The pilot confirms it empirically: both arms spend exactly
+196 coordination bytes per run.
+</Callout>
+
+## Checked, not assumed
+
+The factor structure is asserted by tests rather than by this page:
+
+```python
+test_c2_and_c3_differ_only_in_enforcement
+test_c1_and_c2_differ_only_in_information
+test_c0_is_the_only_uninformed_arm
+test_c3_is_the_only_enforced_arm
+test_the_single_factor_contrasts_really_vary_one_factor
+```
+
+The last one walks every declared contrast and confirms the two arms it
+names differ in exactly one factor. A future edit to an arm cannot quietly
+invalidate a contrast's interpretation without failing that test.

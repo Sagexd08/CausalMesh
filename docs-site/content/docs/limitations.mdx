@@ -1,0 +1,93 @@
+---
+title: Limitations
+description: What is not built, what is not proven, and what this project refuses to claim.
+---
+
+Every gap here is tracked in `docs/backlog.md` with its reason. An entry is
+a deliberate scope decision, not a forgotten to-do.
+
+## Not built
+
+| Item | What it blocks |
+|---|---|
+| Metrics and staleness estimation | Any cost or latency claim across the merged system |
+| Analytical module | The closed-form cost curves |
+| Statistics layer | Every inferential claim |
+| Provenance manifests, reporting | Full audit export |
+| CLI (`doctor`, `run`, `verify`, `analyze`) | Operator ergonomics; the Python API works |
+| CooperBench import | Tasks whose structure is not known by construction |
+| Multi-rater kappa coding | Secondary qualitative failure analysis |
+| Scaling beyond 4 agents | The scalability profile |
+
+## Built but not executed
+
+**No hosted model has been run.** No API key was available and none was
+requested. The adapters are tested over real HTTP against a server that
+speaks both wire protocols — request shape, header placement, response
+parsing, token extraction, failure classification. Whether a real GPT or
+Claude follows the action protocol reliably enough to complete a task is
+**unmeasured**.
+
+`LocalClient` was never run against a live local server either. Ollama, vLLM
+and LM Studio were all probed; none was running.
+
+**The confirmatory collection has not been run**, and its gate is closed
+deliberately. See [Running an experiment](/docs/operating/running-an-experiment).
+
+## Not guaranteed
+
+### There is no filesystem jail on Windows
+
+<Callout type="warn">
+No `chroot`, no mount namespaces. L1 is **process separation, not a jail**.
+A child process can still reach any path its user token permits.
+
+L2 closes that through the sanctioned tool API and is unit-tested against
+relative paths, absolute paths, symlinks, junctions and `..` traversal. An
+agent with arbitrary code execution outside the tool API is out of scope.
+</Callout>
+
+Docker is wired in as the stronger boundary for Linux and CI, documented as
+optional rather than required.
+
+### Suffix truncation needs an anchor
+
+A shorter valid chain is still a valid chain. Tested in both directions.
+
+### A hosted model run is not bit-reproducible
+
+Temperature 0 is not a reproducibility guarantee on any provider. The
+settings remove the randomness that can be removed and record the rest.
+
+## Known dead code
+
+`PathScopedDelivery` exists in `relay/delivery.py` for the scalability
+profile. It is exercised by unit tests but has **no production consumer** in
+this slice — a genuine exception to the no-dead-code rule, recorded here
+rather than hidden.
+
+`RunState.TIMED_OUT` is reachable in the state machine and tested there, but
+no run has yet reached it: whole-run timeouts need a watchdog this slice
+does not have.
+
+## Defects found by execution
+
+Recorded because each one was invisible to inspection and only surfaced by
+running the thing.
+
+| Defect | Consequence had it shipped |
+|---|---|
+| `APPDATA` missing from the scrubbed environment | Every task failed identically in every arm; the experiment would have reported uniform failure while appearing to run |
+| `output_sha256` of non-reproducible bytes | The determinism bug it was meant to fix, hidden behind a hash |
+| Denials unreachable from the gate | "Enforcement never blocked anything" recorded as a finding rather than a defect |
+| Ownership merge could not express a contested path | The contest resolved before the arms could differ; the task measured nothing |
+| Channel bypass passed all 21 adapter tests | Peer information entering an agent outside all accounting; C0 safe only incidentally |
+| Alphabetical "last writer wins" | C3 appeared to lose both registrations when it had preserved one |
+| Lowercase event-type match against an uppercase chain | All four arms failed identically — looks like a broken task, was a broken lookup |
+
+<Callout>
+The general lesson, because it recurs: **the guarantees most worth testing
+are the ones no test naturally covers, because they are properties of what
+the code does not do.** Every test written up to a point checked that
+something happened correctly. Nothing checked that nothing else did.
+</Callout>

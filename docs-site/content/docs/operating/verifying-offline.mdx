@@ -1,0 +1,86 @@
+---
+title: Verifying offline
+description: Checking a chain with the system shut down, on a machine that never ran it.
+---
+
+The verifier takes only `(log, public keys, optional anchors)`. It imports
+nothing from the relay, the claims registry, the scheduler, the agents or
+the tool layer — a boundary enforced by tests that run in a clean
+subprocess.
+
+## Eight checks per link
+
+1. schema version is known
+2. sequence increases monotonically
+3. the recorded previous hash matches the running head
+4. the recomputed chain hash matches the recorded one
+5. the signature verifies **against the key ring**, not the embedded key
+6. the actor is known to the ring
+7. the actor matches the event identity
+8. no duplicate event ids
+
+Check 5 matters most. Verifying a record against a key attached to that same
+record is circular — a forger would attach their own.
+
+## Anchors
+
+```python
+report = verify_chain(chain, ring, anchor=known_head_hash)
+```
+
+Without an anchor, truncation is undetectable: a shorter valid chain is
+still a valid chain. With one, the head mismatch is caught.
+
+## A worked example
+
+```python
+import json
+from pathlib import Path
+
+from causalmesh.crypto.keys import KeyPair, PublicKeyRing
+from causalmesh.experiments import derive_run_seed
+from causalmesh.verifier import verify_chain
+
+SEED = b"the-seed-that-was-recorded"
+RAW = Path("data/raw/pilot_landing")
+
+for directory in sorted(RAW.iterdir()):
+    if not directory.is_dir():
+        continue
+
+    payload = json.loads((directory / "run.json").read_text(encoding="utf-8"))
+    chain = payload["chain"]
+    if not chain:
+        continue
+
+    run_seed = derive_run_seed(SEED, payload["run_id"])
+    actors = {r["event"]["identity"]["agent_id"] for r in chain}
+    ring = PublicKeyRing.from_keypairs(
+        {actor: KeyPair.derive(run_seed, actor) for actor in actors}
+    )
+
+    report = verify_chain(chain, ring)
+    print(f"{payload['arm']:3} {report.valid}  {report.summary()}")
+```
+
+Output from the real pilot:
+
+```
+C0  True  VALID · 4 events, chain intact, anchor=not_anchored
+C1  True  VALID · 4 events, chain intact, anchor=not_anchored
+C2  True  VALID · 4 events, chain intact, anchor=not_anchored
+C3  True  VALID · 5 events, chain intact, anchor=not_anchored
+```
+
+## Failures do not cascade
+
+The verifier advances on the **recorded** digest rather than the recomputed
+one, so a single corrupt link is reported as one failure rather than
+poisoning every link after it.
+
+A tampered chain reports precisely what broke:
+
+```
+INVALID · 4 events, 3 failures
+  (chain_break=1, signature_invalid=1, key_mismatch=1)
+```

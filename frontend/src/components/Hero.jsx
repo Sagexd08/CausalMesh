@@ -1,125 +1,91 @@
-import { Eyebrow, Section } from "./Primitives.jsx";
-import { RESULTS } from "../data.js";
+import { RESULTS, armResult } from "../data.js";
+import Chart from "./Chart.jsx";
+import { Check } from "./Icons.jsx";
+import { ButtonGhost, ButtonPrimary, Mark, Section } from "./Primitives.jsx";
 
-/**
- * Asymmetric by construction: a 7/5 split, headline hard-left, live evidence
- * panel offset right and pushed down. Centered hero layouts are banned above
- * variance 4, and this product's whole claim is that it produces evidence —
- * so the evidence is in the first viewport rather than described later.
- */
 export default function Hero() {
-  const verified = RESULTS.arms.reduce((n, a) => n + a.chains_verified, 0);
+  const c1 = armResult("C1");
+  const c2 = armResult("C2");
+  const saving = Math.round(
+    ((c1.mean_coordination_bytes - c2.mean_coordination_bytes) /
+      c1.mean_coordination_bytes) *
+      100
+  );
+
+  const FIGURES = [
+    [
+      "Coordination cost",
+      c2.mean_coordination_bytes,
+      "B / run",
+      `${saving}% under transcript`,
+      false,
+    ],
+    ["Isolated arm", "0", "bytes in", "proven, not asserted", false],
+    [
+      "Chains verified",
+      RESULTS.total_runs,
+      `/ ${RESULTS.total_runs}`,
+      "offline, no relay",
+      true,
+    ],
+    [
+      "Denials recorded",
+      armResult("C3").denials,
+      "with holder",
+      "actor · path · why",
+      false,
+    ],
+  ];
 
   return (
-    <Section className="pt-28 pb-24 md:pt-36 md:pb-32">
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-x-12 gap-y-16 items-start">
-        <div className="lg:col-span-7">
-          <Eyebrow>Coordination substrate · v0.1</Eyebrow>
+    <Section className="pt-16 pb-20 md:pt-24">
+      <div className="grid grid-cols-1 items-start gap-x-16 gap-y-14 lg:grid-cols-[1fr_1.15fr]">
+        <div>
+          <div className="flex items-center gap-2 text-[13px] text-ink-600">
+            <span className="inline-flex h-5 w-5 items-center justify-center bg-ink-900 text-marker">
+              <Check className="h-3 w-3" />
+            </span>
+            797 tests &middot; 24 runs &middot; every chain verified
+          </div>
 
-          <h1 className="mt-7 text-[2.7rem] leading-[1.04] sm:text-6xl lg:text-[4.2rem] font-semibold tracking-tightest text-chalk-100">
-            Four agents.
+          <h1 className="mt-7 font-display text-[2.7rem] font-extrabold leading-[1.05] tracking-tightest text-ink-900 sm:text-[3.4rem] lg:text-[3.9rem]">
+            Coordination
             <br />
-            One codebase.
-            <br />
-            <span className="text-chalk-500">Provable</span>{" "}
-            <span className="text-signal">order.</span>
+            you can <Mark>prove</Mark>
           </h1>
 
-          <p className="mt-8 max-w-prose text-[17px] leading-relaxed text-chalk-400">
-            CausalMesh sits between a fleet of coding agents and the repository
-            they share. Every action passes a gate, every action is signed into
-            a hash chain, and conflicting writes are refused with the reason
-            recorded.
+          <p className="mt-7 max-w-[44ch] text-[16px] leading-relaxed text-ink-600">
+            Gate every action. Sign every action. Record every refusal with its
+            reason. One substrate for fleets of coding agents — and the evidence
+            to settle who changed what.
           </p>
 
-          <p className="mt-5 max-w-prose text-[17px] leading-relaxed text-chalk-500">
-            It also answers a question nobody has answered cleanly:{" "}
-            <span className="text-chalk-200">
-              how much coordination benefit comes from information, and how much
-              from enforcement?
-            </span>
-          </p>
-
-          <div className="mt-11 flex flex-wrap items-center gap-3">
-            <a
-              href="#results"
-              className="group inline-flex items-center gap-2 rounded-md bg-signal px-5 py-3 text-[14px] font-medium text-ink-950 transition-colors hover:bg-signal-dim"
-            >
-              See the measured results
-              <span
-                aria-hidden="true"
-                className="transition-transform duration-200 group-hover:translate-x-0.5"
-              >
-                →
-              </span>
-            </a>
-            <a
-              href="https://github.com/Sagexd08/CausalMesh"
-              className="inline-flex items-center rounded-md border border-white/10 px-5 py-3 text-[14px] text-chalk-300 transition-colors hover:border-white/20 hover:text-chalk-100"
-            >
-              Read the source
-            </a>
+          <div className="mt-9 flex flex-wrap items-center gap-4">
+            <ButtonPrimary href="#results">See the results</ButtonPrimary>
+            <ButtonGhost href="#architecture">How it works</ButtonGhost>
           </div>
         </div>
 
-        {/* Offset panel: real chain fragment, real hashes, real denial. */}
-        <div className="lg:col-span-5 lg:mt-20">
-          <figure className="rule overflow-hidden rounded-lg border bg-ink-900/70">
-            <figcaption className="flex items-center justify-between border-b border-white/[0.07] px-4 py-2.5">
-              <span className="font-mono text-[11px] text-chalk-600">
-                run_C3 · concurrent_edit_collision
+        <Chart />
+      </div>
+
+      <div className="mt-16 grid grid-cols-2 gap-x-10 gap-y-8 border-t border-rule-soft pt-8 md:grid-cols-4">
+        {FIGURES.map(([label, value, unit, caption, accent]) => (
+          <div key={label}>
+            <div className="text-[12.5px] text-ink-600">{label}</div>
+            <div className="mt-1.5 flex items-baseline gap-1.5">
+              <span
+                className={`text-[2rem] font-medium tabular-nums ${
+                  accent ? "text-marker-deep" : "text-ink-900"
+                }`}
+              >
+                {value}
               </span>
-              <span className="inline-flex items-center gap-1.5 font-mono text-[11px] text-signal">
-                <span
-                  className="h-1.5 w-1.5 rounded-full bg-signal"
-                  aria-hidden="true"
-                />
-                verified
-              </span>
-            </figcaption>
-
-            <div className="divide-y divide-white/[0.05] font-mono text-[12.5px] leading-relaxed">
-              {[
-                ["0", "READ", "agent_a", "src/config.py", null],
-                ["1", "READ", "agent_b", "src/config.py", null],
-                ["2", "WRITE", "agent_a", "src/config.py", "ok"],
-                ["3", "FAILURE", "agent_b", "src/config.py", "denied"],
-              ].map(([seq, type, actor, path, state]) => (
-                <div
-                  key={seq}
-                  className="grid grid-cols-[1.6rem_4.6rem_1fr] items-baseline gap-x-3 px-4 py-2"
-                >
-                  <span className="text-chalk-600 tabular-nums">{seq}</span>
-                  <span
-                    className={
-                      state === "denied" ? "text-arm-c0" : "text-chalk-400"
-                    }
-                  >
-                    {type}
-                  </span>
-                  <span className="truncate">
-                    <span className="text-chalk-300">{actor}</span>
-                    <span className="text-chalk-600"> · {path}</span>
-                  </span>
-                </div>
-              ))}
+              <span className="text-[13px] text-ink-500">{unit}</span>
             </div>
-
-            <div className="border-t border-white/[0.07] bg-ink-850/60 px-4 py-3">
-              <div className="font-mono text-[11px] text-chalk-600">
-                agent_b blocked — src/config.py held by agent_a
-              </div>
-              <div className="mt-1.5 font-mono text-[11px] text-chalk-600">
-                head <span className="text-chalk-400">3064aaefc488…</span>
-              </div>
-            </div>
-          </figure>
-
-          <p className="mt-4 font-mono text-[11px] leading-relaxed text-chalk-600">
-            {verified} of {RESULTS.total_runs} chains verified offline, rebuilt
-            from each run&apos;s derived seed.
-          </p>
-        </div>
+            <div className="mt-1 text-[12.5px] text-ink-500">{caption}</div>
+          </div>
+        ))}
       </div>
     </Section>
   );

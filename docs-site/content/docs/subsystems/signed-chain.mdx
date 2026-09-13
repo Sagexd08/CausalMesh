@@ -1,0 +1,77 @@
+---
+title: Signed chain
+description: Canonicalization, Ed25519 attribution, and the adversarial battery.
+---
+
+## Canonical bytes
+
+Everything downstream is a hash of these bytes, so serialization is strict:
+
+- keys sorted
+- explicit UTF-8 with NFC normalization
+- RFC 3339 UTC timestamps
+- integer-only sequences
+- floats and NaN **rejected**, not coerced
+
+Property tests cover round-trip determinism, key-order independence, unicode
+normalization and nested-object stability.
+
+## Identity
+
+Per-actor Ed25519 keys derived deterministically:
+
+```python
+HKDF(master_seed, salt=actor_id, info=b"causalmesh/ed25519/v1")
+```
+
+Deterministic derivation is what makes a run reproducible from its recorded
+seed. Randomly generated keys would make every run unrepeatable.
+
+`verify_signature` returns a boolean and never raises, so the verifier can
+count failures across a whole log rather than stopping at the first.
+
+## Chaining
+
+```
+GENESIS = SHA256(b"causalmesh/chain/genesis/v1")
+h_i     = SHA256( bytes(h_(i-1)) ‖ canonical(event_i) )
+```
+
+The previous hash is mixed in as **raw bytes**, not hex text.
+
+The verifier advances on the *recorded* digest rather than the recomputed
+one, so a single corrupt link does not cascade into every subsequent link
+being reported as broken. One defect reads as one failure.
+
+## Attribution is checked against the key ring
+
+Signatures are verified against a supplied `PublicKeyRing`, never against a
+key embedded in the record being checked. Verifying a record against its own
+attached key is circular — a forger would simply attach their own.
+
+## The adversarial battery
+
+Twenty attacks, each of which must be detected:
+
+- path, event-type and timestamp mutation
+- mutation with a **recomputed** digest
+- forged insertion, and validly-signed insertion from elsewhere
+- duplicate replay
+- interior deletion, and the sequence gap it leaves
+- adjacent swap, and whole-chain reversal
+- actor reassignment, with and without a swapped public key
+- events from unknown actors
+- signature substitution
+
+And two that document a limit:
+
+```python
+test_truncation_is_undetected_without_an_anchor
+test_truncation_is_detected_with_an_anchor
+```
+
+<Callout type="warn">
+Suffix truncation is invisible to the chain alone, because a shorter valid
+chain is still a valid chain. This is a documented limitation, tested in
+both directions, not a defect.
+</Callout>

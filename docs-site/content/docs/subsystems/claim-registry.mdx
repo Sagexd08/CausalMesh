@@ -1,0 +1,56 @@
+---
+title: Claim registry
+description: Transactional write leases, and the measurement defect that made enforcement invisible.
+---
+
+SQLite with `BEGIN IMMEDIATE` transactions. The invariant:
+
+> At most one valid writer claim may exist for a path at any instant.
+
+"Valid" means granted, not released and not expired. Expiry is evaluated
+against the caller-supplied clock at every read, so a lease whose deadline
+has passed stops blocking others even if nothing has swept the table.
+
+## Why SQLite and not a lock
+
+Agents run as separate OS processes, so an in-process lock would enforce
+nothing across the very boundary the experiment puts them on.
+`BEGIN IMMEDIATE` takes the database write lock at statement start, which
+makes check-then-acquire a single atomic step instead of a race.
+
+## Leases expire
+
+A crashed agent must not wedge the fleet. Expiry and release are recorded
+**distinctly** even though both free the path: a lease that ran out is a
+coordination signal, while a release is orderly completion. Collapsing them
+would erase that difference from the measurements.
+
+## Denials are data, not exceptions
+
+Every refusal records the requesting agent, the path, the holder, and the
+reason. That record is what makes a blocked write explainable months later
+rather than mysterious.
+
+<Callout type="warn" title="Enforcement was unmeasurable, not merely unmeasured">
+For several build steps, denials were written **only** by `acquire`, while
+the C3 gate refuses writes through `may_write`. Every block the gate
+performed was therefore invisible to `denials()` — the method whose own
+docstring calls it "the core enforcement measurement".
+
+A real C3 run reported **2 claims held and 0 denials** while enforcement was
+working correctly. A measurement that cannot observe its own subject is
+worse than a missing one: it reports a confident zero.
+</Callout>
+
+The fix keeps two acts separate:
+
+- `may_write` is an **advisory query** and records nothing. Callers may ask
+  speculatively, so recording there would count *questions* rather than
+  *blocks*, and the denial count would depend on how often the gate happened
+  to be consulted.
+- `record_denial` states that a real attempt reached the gate and was
+  stopped. `ClaimGate` calls it.
+
+An existing test — `test_the_gate_does_not_mutate_state` — was protecting
+that invariant, and the first attempt at the fix broke it. The test was
+right.

@@ -1,0 +1,81 @@
+---
+title: Running an experiment
+description: Profiles, planning, resume, and the confirmatory gate that stays closed.
+---
+
+## Profiles
+
+| Profile | Repetitions | Purpose |
+|---|---|---|
+| `smoke` | 1 | One task. Answers "does it run"; estimates nothing |
+| `pilot` | 3 | Parameter estimates for the power analysis |
+| `small` | 10 | Exploratory |
+| `medium` | 30 | Substantial, still not preregistered |
+| `confirmatory` | 120 | The 1920-run design — **gated** |
+
+## The confirmatory gate
+
+```python
+profile("confirmatory")                     # raises ProfileError
+profile("confirmatory", allow_gated=True)   # explicit opt-in
+```
+
+<Callout type="warn">
+Building the machinery and running it are different acts. The machinery must
+exist and be tested, but executing 1920 runs commits to a preregistered
+analysis, and this project has not written one. The gate stays closed so
+confirmatory numbers cannot be produced by accident and later quoted as
+planned.
+</Callout>
+
+The flag is a typed argument the caller must pass, not an environment
+variable or a config key — those can be set by a file nobody read, while a
+typed flag leaves the decision in the shell history.
+
+## Planning
+
+```python
+plan = plan_experiment(
+    experiment_id="pilot_2026_03",
+    profile=profile("pilot"),
+    task_ids=sorted(tasks),
+    master_seed=SEED,
+    task_hashes={k: v.content_hash() for k, v in tasks.items()},
+)
+
+plan.is_balanced()      # every (task, arm) cell holds the same count
+plan.content_hash()     # includes the order — order is part of identity
+```
+
+Task ids are sorted before truncation so a `max_tasks` cap picks the same
+subset on every machine. Taking the first N of a directory listing would
+depend on filesystem ordering.
+
+## Resume
+
+```python
+runner.prepare()   # registers the plan, recovers anything left RUNNING
+await runner.run() # executes until done
+```
+
+`prepare` is idempotent. Re-planning before a resume cannot reset progress,
+and a plan whose hash differs from the stored one is **refused** — silently
+adopting it would mean resuming a collection under a design that changed
+mid-flight.
+
+A run left RUNNING by a killed process becomes ABANDONED and is
+re-executed. Without that it would be stranded forever, since `claim_next`
+skips that state.
+
+Every state change is retained in a `transitions` table, so a run abandoned
+and resumed twice is distinguishable from one that ran straight through.
+
+## Failure handling
+
+The loop catches `BaseException`, not `Exception`, so a `KeyboardInterrupt`
+still records the run before propagating — otherwise Ctrl-C strands a run in
+RUNNING with no evidence of why.
+
+Every failure writes an artifact containing the full traceback. A failed run
+is evidence: the arm that fails more is telling you something, and dropping
+failures would replace the measurement with a survivorship curve.

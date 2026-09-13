@@ -1,0 +1,64 @@
+---
+title: Tool boundary
+description: Eleven controlled operations, no shell, every call gated and recorded.
+---
+
+Agents get exactly eleven operations:
+
+```
+read_file    write_file   create_file  modify_file
+delete_file  rename_file  list_files   run_command
+run_tests    git_status   git_diff
+```
+
+`TOOL_NAMES` is the single source of truth, and a test pins its length so
+the count in the docstring cannot drift from the code. It did once — the
+docstring said "exactly twelve" directly above a list of eleven, and two
+other documents repeated it.
+
+## No unrestricted shell
+
+`run_command` takes an argument list, never a shell string, and refuses
+anything outside an allowlist (`python`, `pytest`, `git`).
+
+<Callout type="warn">
+`shell=True` would let an agent reach any path its OS token permits through
+`&&`, redirection or a subshell — voiding every containment claim the
+project makes. This is not a stylistic preference.
+</Callout>
+
+An allowlist rather than a denylist, because a denylist is a promise to have
+imagined every dangerous command, and that is not a promise this project can
+keep.
+
+## The environment is scrubbed
+
+Only what a Python or git process genuinely needs is passed through.
+Inheriting the full environment would carry API keys and proxy settings, and
+would make runs depend on whose shell launched them.
+
+<Callout title="A bug worth recording">
+The allowlist originally omitted `APPDATA`. On Windows, user-site packages
+live under `%APPDATA%\Python`, so `python -m pytest` failed with "No module
+named pytest" — and **every task's integration test failed identically in
+every arm**. The experiment would have reported uniform failure while
+appearing to run perfectly.
+</Callout>
+
+## Three isolation layers
+
+| Layer | Mechanism | What it guarantees |
+|---|---|---|
+| **L1 Process** | Spawned subprocess, own cwd, scrubbed environment | No shared memory, no inherited handles, no ambient state |
+| **L2 Path** | Every path resolved through `realpath`, must fall inside the workspace | Agents cannot reach peer workspaces *through the sanctioned tool API* |
+| **L3 Context** | Single typed injection point, per-turn digest, byte counter | A provable account of everything that entered an agent's context |
+
+<Callout type="warn" title="What L1 does not guarantee on Windows">
+There is no `chroot` and no mount namespaces, so L1 is **process
+separation, not a filesystem jail**. A child process can still reach any
+path its user token permits. L2 closes that through the tool API; a
+determined agent with arbitrary code execution is out of scope.
+</Callout>
+
+L3 is what actually answers "can we prove C0 received no coordination
+information?" L1 and L2 close side channels; L3 produces the evidence.

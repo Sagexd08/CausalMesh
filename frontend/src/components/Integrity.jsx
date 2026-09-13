@@ -1,4 +1,4 @@
-import { Eyebrow, Reveal, Section } from "./Primitives.jsx";
+import { Mark, Reveal, Section } from "./Primitives.jsx";
 
 const ATTACKS = [
   ["Event mutation", true],
@@ -16,18 +16,17 @@ export default function Integrity() {
     <Section id="integrity" className="py-24 md:py-32">
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-x-12 gap-y-14">
         <div className="lg:col-span-5">
-          <Eyebrow tone="muted">Evidence</Eyebrow>
-          <h2 className="mt-6 text-3xl md:text-[2.6rem] leading-[1.1] font-semibold tracking-tightest text-chalk-100">
+          <h2 className="font-display text-3xl md:text-[2.6rem] leading-[1.08] font-bold tracking-tightest text-ink-900">
             What the chain
             <br />
-            actually detects.
+            actually <Mark>detects</Mark>
           </h2>
-          <p className="mt-7 max-w-prose text-[16px] leading-relaxed text-chalk-400">
+          <p className="mt-7 max-w-prose text-[16px] leading-relaxed text-ink-600">
             An adversarial battery attacks the log and requires the verifier to
             catch it. The results are the honest scope of the integrity claim —
             including the row that fails.
           </p>
-          <p className="mt-5 max-w-prose text-[15px] leading-relaxed text-chalk-500">
+          <p className="mt-5 max-w-prose text-[15px] leading-relaxed text-ink-600">
             Truncating the end of a chain is undetectable from the chain alone,
             because a shorter valid chain is still a valid chain. With a
             published anchor it is caught. That limitation is documented rather
@@ -36,15 +35,15 @@ export default function Integrity() {
         </div>
 
         <div className="lg:col-span-7 lg:pt-4">
-          <ul className="divide-y divide-white/[0.06] border-y border-white/[0.06]">
+          <ul className="divide-y divide-rule-soft border-y border-rule-soft">
             {ATTACKS.map(([name, detected], i) => (
               <Reveal key={name} delay={i * 40}>
                 <li className="flex items-center justify-between gap-6 py-4">
-                  <span className="text-[15px] text-chalk-300">{name}</span>
+                  <span className="text-[15px] text-ink-700">{name}</span>
                   {detected ? (
-                    <span className="flex items-center gap-2 font-mono text-[12px] text-signal">
+                    <span className="flex items-center gap-2 font-mono text-[12px] text-marker-deep">
                       <span
-                        className="h-1.5 w-1.5 rounded-full bg-signal"
+                        className="h-1.5 w-1.5 rounded-full bg-marker-deep"
                         aria-hidden="true"
                       />
                       detected
@@ -52,7 +51,7 @@ export default function Integrity() {
                   ) : (
                     <span className="text-right font-mono text-[12px] leading-tight text-arm-c3">
                       needs an anchor
-                      <span className="block text-chalk-600">
+                      <span className="block text-ink-500">
                         undetected without one
                       </span>
                     </span>

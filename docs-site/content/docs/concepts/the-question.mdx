@@ -1,0 +1,59 @@
+---
+title: The question
+description: Information versus enforcement, and why the two are normally impossible to separate.
+---
+
+Systems that coordinate agents do two things at once. They **tell** each
+agent what its peers are doing, and they **prevent** agents from making
+conflicting changes. Because these always ship together, their individual
+contributions are unknown.
+
+CausalMesh separates them experimentally. The contribution is
+**measurement**, not the invention of a new coordination mechanism.
+
+## Why it matters outside a paper
+
+The two factors have very different operating profiles.
+
+<Callout title="Enforcement costs availability">
+A lock store must be consistent. That is latency on every write, a new
+failure domain, and real contention whenever two agents genuinely need the
+same file — which, as the pilot shows, is a case where locking makes things
+*worse*, not better.
+</Callout>
+
+<Callout title="Information costs tokens">
+Every byte of peer context is a byte in a prompt. On measured data an
+unbounded transcript cost **84% more** than bounded metadata for identical
+outcomes. Over a long-running fleet that is the dominant line item.
+</Callout>
+
+So the answer changes what you build. If information alone recovers most of
+the benefit, the cheaper and more available system is also the correct one.
+
+## What has to be held constant
+
+Separating two factors means everything else must not move. The design
+holds constant: task, model, decoding parameters, agent roles, repository
+fixture, tool semantics, success criteria, and the randomization protocol.
+
+Anything that cannot be held constant is recorded and treated as a potential
+confound (§43) rather than ignored.
+
+The arms are **installed objects**, not configuration branches — C0 gets a
+channel that raises if anything is offered, C3 gets a gate that consults the
+registry. Nothing reads an arm name at runtime and decides what to do, which
+makes each condition a structural property of the assembled runtime rather
+than a flag someone could set wrong.
+
+## What this does not answer
+
+This build measures the **platform**, not language models. Every result on
+this site was produced by a script-driven agent executing declarative
+actions through the real tool boundary, gate, relay and chain.
+
+That was deliberate: building a coordination substrate against a
+nondeterministic agent makes every failure ambiguous between "the harness is
+broken" and "the model did something different today". But it means nothing
+here supports a claim about how real coding agents coordinate. See
+[Limitations](/docs/limitations).

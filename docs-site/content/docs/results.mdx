@@ -1,0 +1,86 @@
+---
+title: Measured results
+description: A real 24-run pilot collection, and what each row actually shows.
+---
+
+Two tasks × four arms × three repetitions = **24 runs**, executed on one
+machine in 150 seconds. Every figure below comes from
+`data/raw/pilot_landing`. Nothing is illustrative.
+
+| Arm | Success | Mean coordination bytes | Denials | Divergences | Chains verified |
+|:---:|:---:|---:|---:|---:|:---:|
+| C0 | 0/6 | **0** | 0 | 6 | 6/6 |
+| C1 | 6/6 | 361 | 0 | 0 | 6/6 |
+| C2 | 6/6 | 196 | 0 | 0 | 6/6 |
+| C3 | 3/6 | 196 | 3 | 0 | 6/6 |
+
+## Reading it
+
+**C0 fails every run.** Isolated agents make exactly the stale-read and
+clobber errors the tasks induce. Zero coordination bytes, and a single
+unique context digest across all turns.
+
+**Information alone recovers everything.** C1 and C2 are 6/6 on both tasks.
+On this pilot, information is doing the work.
+
+**C1 costs 84% more than C2** for identical outcomes. That is the
+representational overhead, measured — the whole operating cost difference
+between a naive transcript and a bounded window.
+
+**C2 and C3 spend identically** (196 bytes), as they must. They differ by
+enforcement alone, and any gap in information cost would confound the
+contrast.
+
+## The C3 split
+
+<Callout type="warn" title="Enforcement is not strictly an improvement">
+C3 splits **3/3 and 0/3**. It matches C2 where agents own different files,
+and fails where they genuinely need the same one.
+
+On the contested task, exclusive locking prevents the clobber *and* blocks
+legitimate work — the file needs two writers. That is a result about
+enforcement, not a defect in the gate.
+</Callout>
+
+Per-task:
+
+| Task | C0 | C1 | C2 | C3 |
+|---|:---:|:---:|:---:|:---:|
+| `schema_handler_widen` | 0/3 | 3/3 | 3/3 | **3/3** |
+| `concurrent_edit_collision` | 0/3 | 3/3 | 3/3 | **0/3** |
+
+The merged config file tells the story directly:
+
+| Arm | Result |
+|---|---|
+| C0 | `beta` only — agent_a's registration clobbered |
+| C1 / C2 | `alpha` + `beta` — both preserved |
+| C3 | `alpha` only — enforcement protected the first writer by refusing the second |
+
+C3 is the exact inverse of C0. Both lose a registration; they lose different
+ones, for opposite reasons.
+
+## What this pilot does and does not support
+
+<Callout type="warn">
+**One pilot estimates a direction, not an effect size.** Three repetitions
+per cell, two tasks, one machine, script-driven agents. It is evidence the
+machinery works and produces a separable signal.
+
+It is **not** a result about how language models coordinate, and it is not
+a confirmatory finding. The 1920-run design exists and its gate is closed
+because running it would commit to a preregistered analysis that has not
+been written.
+</Callout>
+
+## Provenance
+
+Every number here traces back:
+
+```
+this page
+  → frontend/results.json      (generated, never hand-edited)
+  → data/raw/pilot_landing/*/run.json
+  → the signed event chain in each artifact
+  → verified offline, 24/24
+```

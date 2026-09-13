@@ -1,0 +1,40 @@
+---
+title: The four contrasts
+description: Which comparison isolates which factor, and the one that deliberately does not.
+---
+
+```
+C0 → C2    information benefit
+C1 → C2    representation / coordination cost
+C2 → C3    enforcement benefit
+C1 → C3    complete system (confounded)
+```
+
+## Single-factor contrasts
+
+| Contrast | Isolates | Why it is clean |
+|---|---|---|
+| `information_benefit` | Information | Both arms unenforced, so any difference is attributable to agents knowing what peers did. |
+| `representation` | Representation | Both informed and unenforced. They differ in how information is represented, and therefore in what it costs. |
+| `enforcement_benefit` | Enforcement | Both receive identical information through the same channel object. **This is the contrast the project exists to measure.** |
+
+## The confounded one
+
+`complete_system` (C1 → C3) varies **both** factors at once. That is
+intentional, and it is recorded in the contrast's own rationale:
+
+<Callout type="warn">
+Reported as the end-to-end effect of a complete coordinated system, never as
+evidence for either factor separately.
+</Callout>
+
+`test_the_complete_system_contrast_is_declared_confounded` asserts that both
+factors differ and that the word "confounded" appears in the stated
+rationale. The honesty is enforced by a test rather than by good intentions.
+
+## Reading a contrast
+
+A contrast's `isolates` field is a claim about the **design**, not about a
+result. It isolates the named factor only because the two arms are identical
+in every other respect — a property this codebase must maintain and the
+tests check on every run.

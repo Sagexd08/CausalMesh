@@ -1,0 +1,91 @@
+---
+title: Scheduler
+description: The run state machine, reproducible randomization, and what the loop refuses to do.
+---
+
+Most of the scheduler's design is negative. A scheduler is unusually
+dangerous to an experiment because its failures are **silent**: a collection
+that quietly drops a run still produces a clean-looking dataset, just with a
+smaller denominator and no record of the gap.
+
+| Refusal | Why |
+|---|---|
+| Never skip a run silently | A missing run shrinks the denominator invisibly |
+| Never retry a failure | Re-running until it passes is selection on the outcome |
+| Never overwrite an artifact | Raw evidence is immutable |
+| Never re-execute a finished run | Two results for one planned unit inflates *n* |
+| Never resume a changed plan | Pools runs from two different designs |
+
+## The state machine
+
+```
+PLANNED ─→ RUNNING ─→ COMPLETED
+              │  ├───→ FAILED
+              │  ├───→ TIMED_OUT
+              │  └───→ ABANDONED
+              └─→ (crash) ─→ ABANDONED ─→ RUNNING   (resume)
+```
+
+<Callout title="COMPLETED does not mean the task succeeded">
+It means the run reached its end and produced a verdict. A run whose agents
+failed the task is COMPLETED with `succeeded=False`, and it belongs in the
+denominator. Conflating execution status with task outcome would turn the
+primary outcome into a survivorship rate.
+</Callout>
+
+**ABANDONED is deliberately not terminal.** An interrupted run has no
+verdict, so re-executing it is not selection on the outcome — unlike
+re-executing a FAILED run, which is. The two must stay distinguishable.
+
+`succeeded` is nullable and stays nullable: a harness crash leaves no
+verdict, and `None` must not become `False`.
+
+## Randomization is derived, never sampled
+
+The design is fully crossed, so there is nothing to allocate. Randomization
+exists solely to protect against **order** effects — if arms ran in blocks,
+C0 would occupy the cold start of every collection and its results would be
+confounded with machine state.
+
+Every draw comes from `HMAC-SHA256(master_seed, label)`.
+
+<Callout>
+Not `random.Random(seed).shuffle` — that is deterministic only for one
+CPython version. The Mersenne Twister seeding and the shuffle algorithm are
+implementation details with no cross-version guarantee, and reproducibility
+must hold across machines and versions, not merely across two runs on one
+laptop.
+</Callout>
+
+HMAC rather than `sha256(seed + label)` because concatenation is ambiguous
+when either part varies in length.
+
+## Run ids are derived, not generated
+
+```
+{experiment_id}__{task_id}__{arm}__r{repetition:04d}
+```
+
+Resume depends entirely on this. A UUID would make every replan a fresh set
+of runs and defeat resume completely.
+
+## Claiming is atomic, verified by breaking it
+
+`claim_next` does its SELECT and UPDATE inside one `BEGIN IMMEDIATE`
+transaction. To confirm the test was not passing vacuously, the transaction
+was replaced with a plain read followed by a separate write:
+**the test failed with 19 claims for 12 runs.**
+
+## Evidence is written before the index
+
+If the process dies between the two, the run is found RUNNING at next
+startup, marked ABANDONED, and re-executed — which costs time but cannot
+lose evidence. The reverse order could mark a run COMPLETED whose artifact
+was never written.
+
+## Sequential by choice
+
+Runs share one machine. A parallel scheduler would make wall-clock timings
+depend on what else happened to be running, which is a confound in the
+coordination-cost measurement — and that is an outcome, not a diagnostic.
+The index already supports concurrency; the blocker is measurement validity.

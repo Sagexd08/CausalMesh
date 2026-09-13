@@ -1,0 +1,71 @@
+---
+title: Tasks
+description: Declarative task definitions and the gate that proves a task is coordination-sensitive.
+---
+
+A task bundles everything a run needs to be reproducible: a repository
+fixture, agent roles, a declarative scenario, success criteria and a
+version.
+
+Tasks are **data, not code**. A task that could execute arbitrary Python
+would make "the same task" unverifiable across machines, and the
+configuration hash would no longer pin what actually ran.
+
+## Two shapes of coordination dependency
+
+| Shape | Mechanism |
+|---|---|
+| **Dependency** | Agent A writes a path agent B declares a dependency on |
+| **Contention** | Two agents write the same path |
+
+<Callout type="warn" title="The validator was wrong about this">
+Its first version required contention and rejected `schema_handler_widen`,
+which has none. Running the task settled it: with no contested path at all,
+C0 fails and C1/C2/C3 succeed. The rule was wrong, not the task — and
+demanding contention would have excluded a quarter of the planned benchmark.
+</Callout>
+
+## The quality gate
+
+> A task must demonstrate empirically that the coordination dependency
+> actually exists. Do not assume a task is coordination-sensitive merely
+> because its YAML says it is.
+
+`check_sensitivity()` runs the task under C0 and C2 and compares. C2 rather
+than C3 is the comparison arm: C3 adds enforcement on top of information, so
+a C0-versus-C3 difference could come from either factor.
+
+Structural validation is cheap and runs on every task. The quality gate is
+expensive, deliberately.
+
+## The two tasks that exist
+
+### `schema_handler_widen` — dependency
+
+agent_a widens a schema; agent_b's handler must follow. Ownership is
+disjoint, so enforcement never has anything to refuse.
+
+### `concurrent_edit_collision` — contention
+
+Both agents must register a handler in one shared config file. The path is
+genuinely contested, so C3 has something real to block.
+
+<Callout>
+This second task exists because the claim registry had recorded **2 claims
+held and 0 denials, ever**. "C3 prevents conflicting writes" was an untested
+claim. Building the task to prove it found two defects that had made the
+proof impossible.
+</Callout>
+
+## Success criteria
+
+```yaml
+success:
+  integration_test: [python, -m, pytest, -q, tests/]
+  divergence_file: src/config.py
+  divergence_marker: 'register("beta", beta.handle)  # sole registration'
+```
+
+The divergence marker is the trace a stale or clobbering write leaves
+behind. It must be **written by someone**, but need not be contested —
+stale-dependency defects show up in a file only one agent writes.

@@ -4,52 +4,78 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Ground: warm off-black, never #000. Pure black crushes the
-        // shadow detail every surface below depends on.
+        // Near-white ground with a dotted guide grid over it. The reference
+        // is a technical product page: the page reads as graph paper, and
+        // the data sits on it.
+        paper: {
+          DEFAULT: "#ffffff",
+          raised: "#fbfbfa",
+          sunk: "#f4f4f2",
+        },
         ink: {
-          950: "#0b0c0d",
-          900: "#111315",
-          850: "#16191c",
-          800: "#1d2125",
-          700: "#2a2f35",
-          600: "#3a4149",
+          900: "#101010",
+          800: "#1c1c1c",
+          700: "#3d3d3d",
+          600: "#5f5f5f",
+          500: "#8a8a8a",
+          400: "#b4b4b4",
+          300: "#d8d8d8",
+          200: "#e8e8e6",
         },
-        // Text ramp, neutral so the single accent stays the only hue.
-        chalk: {
-          100: "#f2f4f5",
-          200: "#dfe3e6",
-          400: "#a8b0b8",
-          500: "#828b94",
-          600: "#646d76",
+        rule: {
+          DEFAULT: "#101010",
+          soft: "#e3e3e0",
+          dot: "#d2d2ce",
         },
-        // The one accent: desaturated signal-green. Under 80% saturation,
-        // and deliberately not the purple/blue neon every AI product ships.
-        signal: {
-          DEFAULT: "#7dd3a0",
-          dim: "#5aa87c",
-          deep: "#2f6a4a",
+        // The highlighter. One saturated accent used as a marker swipe
+        // behind a single word per headline, and nowhere else at full
+        // strength — that restraint is what makes it land.
+        marker: {
+          DEFAULT: "#8ce619",
+          deep: "#6fbe0f",
+          wash: "#f0fbe0",
         },
-        // Arm identity. Sequential lightness on one hue family rather than
-        // four competing colors: the arms are ordered, not categorical.
         arm: {
-          c0: "#8b6f5c",
-          c1: "#6b8fa8",
-          c2: "#7dd3a0",
-          c3: "#c2a878",
+          c0: "#c2410c",
+          c1: "#6b7280",
+          c2: "#6fbe0f",
+          c3: "#a16207",
         },
       },
       fontFamily: {
-        // Geist over Inter, which the taste skill bans for premium work.
-        // System fallbacks first so the page renders correctly offline.
-        sans: ["Geist", "Satoshi", "ui-sans-serif", "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
-        mono: ["Geist Mono", "JetBrains Mono", "ui-monospace", "SFMono-Regular", "Menlo", "monospace"],
+        // Instrument Sans: engineered, slightly condensed, tight apertures.
+        // Geist was here first and the design detector flagged it — it is on
+        // every AI product page shipped this year, which is exactly the
+        // convergence a distinctive face is supposed to avoid. Inter is
+        // banned outright by the taste skill for the same reason.
+        sans: [
+          "Outfit",
+          "ui-sans-serif",
+          "system-ui",
+          "-apple-system",
+          "Segoe UI",
+          "sans-serif",
+        ],
+        display: [
+          "Cabinet Grotesk",
+          "Outfit",
+          "ui-sans-serif",
+          "system-ui",
+          "sans-serif",
+        ],
+        mono: [
+          "JetBrains Mono",
+          "ui-monospace",
+          "SFMono-Regular",
+          "Menlo",
+          "monospace",
+        ],
       },
-      letterSpacing: { tightest: "-0.045em" },
-      maxWidth: { prose: "65ch" },
-      animation: { "fade-up": "fadeUp 0.6s cubic-bezier(0.16,1,0.3,1) both" },
-      keyframes: {
-        fadeUp: { "0%": { opacity: 0, transform: "translateY(12px)" }, "100%": { opacity: 1, transform: "none" } },
-      },
+      letterSpacing: { tightest: "-0.035em" },
+      // Cabinet Grotesk for display only: heavier, more condensed, with the
+      // engineered feel the reference has at large sizes. Satoshi carries
+      // body copy, where Cabinet is too characterful to read at length.
+      maxWidth: { prose: "62ch" },
     },
   },
   plugins: [],

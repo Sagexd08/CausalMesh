@@ -1,0 +1,80 @@
+---
+title: The evidence model
+description: What is recorded, what is immutable, and what "verifiable" means precisely.
+---
+
+## Everything an agent does becomes an event
+
+Every tool call passes through `LifecycleBoundary.invoke`, which gates it
+before execution and records it afterwards — **including denials and
+failures**. The event is emitted after execution, carrying the real outcome:
+
+<Callout>
+A denied write is emitted as a `FAILURE` event, not as the write it was
+refused. The log must say what happened, not what was attempted.
+</Callout>
+
+## Events are canonicalized before signing
+
+Ambiguous serialization silently breaks every downstream hash, so
+canonicalization is strict: sorted keys, explicit UTF-8 with NFC
+normalization, RFC 3339 UTC timestamps, integer-only sequences, and outright
+rejection of floats and NaN.
+
+## The chain
+
+```
+h_i = SHA256( h_(i-1) ‖ canonical(event_i) )
+```
+
+Each event is signed with a per-actor Ed25519 key derived deterministically
+from `master_seed + actor_id`, so attribution is verifiable rather than
+asserted, and two runs with the same seed produce byte-identical signatures.
+
+<Callout type="warn" title="Nothing non-reproducible may enter the payload">
+Wall-clock duration, command stdout, and elapsed times are all excluded.
+An earlier version added an `output_sha256` of the command output, which
+reintroduced exactly the failure it was meant to fix — a digest of
+non-reproducible bytes is just as non-reproducible, only now invisible.
+Timing is still measured; it lives in the run artifact, outside the
+integrity record.
+</Callout>
+
+## Offline verification
+
+The verifier takes only `(log, public keys, optional anchors)` and imports
+nothing from the relay. Two tests enforce that boundary in a clean
+subprocess, because `sys.modules` in the test process is already polluted:
+
+```python
+test_the_verifier_does_not_import_the_relay
+test_the_verifier_needs_only_events_and_crypto
+```
+
+That matters because offline verification is the entire audit story: if the
+verifier needed the relay, an auditor would need the very component whose
+output they are checking.
+
+## What the chain detects
+
+| Attack | Result |
+|---|---|
+| Event mutation | detected |
+| Event insertion | detected |
+| Event deletion | detected |
+| Event reordering | detected |
+| Signature substitution | detected |
+| Wrong-actor attribution | detected |
+| Duplicate replay | detected |
+| **Suffix truncation** | **undetected without an anchor**, detected with one |
+
+That last row is a real limitation, tested in both directions. A shorter
+valid chain is still a valid chain; only an external anchor reveals that
+the end was cut off.
+
+## Raw data is immutable
+
+The chain store is append-only with deliberately **no** update, delete,
+replace or clear API. Writing an artifact over an existing one raises rather
+than overwrites — a second execution under the same run id must fail loudly
+rather than destroy the first run's evidence.

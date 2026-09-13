@@ -1,0 +1,139 @@
+---
+title: Quickstart
+description: Install the package, run a smoke collection, and verify the chains it produces.
+---
+
+## Requirements
+
+Python 3.11 or newer and Git. The runtime core deliberately stays light —
+`cryptography` for Ed25519 and `PyYAML` for configuration — because a
+coordination substrate that drags in a message broker is harder to trust and
+harder to reproduce.
+
+```bash
+git clone https://github.com/Sagexd08/CausalMesh
+cd CausalMesh
+pip install -e ".[dev]"
+```
+
+## Run the test suite
+
+```bash
+pytest                    # 797 tests
+pytest -m "not slow"      # skips the integration tests that spawn subprocesses
+```
+
+The slow tests execute real runs: real workspaces, real agents, real
+`pytest` subprocesses inside those workspaces. They take minutes because
+they are doing the thing rather than asserting about it.
+
+## Execute a collection
+
+There is no CLI yet — it is Step 15 of the build plan and is not written.
+The Python API is what exists:
+
+```python title="run_smoke.py"
+import asyncio
+from pathlib import Path
+
+from causalmesh.experiments import plan_experiment, profile
+from causalmesh.scheduler import ExperimentRunner, RunEnvironment
+from causalmesh.tasks import TaskDefinition
+
+SEED = b"a-seed-you-record-somewhere"
+
+async def main():
+    task = TaskDefinition.from_yaml("tasks/schema_handler_widen.yaml")
+
+    plan = plan_experiment(
+        experiment_id="my_first_run",
+        profile=profile("smoke"),          # 1 task x 4 arms x 1 repetition
+        task_ids=[task.task_id],
+        master_seed=SEED,
+        task_hashes={task.task_id: task.content_hash()},
+    )
+
+    environment = RunEnvironment.under(".", experiment_id="my_first_run")
+
+    with ExperimentRunner(
+        plan=plan,
+        tasks={task.task_id: task},
+        environment=environment,
+        master_seed=SEED,
+    ) as runner:
+        runner.prepare()
+        report = await runner.run()
+        print(report.summary())
+
+asyncio.run(main())
+```
+
+```bash
+python run_smoke.py
+```
+
+<Callout title="The seed is not optional">
+`master_seed` is a required argument with no default. A run whose seed
+nobody recorded cannot be reproduced, and the API refuses to let that happen
+quietly. Everything derived from it — signing keys, execution order,
+per-run seeds — comes from HMAC over that value.
+</Callout>
+
+## Read what it produced
+
+```
+data/raw/my_first_run/
+  index.db                        operational run index (resumable)
+  my_first_run__..._C0__r0000/
+    run.json                      chain + outcome + coordination accounting
+  my_first_run__..._C1__r0000/
+  my_first_run__..._C2__r0000/
+  my_first_run__..._C3__r0000/
+```
+
+A smoke collection answers only "does the machinery run end to end". With
+one repetition per cell it estimates nothing, and the profile's own
+docstring says so.
+
+## Verify a chain offline
+
+```python title="verify.py"
+import json
+from pathlib import Path
+
+from causalmesh.crypto.keys import KeyPair, PublicKeyRing
+from causalmesh.experiments import derive_run_seed
+from causalmesh.verifier import verify_chain
+
+SEED = b"a-seed-you-record-somewhere"
+
+for directory in Path("data/raw/my_first_run").iterdir():
+    if not directory.is_dir():
+        continue
+    payload = json.loads((directory / "run.json").read_text(encoding="utf-8"))
+    chain = payload["chain"]
+
+    run_seed = derive_run_seed(SEED, payload["run_id"])
+    actors = {r["event"]["identity"]["agent_id"] for r in chain}
+    ring = PublicKeyRing.from_keypairs(
+        {a: KeyPair.derive(run_seed, a) for a in actors}
+    )
+
+    report = verify_chain(chain, ring)
+    print(payload["arm"], report.valid, report.summary())
+```
+
+The verifier imports nothing from the relay — that boundary is enforced by a
+test — so this works on a different machine, months later, with the system
+shut down.
+
+## Next
+
+<Cards>
+  <Card title="The four arms" href="/docs/concepts/the-four-arms">
+    What C0 through C3 actually differ by.
+  </Card>
+  <Card title="Running an experiment" href="/docs/operating/running-an-experiment">
+    Profiles, randomization, resume, and the closed confirmatory gate.
+  </Card>
+</Cards>

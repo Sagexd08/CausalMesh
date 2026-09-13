@@ -1,0 +1,94 @@
+---
+title: Reading a run
+description: What is in a run artifact and how to interpret each field.
+---
+
+Each run writes one `run.json` under `data/raw/<experiment>/<run_id>/`.
+
+```json
+{
+  "arm": "C3",
+  "chain": [ /* every signed event, in full */ ],
+  "experiment_id": "pilot_landing",
+  "plan_order": 7,
+  "repetition": 1,
+  "result": {
+    "outcome": { "succeeded": false, "tests_passed": false,
+                 "divergence_absent": true, "evidence": [ ] },
+    "agent_summaries": { },
+    "claim_history": [ ],
+    "denials": [ ],
+    "coordination_bytes": 196,
+    "workspace_digests": { }
+  },
+  "run_id": "pilot_landing__concurrent_edit_collision__C3__r0001",
+  "state": "completed"
+}
+```
+
+The chain goes in **whole**. An artifact that summarised it would leave the
+verifier nothing to verify.
+
+## Outcome
+
+```
+success = integration tests pass  AND  induced divergence absent
+```
+
+Both, never either. A run whose tests pass while the divergence marker
+remains has not resolved the coordination problem — it failed to notice it,
+which is exactly the C0 failure mode an "either" rule would hide.
+
+There is no subjective field anywhere in the outcome module.
+
+<Callout>
+A **missing** divergence file is not "no divergence": the check could not be
+performed, and reporting success on that basis would be a false negative.
+Tests that never ran are likewise recorded distinctly from tests that ran
+and failed.
+</Callout>
+
+## Coordination accounting
+
+```json
+"coordination": {
+  "coordination_bytes": 0,
+  "events_available": 2,
+  "events_injected": 0,
+  "events_dropped": 2,
+  "received_no_coordination": true,
+  "turn_digests": ["e3b0c442...", "e3b0c442...", "..."]
+}
+```
+
+For a C0 run, `turn_digests` holds **one unique value** repeated — the
+digest of the empty string. That is the isolation proof.
+
+## Denials
+
+```json
+{
+  "requesting_agent": "agent_b",
+  "holder_agent": "agent_a",
+  "path": "src/config.py",
+  "reason": "write to 'src/config.py' denied: held by 'agent_a' until ...",
+  "timestamp_us": 1700000002000000
+}
+```
+
+Present only under C3. A denial in C0, C1 or C2 would mean enforcement
+leaked into an arm defined as unenforced.
+
+## Success is judged on an integrated workspace
+
+Agents have separate workspaces, but that is an isolation mechanism, not the
+research model. Each run merges them, taking every file from the agent whose
+role owns it.
+
+<Callout type="warn" title="Contested paths are the exception">
+A contested path has no single owner by definition, so resolving it by
+ownership would decide the contest before the arms could differ. Contested
+paths are merged from the **signed chain** instead: the last agent whose
+accepted write event names the path wins. A denied write produces no event,
+so a blocked agent cannot win by construction.
+</Callout>

@@ -126,5 +126,15 @@ artifact.html
 # operator's toolchain and would otherwise pin this repo to one agent setup.
 # ---------------------------------------------------------------------------
 .agents/
-.claude/skills/
 skills-lock.json
+
+# .claude/skills/ IS tracked: these are the design skills this project was
+# built with, and a future session in another checkout needs them to make
+# changes that match. The impeccable binaries are excluded — they are
+# platform-specific and re-downloaded on first run.
+.claude/skills/impeccable/scripts/
+
+# Fumadocs site build output
+docs-site/node_modules/
+docs-site/.next/
+docs-site/.source/

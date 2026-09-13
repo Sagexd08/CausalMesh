@@ -1,0 +1,96 @@
+---
+title: Model adapters
+description: Provider-neutral agents over the chat-completions wire protocol — and what has not been run.
+---
+
+`ModelAgent` implements the same five-method `CodingAgent` lifecycle the
+script-driven agent does, so the scheduler, relay, gate, channels and chain
+are untouched by which kind of agent is running.
+
+```
+initialize → observe → plan → act → finalize
+```
+
+`observe` is separated from `act` so coordination cost is attributable apart
+from task-reasoning cost.
+
+## Wire protocol, not vendor SDKs
+
+`openai` and `anthropic` are both installed and neither is used.
+
+1. **Reproducibility.** An SDK is a moving dependency whose retry policy and
+   defaults change between releases. A run that cannot be re-executed in two
+   years because a client library changed is not reproducible. The bytes on
+   the wire are the contract.
+2. **Recorded confounds.** Endpoint, model, temperature, top_p, seed and max
+   tokens must all be captured. An SDK supplying its own defaults hides some.
+3. **One code path.** Three SDKs would be three failure modes to test.
+
+## What differs between providers
+
+| | request | system prompt | tokens |
+|---|---|---|---|
+| OpenAI | `messages` | a `role: system` message | `usage.prompt_tokens` |
+| Anthropic | `messages` + `system` | a **top-level field** | `usage.input_tokens` |
+| Local | OpenAI shape | as OpenAI | often absent |
+
+<Callout type="warn">
+Anthropic is not "OpenAI with a different URL". It rejects `role: "system"`
+inside `messages`, so leaving the prompt there would fail the request — or
+worse, on a lenient proxy, silently drop the agent's entire instruction set,
+which looks like a badly behaved model rather than a broken adapter.
+</Callout>
+
+## Containment
+
+`ModelAgent` never holds a `Toolbox`. It reaches tools only through
+`ToolExecutor`, so there is no code path by which model output can touch the
+filesystem without passing the gate — not by discipline, but because the
+object it would need is not reachable.
+
+Two tests enforce it: one on a live agent's object graph, one asserting the
+module imports no execution primitives at all.
+
+## The action protocol
+
+One JSON object per turn:
+
+```json
+{"tool": "write_file", "arguments": {"path": "...", "content": "..."},
+ "reasoning": "why", "done": false}
+```
+
+Strict by design. Every rejection carries a classified `kind` — `no_json`,
+`malformed_json`, `unknown_tool`, `bad_arguments` — so a model that cannot
+follow the protocol shows up as **countable non-compliance** rather than
+silently degraded behaviour.
+
+## Determinism, precisely
+
+`ModelSettings` defaults to `temperature=0.0`, `top_p=1.0`, and passes
+`seed` where a provider accepts it.
+
+<Callout type="warn" title="This does not make a model deterministic">
+Temperature 0 is not a reproducibility guarantee on any hosted provider:
+batching, model updates behind an alias, and GPU floating-point
+non-associativity all produce variation. The settings remove the randomness
+that *can* be removed and record the rest.
+
+A run with a hosted model is therefore **not bit-reproducible**. The chain
+is still verifiable — it records what happened, which is a different
+property from being able to make it happen again.
+</Callout>
+
+## What has not been executed
+
+No hosted model has been run through this code. No API key was available and
+none was requested — spending money is the operator's decision.
+
+- **Tested:** the wire protocol both providers use, over real HTTP against a
+  server that speaks it, with real status codes — request shape, header
+  placement, response parsing, token extraction, failure classification.
+- **Untested:** whether a real GPT or Claude follows the action protocol
+  reliably enough to complete a task, and at what failure rate.
+
+`LocalClient` was likewise never run against a live server; Ollama, vLLM and
+LM Studio were all probed and none was running.

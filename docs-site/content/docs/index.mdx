@@ -1,0 +1,88 @@
+---
+title: CausalMesh
+description: A coordination substrate for fleets of autonomous coding agents, with cryptographically verifiable evidence of everything every agent did.
+---
+
+Put four coding agents on one repository and they interfere. They make stale
+reads, duplicate each other's work, and overwrite each other's changes.
+Every one of those is a **coordination** failure rather than a capability
+failure — each agent is doing competent work, and the system is what loses.
+
+CausalMesh sits between the fleet and the repository. Every action passes a
+gate, every action is signed into a hash chain, and conflicting writes are
+refused with the reason recorded.
+
+It also answers a question nobody has answered cleanly:
+
+<Callout title="The research question">
+How much of the coordination benefit comes from **information** (agents
+knowing what peers did), and how much from **enforcement** (agents being
+prevented from conflicting)?
+</Callout>
+
+## Why the question is hard
+
+These two factors normally arrive together. Every system that shares state
+also locks it, so nobody knows which one is doing the work — and they cost
+very different things.
+
+- **Enforcement** needs a consistent lock store: latency, a failure domain,
+  and contention when agents genuinely need the same file.
+- **Information** needs context tokens, which is the dominant operating cost
+  of a long-running fleet.
+
+If information alone recovers most of the benefit, you can run a much
+cheaper and more available system. That is a deployment decision, and today
+nobody can make it on evidence.
+
+## What exists today
+
+<Cards>
+  <Card title="Substrate" href="/docs/subsystems/tool-boundary">
+    Tool boundary, claim registry, coordination channels and the signed
+    chain. All built, all exercised.
+  </Card>
+  <Card title="Experiment" href="/docs/concepts/the-four-arms">
+    Four arms, four contrasts, a scheduler with reproducible randomization
+    and resume.
+  </Card>
+  <Card title="Measured results" href="/docs/results">
+    A real 24-run pilot. Every figure on this site traces to
+    `data/raw/pilot_landing`.
+  </Card>
+  <Card title="Known gaps" href="/docs/limitations">
+    What is not built, what is not proven, and what this project refuses to
+    claim.
+  </Card>
+</Cards>
+
+## Status, stated plainly
+
+| | |
+|---|---|
+| Tests | **797 passing** |
+| Modules | 56 across 22 packages |
+| Pilot collection | 24 runs, 2 tasks, 4 arms, executed |
+| Chains verified offline | 24 / 24 |
+| Hosted model runs | **none** — see [Limitations](/docs/limitations) |
+| Analysis and reporting layer | **not built** |
+
+<Callout type="warn" title="This documentation does not overclaim">
+Where something is unbuilt, untested or unproven, these pages say so in the
+place you would look for it — not in a footnote. A limitation that is only
+discoverable by reading the source is a limitation the documentation is
+hiding.
+</Callout>
+
+## The standing commitments
+
+The project holds itself to a short list, and the documentation is part of
+how it is held:
+
+- **No fabricated results.** Not results, not benchmarks, not model outputs.
+- **Raw data is immutable.** Once written, `data/raw/` is never modified.
+- **Failed runs are evidence.** They are recorded with full context, never
+  silently discarded.
+- **No security claim beyond what a passing test establishes.**
+- **Every reported number traces** from the claim, through the analysis, to
+  the signed event chain that produced it.
