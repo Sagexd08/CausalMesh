@@ -13,7 +13,8 @@
     "preview": "npm run preview --workspace=frontend",
     "dev:docs": "npm run dev --workspace=docs-site",
     "build:docs": "npm run build --workspace=docs-site",
-    "build:all": "npm run build && npm run build:docs"
+    "build:all": "npm run build && npm run build:docs",
+    "dev:all": "npx concurrently \"npm run dev\" \"npm run dev:docs\""
   },
   "engines": {
     "node": ">=20"
