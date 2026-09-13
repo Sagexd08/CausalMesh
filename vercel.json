@@ -15,21 +15,25 @@
     }
   ],
   "routes": [
-
+    {
+      "src": "^/docs/?$",
+      "dest": "/docs-site/index"
+    },
+    {
+      "src": "^/docs/(.*)",
+      "dest": "/docs-site/$1"
+    },
+    {
+      "src": "^/_next/(.*)",
+      "dest": "/docs-site/_next/$1"
+    },
     {
       "handle": "filesystem"
     },
     {
-      "src": "/docs",
-      "dest": "/docs-site"
-    },
-    {
-      "src": "/docs/(.*)",
-      "dest": "/docs-site/$1"
-    },
-    {
-      "src": "/(.*)",
+      "src": "^/(.*)",
       "dest": "/frontend/$1"
     }
   ]
 }
+

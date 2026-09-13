@@ -27,7 +27,7 @@ export default function HomePage() {
 
       <div className="mt-8 flex flex-wrap gap-3">
         <Link
-          href="/"
+          href="/quickstart"
           className="rounded-md bg-fd-primary px-5 py-2.5 text-sm font-medium text-fd-primary-foreground transition-opacity hover:opacity-90"
         >
           Read the docs
