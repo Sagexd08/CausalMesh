@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { AGENT_MARKS } from "./AgentIcons.jsx";
+import agentMarks from "../agent-marks.json";
 import { Check } from "./Icons.jsx";
 import { Mark, Section } from "./Primitives.jsx";
 
@@ -22,12 +22,25 @@ const STATUS = {
   untested: ["Not yet run", "text-ink-600 bg-paper-sunk border-rule-soft"],
 };
 
-const AGENTS = AGENT_MARKS.map(([name, Icon], i) => ({
-  name,
-  Icon,
+const AGENTS = agentMarks.map((agent, i) => ({
+  ...agent,
   // The three adapters that exist are the ones exercised by the test suite.
   status: i < 3 ? "tested" : "untested",
 }));
+
+function AgentMark({ agent, alt = "", className = "" }) {
+  return (
+    <span
+      className={`flex h-7 w-7 shrink-0 items-center justify-center border border-rule-soft bg-paper ${className}`}
+    >
+      <img
+        src={agent.src}
+        alt={alt}
+        className="h-5 w-5 object-contain"
+      />
+    </span>
+  );
+}
 
 function stepsFor(name) {
   return [
@@ -70,7 +83,6 @@ export default function Agents() {
           <div className="mt-9 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3">
             {AGENTS.map((item, i) => {
               const active = i === selected;
-              const Icon = item.Icon;
               return (
                 <button
                   key={item.name}
@@ -83,11 +95,7 @@ export default function Agents() {
                       : "border-rule-soft bg-paper-raised hover:border-ink-300"
                   }`}
                 >
-                  <Icon
-                    className={`h-5 w-5 shrink-0 ${
-                      active ? "text-ink-900" : "text-ink-500"
-                    }`}
-                  />
+                  <AgentMark agent={item} />
                   <span
                     className={`truncate text-[13px] ${
                       active ? "font-medium text-ink-900" : "text-ink-700"
@@ -111,7 +119,7 @@ export default function Agents() {
         {/* Setup panel */}
         <div className="overflow-hidden rounded-xl border border-rule-soft bg-paper-raised">
           <div className="flex items-center gap-3 border-b border-rule-soft px-5 py-3.5">
-            <agent.Icon className="h-5 w-5 text-ink-900" />
+            <AgentMark agent={agent} alt={`${agent.name} mark`} />
             <span className="text-[15px] font-medium text-ink-900">
               {agent.name}
             </span>
