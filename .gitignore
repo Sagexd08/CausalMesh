@@ -116,9 +116,19 @@ experiments/**
 # ---------------------------------------------------------------------------
 # Frontend build output
 # ---------------------------------------------------------------------------
-frontend/node_modules/
+# Keep dependency trees local in every workspace. Package manifests and
+# lockfiles remain tracked so a fresh checkout installs the same graph.
+node_modules/
 frontend/dist/
 artifact.html
+
+# Hosting/provider state is generated per developer or deployment and must
+# never carry credentials or project-specific links into the repository.
+.vercel/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 
 # ---------------------------------------------------------------------------
 # Agent tooling installed by `npx skills add` — vendored third-party skill
@@ -135,6 +145,5 @@ skills-lock.json
 .claude/skills/impeccable/scripts/
 
 # Fumadocs site build output
-docs-site/node_modules/
 docs-site/.next/
 docs-site/.source/
