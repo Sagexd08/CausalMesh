@@ -1,10 +1,10 @@
 import Link from 'next/link';
 
 const ENTRY = [
-  ['Quickstart', 'Install, run a smoke collection, verify the chains.', '/docs/quickstart'],
-  ['The question', 'Information versus enforcement, and why they are hard to separate.', '/docs/concepts/the-question'],
-  ['Measured results', 'A real 24-run pilot, and what each row shows.', '/docs/results'],
-  ['Limitations', 'What is not built, not proven, and not claimed.', '/docs/limitations'],
+  ['Quickstart', 'Install, run a smoke collection, verify the chains.', '/quickstart'],
+  ['The question', 'Information versus enforcement, and why they are hard to separate.', '/concepts/the-question'],
+  ['Measured results', 'A real 24-run pilot, and what each row shows.', '/results'],
+  ['Limitations', 'What is not built, not proven, and not claimed.', '/limitations'],
 ];
 
 export default function HomePage() {
@@ -27,7 +27,7 @@ export default function HomePage() {
 
       <div className="mt-8 flex flex-wrap gap-3">
         <Link
-          href="/docs"
+          href="/"
           className="rounded-md bg-fd-primary px-5 py-2.5 text-sm font-medium text-fd-primary-foreground transition-opacity hover:opacity-90"
         >
           Read the docs

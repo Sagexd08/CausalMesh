@@ -15,14 +15,7 @@
     }
   ],
   "routes": [
-    {
-      "src": "/docs(?:/(.*))?",
-      "dest": "/docs-site/docs/$1"
-    },
-    {
-      "src": "/_next/(.*)",
-      "dest": "/docs-site/_next/$1"
-    },
+
     {
       "handle": "filesystem"
     },
