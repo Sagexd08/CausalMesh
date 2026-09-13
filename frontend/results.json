@@ -1,0 +1,89 @@
+{
+  "arms": [
+    {
+      "arm": "C0",
+      "chains_verified": 6,
+      "denials": 0,
+      "divergences": 6,
+      "events": 24,
+      "mean_coordination_bytes": 0.0,
+      "runs": 6,
+      "success_rate": 0.0,
+      "successes": 0
+    },
+    {
+      "arm": "C1",
+      "chains_verified": 6,
+      "denials": 0,
+      "divergences": 0,
+      "events": 24,
+      "mean_coordination_bytes": 361.0,
+      "runs": 6,
+      "success_rate": 1.0,
+      "successes": 6
+    },
+    {
+      "arm": "C2",
+      "chains_verified": 6,
+      "denials": 0,
+      "divergences": 0,
+      "events": 24,
+      "mean_coordination_bytes": 196.0,
+      "runs": 6,
+      "success_rate": 1.0,
+      "successes": 6
+    },
+    {
+      "arm": "C3",
+      "chains_verified": 6,
+      "denials": 3,
+      "divergences": 0,
+      "events": 24,
+      "mean_coordination_bytes": 196.0,
+      "runs": 6,
+      "success_rate": 0.5,
+      "successes": 3
+    }
+  ],
+  "experiment_id": "pilot_landing",
+  "profile": "pilot",
+  "tasks": {
+    "concurrent_edit_collision": {
+      "C0": {
+        "runs": 3,
+        "success": 0
+      },
+      "C1": {
+        "runs": 3,
+        "success": 3
+      },
+      "C2": {
+        "runs": 3,
+        "success": 3
+      },
+      "C3": {
+        "runs": 3,
+        "success": 0
+      }
+    },
+    "schema_handler_widen": {
+      "C0": {
+        "runs": 3,
+        "success": 0
+      },
+      "C1": {
+        "runs": 3,
+        "success": 3
+      },
+      "C2": {
+        "runs": 3,
+        "success": 3
+      },
+      "C3": {
+        "runs": 3,
+        "success": 3
+      }
+    }
+  },
+  "total_runs": 24
+}

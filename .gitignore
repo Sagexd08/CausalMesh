@@ -112,3 +112,19 @@ experiments/**
 *.db-journal
 *.db-wal
 *.db-shm
+
+# ---------------------------------------------------------------------------
+# Frontend build output
+# ---------------------------------------------------------------------------
+frontend/node_modules/
+frontend/dist/
+artifact.html
+
+# ---------------------------------------------------------------------------
+# Agent tooling installed by `npx skills add` — vendored third-party skill
+# definitions, not project source. Tracked nowhere: they belong to the
+# operator's toolchain and would otherwise pin this repo to one agent setup.
+# ---------------------------------------------------------------------------
+.agents/
+.claude/skills/
+skills-lock.json

@@ -107,9 +107,66 @@ That last row is a real limitation, documented rather than hidden.
 
 ## Status
 
-🚧 **Under active construction.** Currently at Step 0 (repository bootstrap) of the plan below.
+**Substrate complete and exercised. 797 tests passing.**
 
-The build follows a vertical slice first: a single scenario driven end-to-end through every subsystem, executed under all four arms, before breadth is added. No subsystem is considered complete until it participates in a real executable path.
+The build follows a vertical slice first: a single scenario driven end-to-end
+through every subsystem, executed under all four arms, before breadth is
+added. No subsystem is considered complete until it participates in a real
+executable path.
+
+| Subsystem | State |
+|---|---|
+| Event protocol, canonicalization | ✅ property-tested |
+| Ed25519 identity, hash chain | ✅ |
+| Offline verifier + adversarial battery | ✅ 8 attack classes |
+| Claim registry, leases | ✅ concurrency-tested across threads |
+| Relay: sequence, sign, chain, fan-out | ✅ |
+| Isolation, 11 tools, lifecycle hooks | ✅ leakage-tested |
+| Channels, relevance, information window | ✅ |
+| Script-driven agent | ✅ |
+| Task system + empirical §37 gate | ✅ 2 tasks |
+| Scheduler, state machine, run index | ✅ resume-tested |
+| Model adapters (OpenAI, Anthropic, local) | ✅ tested over real HTTP |
+| Metrics, statistics, provenance, CLI | ⬜ not built |
+
+Not yet done, and stated plainly: **no hosted model has been run** (no key was
+available, and spending money is the operator's decision), and the analysis
+and reporting layers do not exist. See [`docs/backlog.md`](docs/backlog.md),
+which records every gap as a tracked item with its reason.
+
+## Measured results
+
+A real pilot collection — 2 tasks × 4 arms × 3 repetitions = **24 runs**,
+executed on this machine, 150 s wall clock. Nothing below is illustrative.
+
+| Arm | Success | Mean coordination bytes | Denials | Divergences | Chains verified |
+|:---:|:---:|---:|---:|---:|:---:|
+| C0 | 0/6 | **0** | 0 | 6 | 6/6 |
+| C1 | 6/6 | 361 | 0 | 0 | 6/6 |
+| C2 | 6/6 | 196 | 0 | 0 | 6/6 |
+| C3 | 3/6 | 196 | 3 | 0 | 6/6 |
+
+Reading it:
+
+- **C0 fails every run.** Isolated agents make exactly the stale-read and
+  clobber errors the tasks induce. Zero coordination bytes, and a single
+  unique context digest across all turns — proof that nothing entered, not an
+  assertion that nothing should have.
+- **Information alone recovers everything** on both tasks. C1 and C2 are 6/6.
+- **C1 costs 84% more than C2** for identical outcomes. That is the
+  representational overhead, measured.
+- **C2 and C3 spend identically** (196 bytes), as they must: they differ by
+  enforcement alone, and any information difference would confound the
+  contrast.
+- **C3 splits 3/3 and 0/3.** Where ownership is disjoint it matches C2. Where
+  the path is genuinely contested, enforcement *prevents the clobber and
+  blocks legitimate work* — the file needs two writers. That is §74's
+  trade-off measured rather than assumed to be an improvement.
+- **All 24 chains verify offline**, rebuilt from each run's derived seed.
+
+One pilot estimates a direction, not an effect size. The confirmatory design
+(1920 runs) is built and **gated**: it commits to a preregistered analysis
+this project has not written.
 
 ## 📋 Implementation plan
 
@@ -117,7 +174,31 @@ The build follows a vertical slice first: a single scenario driven end-to-end th
 
 It covers the architecture, the honest security model, the 17-step build sequence, the verification procedure, and the explicit non-goals of the current slice.
 
-## Planned usage
+## Usage
+
+The Python API is what exists today; the CLI is Step 15 and not yet built.
+
+```python
+from causalmesh.experiments import plan_experiment, profile
+from causalmesh.scheduler import ExperimentRunner, RunEnvironment
+from causalmesh.tasks import TaskDefinition
+
+task = TaskDefinition.from_yaml("tasks/schema_handler_widen.yaml")
+plan = plan_experiment(
+    experiment_id="my_run", profile=profile("smoke"),
+    task_ids=[task.task_id], master_seed=b"a-recorded-seed",
+)
+env = RunEnvironment.under(".", experiment_id="my_run")
+with ExperimentRunner(plan=plan, tasks={task.task_id: task},
+                      environment=env, master_seed=b"a-recorded-seed") as r:
+    r.prepare()
+    report = await r.run()
+```
+
+Run the suite with `pytest`. The slow integration tests execute real
+subprocesses; `pytest -m "not slow"` skips them.
+
+### Planned CLI (Step 15)
 
 ```bash
 causalmesh doctor                          # environment health check
@@ -148,7 +229,21 @@ data/         raw (immutable), processed, manifests, exports
 artifacts/    chains, metrics, plots, tables, reports, certificates
 tests/        unit, integration, property, adversarial, failure, reproducibility
 docs/         architecture, protocol, events, claims, security, analysis
+frontend/     landing page (React + Vite + Tailwind)
 ```
+
+## Documentation
+
+| Document | What it covers |
+|---|---|
+| [`docs/IDEA.md`](docs/IDEA.md) | What this is and why, for a deployment reader |
+| [`docs/PLAN.md`](docs/PLAN.md) | The full build sequence |
+| [`docs/security.md`](docs/security.md) | The three-layer isolation model and its limits |
+| [`docs/adapters.md`](docs/adapters.md) | Model adapters, and what has not been executed |
+| [`docs/scheduler.md`](docs/scheduler.md) | The run loop, state machine and randomization |
+| [`docs/claims.md`](docs/claims.md) | Write leases and enforcement |
+| [`docs/tasks.md`](docs/tasks.md) | Task definitions and the §37 sensitivity gate |
+| [`docs/backlog.md`](docs/backlog.md) | Every known gap, with its reason |
 
 ## Requirements
 
