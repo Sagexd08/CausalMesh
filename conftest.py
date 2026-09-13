@@ -13,3 +13,12 @@ from pathlib import Path
 SRC = Path(__file__).resolve().parent / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
+
+# Test-support modules are imported by bare name from any test directory
+# (`from fake_model_server import FakeModelServer`). Pytest only puts a
+# directory on sys.path when a test in that same directory imports from it,
+# and the fake model server is used from tests/integration/ — so it is
+# registered here rather than relying on that.
+SUPPORT = Path(__file__).resolve().parent / "tests" / "support"
+if str(SUPPORT) not in sys.path:
+    sys.path.insert(0, str(SUPPORT))

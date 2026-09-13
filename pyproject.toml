@@ -94,7 +94,7 @@ extend-exclude = ["fixtures"]
 # Test-support modules (e.g. tests/adversarial/chain_fixtures.py) are imported
 # by bare name because pytest puts each test directory on sys.path; listing
 # those directories here keeps them classified as first-party.
-src = ["src", "tests", "tests/adversarial"]
+src = ["src", "tests", "tests/adversarial", "tests/support"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "RUF"]

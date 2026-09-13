@@ -13,22 +13,37 @@ These are the five items `docs/PLAN.md` names explicitly.
 
 ### Real LLM adapters (OpenAI, Anthropic, local)
 
-**Status:** not built. `adapters/` holds the `CodingAgent` interface;
-`agents/mock.py` is the only implementation.
+**Status (Phase 1): built and tested; no hosted model executed.**
 
-**Why:** no API keys, no cost, no model nondeterminism. The infrastructure
-claims this project makes — chain integrity, isolation, claim exclusivity,
-coordination accounting — are all testable deterministically, and a
-nondeterministic agent would make a failing test ambiguous between "the
-harness is broken" and "the model did something else this time".
+`OpenAIClient`, `AnthropicClient` and `LocalClient` exist, written against
+the chat-completions wire protocol rather than vendor SDKs, and are tested
+over real HTTP against a server that implements both protocols. Every
+coordination guarantee holds with a model driving — see `docs/adapters.md`.
 
-**What it would take:** an adapter implementing `CodingAgent`, plus a
-decision about how to hold decoding parameters constant across arms (§3)
-and how to record model version as a potential confound (§43).
+**What remains untested:** whether a real hosted model follows the action
+protocol reliably enough to complete a task, and at what
+protocol-failure rate. That needs an API key and a budget, and spending
+money is the operator's decision. `LocalClient` was also not exercised
+against a live local server: Ollama, vLLM and LM Studio were all probed and
+none was running on this machine.
 
-**What it blocks:** every claim about *agent behaviour*. This build
+**Why it was deferred until Phase 1:** building the substrate against a
+deterministic agent means a failing test is unambiguous. With a
+nondeterministic model in the loop from the start, every failure is "the
+harness is broken" *or* "the model did something different today", and a
+coordination substrate cannot be debugged through that fog.
+
+**What it still blocks:** every claim about *agent behaviour*. This build
 measures the platform, not language models. Nothing in it supports a claim
 about how real coding agents coordinate.
+
+**A note on determinism (§84):** a run with a hosted model is not
+bit-reproducible, and `ModelSettings` does not pretend otherwise.
+Temperature 0 is not a reproducibility guarantee on any hosted provider —
+batching, aliased model updates and GPU floating-point non-associativity
+all produce variation. The settings remove the randomness that can be
+removed and record the rest. The chain remains verifiable: it records what
+happened, which is a different property from being able to repeat it.
 
 ### CooperBench import (§54)
 
@@ -194,3 +209,25 @@ and they record when a file was touched rather than which write the system
 accepted. The relay's monotonic sequence is authoritative, and a denied
 write produces no event at all, so a blocked agent cannot win a contested
 path by construction.
+
+### A channel bypass passed every test (Phase 1)
+
+**Status:** fixed.
+
+Feeding delivered events straight into a model's conversation — bypassing
+the coordination channel entirely — passed all 21 adapter tests.
+
+This is the most serious defect available in this codebase. Peer
+information would reach an agent's context outside all accounting, so the
+coordination-byte total would no longer be a complete account of what the
+agent knew, and the C0-versus-C2 contrast would measure something other
+than information. C0 stayed safe only incidentally, because `NullChannel`
+raises on non-empty input; under C2 the leak would have been silent.
+
+`test_the_channel_is_the_only_route_information_takes` now closes it.
+
+The general lesson, recorded because it will recur: **the guarantees most
+worth testing are the ones no test naturally covers, because they are
+properties of what the code does not do.** Every test written so far
+checked that something happened correctly. Nothing checked that nothing
+else happened.

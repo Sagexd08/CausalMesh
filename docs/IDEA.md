@@ -241,10 +241,12 @@ the one you deploy.
 | Isolation, 11 tools, lifecycle hooks | ✅ leakage-tested |
 | Channels, relevance, information window | ✅ |
 | Script-driven agent | ✅ |
+| Model adapters (OpenAI, Anthropic, local) | ✅ tested over real HTTP |
+| Contested-path task, enforcement denials | ✅ |
 | Task system + empirical sensitivity gate | ✅ |
 | Scheduler, state machine, run index | ✅ resume-tested |
 
-**721 tests passing.** Not merely compiling — executed, with artifacts read
+**797 tests passing.** Not merely compiling — executed, with artifacts read
 back and inspected.
 
 ### The critical gap: the agent layer
