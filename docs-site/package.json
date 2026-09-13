@@ -27,5 +27,11 @@
     "postcss": "^8.5.28",
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2"
+  },
+  "optionalDependencies": {
+    "@next/swc-linux-x64-gnu": "16.3.4",
+    "@tailwindcss/oxide-linux-x64-gnu": "4.3.3",
+    "@yuku-analyzer/binding-linux-x64-gnu": "0.9.5",
+    "lightningcss-linux-x64-gnu": "1.32.0"
   }
 }
