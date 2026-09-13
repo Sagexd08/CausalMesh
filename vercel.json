@@ -16,24 +16,12 @@
   ],
   "routes": [
     {
-      "src": "^/docs/?$",
-      "dest": "/docs-site/index"
-    },
-    {
-      "src": "^/docs/(.*)",
-      "dest": "/docs-site/$1"
-    },
-    {
-      "src": "^/_next/(.*)",
-      "dest": "/docs-site/_next/$1"
-    },
-    {
-      "handle": "filesystem"
-    },
-    {
-      "src": "^/(.*)",
+      "src": "^/(assets/.*|og-image\\.png)$",
       "dest": "/frontend/$1"
+    },
+    {
+      "src": "^/(?:index\\.html)?$",
+      "dest": "/frontend/index.html"
     }
   ]
 }
-
