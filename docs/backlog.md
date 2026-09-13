@@ -133,17 +133,64 @@ than letting the state's presence imply a capability.
 
 ### Remaining task families (Step 9)
 
-**Status:** one task exists (`schema_handler_widen`, the schema/handler
-family). Three families from §35 are unbuilt: `interface_consumer`,
-`shared_utility_refactor`, `concurrent_edit_collision`.
+**Status:** two tasks exist — `schema_handler_widen` (schema/handler) and
+`concurrent_edit_collision` (contested path). Two families from §35 remain
+unbuilt: `interface_consumer` and `shared_utility_refactor`.
 
 **Why:** §37 requires each task to *empirically demonstrate* its
 coordination dependency, which costs a C0-versus-C2 validation run per
 task. Building four tasks before validating one would have risked four
 tasks with the same defect.
 
-**Note:** `concurrent_edit_collision` is the family the §74 acceptance
-criterion needs — it is the one where C3 prevents a conflicting write. The
-current task has no contested path, so it exercises enforcement without
-ever triggering a denial. **§74 cannot be satisfied until that family
-exists**, and Step 16 depends on it.
+**Resolved (Phase 0):** `concurrent_edit_collision` now exists and a real
+C3 run records a denial with actor, path and holder. Building it exposed
+that the denial log had never been reachable from the gate at all — see
+below.
+
+### Enforcement was unmeasurable, not merely unmeasured (Phase 0)
+
+**Status:** fixed.
+
+Denials were written only by `ClaimRegistry.acquire`, while the C3 gate
+refuses writes through `may_write`. Every block the gate performed was
+therefore invisible to `denials()` — the method whose own docstring calls
+it "the core enforcement measurement". A real C3 run reported 2 claims held
+and 0 denials while enforcement was working correctly.
+
+This was worse than a missing feature. A measurement that cannot observe
+its own subject reports a confident zero, and "C3 never blocked anything"
+would have been recorded as a finding rather than a defect.
+
+The fix keeps the two acts separate: `may_write` stays read-only, because
+it is an advisory query callers may make speculatively and recording there
+would count questions rather than blocks. `record_denial` is the explicit
+statement that a real attempt was refused, and `ClaimGate` calls it.
+
+### Ownership merge could not express a contested path (Phase 0)
+
+**Status:** fixed.
+
+The integration merge took every file from its declared owner, so on a
+contested path the non-owner's write was discarded in *every* arm — the
+contest was resolved before the arms could differ, and the task measured
+nothing.
+
+Contested paths are now excluded from the ownership rule and resolved from
+the **signed chain**: the last agent whose accepted write event names the
+path wins. Two wrong versions preceded that:
+
+- Alphabetical order, described as "last writer wins". It is not. Under C3
+  agent_b's write was refused, so its workspace still held the untouched
+  fixture, and that empty copy overwrote agent_a's successful write purely
+  because "agent_b" sorts later. C3 appeared to lose both registrations
+  when it had preserved one.
+- Matching event types in lowercase when the chain serialises them
+  uppercase. The lookup silently matched nothing, every contested path fell
+  back to the fixture, and all four arms failed identically — which looks
+  like a broken task rather than a broken lookup.
+
+Filesystem mtimes were rejected as the ordering source: coarse resolution,
+and they record when a file was touched rather than which write the system
+accepted. The relay's monotonic sequence is authoritative, and a denied
+write produces no event at all, so a blocked agent cannot win a contested
+path by construction.

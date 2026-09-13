@@ -299,7 +299,10 @@ async def execute_task(
     # what an ownership-based merge does and what the claim registry
     # already encodes. A file nobody owns is taken from the fixture.
     integrated = _integrate_workspaces(
-        task, workspaces, destination=workspace_root / f"{config.run_id}_integrated"
+        task,
+        workspaces,
+        destination=workspace_root / f"{config.run_id}_integrated",
+        records=relay.records(),
     )
     exit_code = _run_integration_test(task, integrated)
     outcome = evaluate_outcome(
@@ -341,6 +344,7 @@ def _integrate_workspaces(
     workspaces: dict[str, Workspace],
     *,
     destination: Path,
+    records: list[dict[str, Any]] | None = None,
 ) -> Workspace:
     """Merge the agents' workspaces into the shared codebase they represent.
 
@@ -362,16 +366,62 @@ def _integrate_workspaces(
         path: role.agent_id for role in task.roles for path in role.owns
     }
 
+    # A contested path has no single owner, by definition. Resolving it by
+    # ownership would decide the contest before the arms could differ:
+    # agent_b's write would be discarded in every arm, informed or not, and
+    # the task would measure nothing.
+    #
+    # So contested paths are excluded from the ownership rule and merged
+    # last-writer-wins instead — which is exactly what an unsynchronised
+    # shared filesystem does, and therefore the behaviour the enforcement
+    # factor exists to change.
+    contested = set(task.contested_paths)
+    for path in contested:
+        owner_of.pop(path, None)
+
     # Lay down every agent's files first, then let owners overwrite. The
     # two passes matter: an owner's version must win regardless of the
     # order agents happen to be iterated in.
-    for workspace in workspaces.values():
+    for agent_id in sorted(workspaces):
+        workspace = workspaces[agent_id]
         for relative in workspace.list_files():
-            if relative in owner_of:
+            if relative in owner_of or relative in contested:
                 continue
             target = merged.resolve(relative)
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(workspace.resolve(relative).read_bytes())
+
+    # Contested paths are resolved from the *chain*, which is the only
+    # authoritative record of who wrote what and in what order.
+    #
+    # The first version of this took the alphabetically last agent's copy
+    # and called it last-writer-wins. It is not: under C3, agent_b's write
+    # to the contested file was refused, so its workspace still held the
+    # untouched fixture — and that empty copy overwrote agent_a's
+    # successful write purely because "agent_b" sorts after "agent_a".
+    # C3 then looked like it had lost both registrations when it had
+    # actually preserved one. Filesystem mtimes would be no better: they
+    # have coarse resolution and record when a file was touched, not which
+    # write the system accepted.
+    #
+    # The relay assigns a monotonic sequence to every accepted event, and a
+    # denied write produces no write event at all. Reading the order from
+    # there means the merge agrees with the signed evidence by
+    # construction.
+    for relative in sorted(contested):
+        writer = _last_writer(relative, records or [])
+        candidates = [writer] if writer else sorted(workspaces)
+        for agent_id in candidates:
+            workspace = workspaces.get(agent_id)
+            if workspace is None or not workspace.contains(relative):
+                continue
+            origin = workspace.resolve(relative)
+            if not origin.is_file():
+                continue
+            target = merged.resolve(relative)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(origin.read_bytes())
+            break
 
     for relative, owner in owner_of.items():
         source = workspaces.get(owner)
@@ -385,6 +435,36 @@ def _integrate_workspaces(
         target.write_bytes(origin.read_bytes())
 
     return merged
+
+
+
+def _last_writer(path: str, records: list[dict[str, Any]]) -> str | None:
+    """Which agent last successfully wrote this path, per the signed chain.
+
+    Only mutating events count, and only ones the relay accepted: a write
+    the C3 gate refused never becomes an event, so a blocked agent cannot
+    win a contested path. Returns None when nobody wrote it, leaving the
+    caller to fall back to whatever the fixture provided.
+    """
+    # Compared case-insensitively against the event vocabulary: the chain
+    # serialises these as "WRITE", and a lowercase comparison silently
+    # matched nothing — every contested path then fell back to the fixture
+    # and all four arms failed identically, which looks like a broken task
+    # rather than a broken lookup.
+    mutating = {"write", "create", "modify", "rename", "delete"}
+    winner: str | None = None
+    best = -1
+    for record in records:
+        event = record.get("event", {})
+        if str(event.get("event_type", "")).lower() not in mutating:
+            continue
+        if path not in event.get("paths", ()):
+            continue
+        sequence = event.get("sequence", -1)
+        if sequence >= best:
+            best = sequence
+            winner = event.get("identity", {}).get("agent_id")
+    return winner
 
 
 def _run_integration_test(task: TaskDefinition, workspace: Workspace) -> int | None:

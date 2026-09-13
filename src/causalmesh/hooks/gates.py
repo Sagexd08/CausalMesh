@@ -33,6 +33,22 @@ class ClaimGate:
                 path=path, agent_id=call.agent_id, run_id=self.run_id, now_us=now_us
             )
             if not outcome.granted:
+                # Record it. This is the point at which a real write attempt
+                # is stopped, and §20 requires every blocked write to be
+                # attributable. `may_write` deliberately records nothing —
+                # it is an advisory query — so if the gate does not record
+                # here, nothing does, and `denials()` reports a confident
+                # zero no matter how much enforcement actually happened.
+                # That was the state of the system when a C3 run reported
+                # 2 claims held and 0 denials.
+                self.registry.record_denial(
+                    path=path,
+                    requesting_agent=call.agent_id,
+                    run_id=self.run_id,
+                    now_us=now_us,
+                    holder=outcome.holder,
+                    reason=outcome.reason,
+                )
                 return GateDecision(
                     allowed=False,
                     reason=outcome.reason,

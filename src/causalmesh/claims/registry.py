@@ -532,12 +532,19 @@ class ClaimRegistry:
         return self._live_holder(self._connection, run_id, normalized, now_us)
 
     def may_write(self, *, path: str, agent_id: str, run_id: str, now_us: int) -> ClaimOutcome:
-        """The C3 write gate: may this agent write to this path?
+        """Ask whether this agent could write to this path. **Read-only.**
 
         A path with no live holder is writable. This is deliberate — claims are
         exclusive when held, not mandatory before every write — so the
         registry stays usable for the specific enforcement C3 defines rather
         than imposing a stricter regime the experiment never asked for.
+
+        This method records nothing, and must not. It is an advisory query
+        that callers may make speculatively and repeatedly; if it wrote a
+        denial, the enforcement measurement would count *questions* rather
+        than *blocks* and would depend on how often the gate happened to be
+        consulted. `record_denial` is the separate, explicit act of saying
+        "a real write attempt was refused".
         """
         holder = self.check(path=path, run_id=run_id, now_us=now_us)
         if holder is None:
@@ -553,6 +560,52 @@ class ClaimRegistry:
             ),
             holder=holder,
         )
+
+    def record_denial(
+        self,
+        *,
+        path: str,
+        requesting_agent: str,
+        run_id: str,
+        now_us: int,
+        holder: Claim | None,
+        reason: str,
+    ) -> None:
+        """Record that a real write attempt was refused (§20).
+
+        Separate from `may_write` on purpose. `may_write` answers a
+        question and may be asked speculatively; this states that a call
+        actually reached the gate and was stopped. Merging them would make
+        the denial count depend on how often the gate was consulted, and
+        keeping them apart means the count measures blocked *work*.
+
+        This exists because for several steps nothing called it: denials
+        were written only by `acquire`, while the C3 gate refuses through
+        `may_write`. Every block the gate performed was therefore invisible
+        to `denials()` — the method whose own docstring calls it the core
+        enforcement measurement. A real C3 run reported 2 claims held and 0
+        denials while enforcement was working correctly. A measurement that
+        cannot observe its subject is worse than a missing one, because it
+        reports a confident zero.
+        """
+        with self._write_transaction() as connection:
+            connection.execute(
+                """
+                INSERT INTO denials
+                    (run_id, path, requesting_agent, holder_agent, holder_claim_id,
+                     reason, timestamp_us)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    run_id,
+                    self._normalize_path(path),
+                    requesting_agent,
+                    holder.agent_id if holder else None,
+                    holder.claim_id if holder else None,
+                    reason,
+                    now_us,
+                ),
+            )
 
     def expire(self, *, run_id: str, now_us: int) -> int:
         """Sweep lapsed claims in a run, returning how many were expired."""

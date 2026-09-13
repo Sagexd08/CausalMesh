@@ -372,3 +372,68 @@ class TestClaimValue:
         for duration in (0, -1):
             with pytest.raises(ClaimError, match="positive"):
                 acquire(registry, "c1", "src/a.py", "agent_a", 0, duration=duration)
+
+
+class TestDenialRecording:
+    """A real blocked write must be recorded (spec §20, §44).
+
+    Two layers, deliberately separate:
+
+    - `may_write` answers a question and records nothing. Callers may ask
+      speculatively, so recording there would count questions, not blocks.
+    - `record_denial` states that a call reached the gate and was stopped.
+
+    For several steps nothing called the second one: denials were written
+    only by `acquire`, while the C3 gate refuses through `may_write`. Every
+    block the gate performed was invisible to `denials()`, whose own
+    docstring calls it the core enforcement measurement. A real C3 run
+    reported 2 claims held and 0 denials while enforcement worked
+    correctly.
+    """
+
+    def test_may_write_still_records_nothing(self, registry: ClaimRegistry) -> None:
+        # The invariant that keeps the count meaningful.
+        acquire(registry, "c1", "src/schema.py", "agent_a", 0)
+        for _ in range(5):
+            registry.may_write(path="src/schema.py", agent_id="agent_b", run_id=RUN, now_us=SECOND)
+        assert registry.denials(run_id=RUN) == []
+
+    def test_a_recorded_denial_carries_its_attribution(self, registry: ClaimRegistry) -> None:
+        acquire(registry, "c1", "src/schema.py", "agent_a", 0)
+        outcome = registry.may_write(
+            path="src/schema.py", agent_id="agent_b", run_id=RUN, now_us=SECOND
+        )
+        assert not outcome.granted
+        registry.record_denial(
+            path="src/schema.py",
+            requesting_agent="agent_b",
+            run_id=RUN,
+            now_us=SECOND,
+            holder=outcome.holder,
+            reason=outcome.reason,
+        )
+
+        denials = registry.denials(run_id=RUN)
+        assert len(denials) == 1
+        assert denials[0]["requesting_agent"] == "agent_b"
+        assert denials[0]["holder_agent"] == "agent_a"
+        assert denials[0]["holder_claim_id"] == "c1"
+        assert denials[0]["path"] == "src/schema.py"
+
+    def test_each_blocked_attempt_is_its_own_row(self, registry: ClaimRegistry) -> None:
+        # An agent retrying against a held path is spending real effort, and
+        # §44 needs the count rather than a boolean.
+        acquire(registry, "c1", "src/schema.py", "agent_a", 0)
+        for now in (SECOND, 2 * SECOND, 3 * SECOND):
+            outcome = registry.may_write(
+                path="src/schema.py", agent_id="agent_b", run_id=RUN, now_us=now
+            )
+            registry.record_denial(
+                path="src/schema.py",
+                requesting_agent="agent_b",
+                run_id=RUN,
+                now_us=now,
+                holder=outcome.holder,
+                reason=outcome.reason,
+            )
+        assert len(registry.denials(run_id=RUN)) == 3

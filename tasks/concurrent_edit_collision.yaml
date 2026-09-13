@@ -1,0 +1,145 @@
+# Task: two agents must both register themselves in one shared config file.
+#
+# The coordination dependency (spec §35, family concurrent_edit_collision):
+#   BOTH agents need to write src/config.py. Ownership genuinely overlaps —
+#   unlike schema_handler_widen, where it is disjoint and enforcement never
+#   has anything to block.
+#
+# This task exists because the claim registry had recorded 2 claims held and
+# 0 denials, ever. "C3 prevents conflicting writes" was untested: no task
+# had ever produced a contested path, so the gate had never refused
+# anything. §74 requires enforcement to be measured, not assumed.
+#
+# What each arm should show:
+#   C0  - no information: agent_b overwrites agent_a's registration wholesale
+#         (last writer wins), so only one handler survives.
+#   C1/C2 - informed: agent_b learns agent_a registered first and writes a
+#         config containing BOTH registrations.
+#   C3  - informed AND enforced: agent_a holds the lease on src/config.py,
+#         so agent_b's write is REFUSED and recorded as a denial. This is
+#         the arm where the trade-off shows: enforcement prevents the
+#         clobber but also blocks legitimate work, because on this task the
+#         file genuinely needs two writers.
+#
+# That C3 outcome is a finding, not a defect. §74 asks for the trade-off to
+# be measured rather than assumed to be an improvement, and a task where
+# exclusive locking is the wrong tool is exactly how that gets measured.
+
+task_id: concurrent_edit_collision
+version: "1.0.0"
+family: concurrent_edit_collision
+description: >
+  Two agents must each register a handler in one shared config file. The
+  path is genuinely contested: both need to write it, so enforcement has
+  something real to refuse.
+
+fixture: shared_config
+
+roles:
+  - agent_id: agent_a
+    owns: [src/config.py, src/alpha.py]
+    description: Registers the alpha handler in the shared config.
+  - agent_id: agent_b
+    owns: [src/beta.py]
+    depends_on: [src/config.py]
+    description: Registers the beta handler in the same shared config.
+
+success:
+  integration_test: [python, -m, pytest, -q, tests/]
+  # A clobbered config has lost one registration. The marker is the
+  # single-entry form agent_b writes when it does not know agent_a was
+  # there first.
+  divergence_file: src/config.py
+  divergence_marker: 'register("beta", beta.handle)  # sole registration'
+
+# Declared, and the validator checks this against what the scenario
+# actually does — a task claiming contention it does not create would be
+# worse than one claiming none.
+contested_paths: [src/config.py]
+
+scenario:
+  agent_a:
+    owns: [src/config.py, src/alpha.py]
+    actions:
+      - read: src/config.py
+      # agent_a registers first and holds the file.
+      - write:
+          path: src/config.py
+          content: |
+            """Shared handler registry."""
+
+            import alpha
+
+            REGISTERED = {}
+
+
+            def register(name, handler):
+                """Add a handler to the registry."""
+                REGISTERED[name] = handler
+
+
+            def registered_names():
+                """Every handler currently registered."""
+                return sorted(REGISTERED)
+
+
+            register("alpha", alpha.handle)
+
+  agent_b:
+    owns: [src/beta.py]
+    depends_on: [src/config.py]
+    actions:
+      # Reads before agent_a's write lands.
+      - read: src/config.py
+      # Deliberation window: agent_a writes during this (§23).
+      - wait: 2s
+      # Informed: agent_b knows agent_a registered, so it preserves that
+      # registration and adds its own.
+      - write:
+          if_informed_about: src/config.py
+          path: src/config.py
+          content: |
+            """Shared handler registry."""
+
+            import alpha
+            import beta
+
+            REGISTERED = {}
+
+
+            def register(name, handler):
+                """Add a handler to the registry."""
+                REGISTERED[name] = handler
+
+
+            def registered_names():
+                """Every handler currently registered."""
+                return sorted(REGISTERED)
+
+
+            register("alpha", alpha.handle)
+            register("beta", beta.handle)
+      # Uninformed: agent_b never heard, so it writes the config it planned
+      # from what it read — clobbering agent_a's registration.
+      - write:
+          if_uninformed_about: src/config.py
+          path: src/config.py
+          content: |
+            """Shared handler registry."""
+
+            import beta
+
+            REGISTERED = {}
+
+
+            def register(name, handler):
+                """Add a handler to the registry."""
+                REGISTERED[name] = handler
+
+
+            def registered_names():
+                """Every handler currently registered."""
+                return sorted(REGISTERED)
+
+
+            register("beta", beta.handle)  # sole registration
