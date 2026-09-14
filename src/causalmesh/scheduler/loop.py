@@ -323,6 +323,11 @@ class ExperimentRunner:
             # `run_config` is whatever the caller supplied; an empty dict
             # records "not captured" rather than inventing a value.
             "provenance": dict(self.run_config),
+            # A run is reproducible unless something nondeterministic drove
+            # it. `agent_kind` is set only when a real coding-agent CLI was
+            # connected; MockAgent leaves it unset, so the default is the
+            # deterministic case and a live run has to declare itself.
+            "reproducible": "agent_kind" not in self.run_config,
             "repetition": record.repetition,
             "result": result.to_dict(),
             "run_id": record.run_id,
