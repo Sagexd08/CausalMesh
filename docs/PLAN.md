@@ -144,8 +144,18 @@ Pure mathematics with zero storage dependency, unit-tested against hand-computed
 ### Step 13 — Statistics (§48–50)
 The preregistered mixed-effects logistic model with task random intercepts, the four primary contrasts, Holm–Bonferroni correction, 95% confidence intervals, TOST at ±10 percentage points (a non-significant difference is explicitly *not* an equivalence result), and configurable power analysis that states its assumptions.
 
-### Step 14 — Provenance, manifests and reporting (§30–33, §60, §66–69)
+### Step 14 — Provenance, manifests and reporting (§30–33, §60, §66–69) — **partially done**
 Manifests carrying SHA-256 hashes of every artifact, environment capture and a configuration freeze hash. The report generator ensures every number carries a traceable source reference and every figure and table is labeled ANALYTICAL, PILOT, CONFIRMATORY, EXPLORATORY or DERIVED.
+
+**Built:** `provenance/` captures the environment (§30, §32) and writes manifests (§31, §33). `causalmesh manifest write` records a SHA-256 over every artifact plus a configuration freeze hash; `causalmesh audit` checks the record against what is on disk and **re-verifies every chain**, because a manifest proves the bytes are unchanged and says nothing about whether they were ever valid.
+
+Manifests are tracked in git while `data/raw/` is not, which is what keeps a published figure traceable to its run after the raw directory is gone.
+
+Three `RunConfig` fields — `git_commit`, `machine_id`, `operator_id` — existed and defaulted to `"unknown"` because nothing populated them, so every run produced before this was unattributable. `experiment run` now captures them. They are recorded in the artifact **envelope**, never in the signed chain: the chain is bit-reproducible, and a hostname or commit hash inside it would break that. Verified by executing the same collection twice under one seed and confirming all four head hashes match.
+
+A manifest recorded from a dirty working tree reports itself as not attributable to a commit, rather than implying the tree matched the hash it names.
+
+**Not built:** the report generator, and the §68 figure labelling it would apply. `causalmesh analyze` labels its own tables PILOT and DERIVED in the meantime.
 
 ### Step 15 — CLI, doctor, audit and docs (§61, §62, §83, §94) — **partially done**
 All §62 commands with `--help` and meaningful exit codes. `doctor` reports PASS/WARN/FAIL with actionable diagnostics. `audit` detects untested modules, missing provenance, unverified runs, dirty raw data and configuration mismatches. All ten `docs/*.md` files describe **actual** behavior.

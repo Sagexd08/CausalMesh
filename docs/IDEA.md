@@ -246,7 +246,7 @@ the one you deploy.
 | Task system + empirical sensitivity gate | ✅ |
 | Scheduler, state machine, run index | ✅ resume-tested |
 
-**839 tests passing.** Not merely compiling — executed, with artifacts read
+**865 tests passing.** Not merely compiling — executed, with artifacts read
 back and inspected.
 
 ### The critical gap: the agent layer

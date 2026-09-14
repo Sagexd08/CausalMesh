@@ -107,7 +107,7 @@ That last row is a real limitation, documented rather than hidden.
 
 ## Status
 
-**Substrate complete and exercised. 839 tests passing.**
+**Substrate complete and exercised. 865 tests passing.**
 
 The build follows a vertical slice first: a single scenario driven end-to-end
 through every subsystem, executed under all four arms, before breadth is
@@ -213,6 +213,8 @@ causalmesh experiment run  --profile smoke  # execute; resumable and idempotent
 causalmesh experiment status --latest       # per-arm outcomes
 causalmesh verify --all                     # offline chain verification
 causalmesh analyze --latest                 # costs and the four contrasts
+causalmesh manifest write --latest          # SHA-256 over every artifact
+causalmesh audit --all                      # evidence present, unchanged, valid
 ```
 
 Every command takes `--json` for scripting, and exits `0` on success, `1`
@@ -226,8 +228,16 @@ repository and no relay present, which is the §82 clean-room check.
 task, and makes no claim that a difference is distinguishable from noise.
 The statistics layer that would support such a claim is not built.
 
-**Not yet built:** `report` and `audit`. The analysis, reporting and
-provenance subsystems are empty — `causalmesh doctor` says so, and
+`audit` is what makes the traceability commitment checkable rather than
+asserted: it confirms every recorded artifact is present and unchanged, and
+re-verifies every chain rather than trusting the manifest — a manifest
+proves the bytes have not changed, not that they were ever valid.
+
+Manifests are tracked in git while `data/raw/` is not, so a published
+figure stays traceable to its run after the raw directory is gone.
+
+**Not yet built:** `report`. The analysis and reporting subsystems are
+empty — `causalmesh doctor` says so, and
 [`docs/backlog.md`](docs/backlog.md) records why.
 
 ## Design commitments

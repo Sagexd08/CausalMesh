@@ -119,7 +119,7 @@ is byte-identical.
 **13/**
 Status, plainly: ~40% built.
 
-839 tests pass. Protocol, crypto, claims, relay, channels, tasks, scheduler and
+865 tests pass. Protocol, crypto, claims, relay, channels, tasks, scheduler and
 adapters are done.
 
 Metrics, analysis, reporting and the CLI are not. No hosted model has driven it
@@ -142,7 +142,7 @@ to hear them.
 
 Every figure is checkable:
 
-- `839 tests` — `pytest` output, 2026-09-14
+- `865 tests` — `pytest` output, 2026-09-14
 - `24 runs`, arm figures — `docs-site/lib/landing/results.json`, generated from
   `data/raw/pilot_landing/`
 - `46%` — 196 B / 361 B = 0.543. C2 costs 54% of C1, i.e. **46% less**. Say
