@@ -142,6 +142,7 @@ def run_command(
     as_json: Annotated[bool, typer.Option("--json")] = False,
 ) -> None:
     """Execute a collection. Resumable: re-running continues where it stopped."""
+    from causalmesh.provenance import Environment
     from causalmesh.scheduler import ExperimentRunner, RunEnvironment
 
     repo = _repo_or_exit(root_option)
@@ -157,12 +158,20 @@ def run_command(
         index_path=repo.index_path(name),
     )
 
+    # §30: which code ran, on what, run by whom. These three RunConfig
+    # fields existed and defaulted to "unknown" because nothing populated
+    # them, so every run produced before this was unattributable.
+    captured = Environment.capture(repo.root)
+
     note(f"{name}: {len(plan)} runs planned ({plan.profile} profile)")
+    if captured.git.dirty:
+        note("working tree is dirty; these runs will not be attributable to a commit")
     with ExperimentRunner(
         plan=plan,
         tasks=tasks,
         environment=environment,
         master_seed=_seed_bytes(seed),
+        run_config=captured.to_run_config(),
     ) as runner:
         registered = runner.prepare()
         if registered:

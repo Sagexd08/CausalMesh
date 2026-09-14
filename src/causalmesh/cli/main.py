@@ -13,8 +13,9 @@ from __future__ import annotations
 
 import typer
 
-from causalmesh.cli import commands_experiment, commands_task, commands_verify
+from causalmesh.cli import commands_audit, commands_experiment, commands_task, commands_verify
 from causalmesh.cli.commands_analyze import analyze_command
+from causalmesh.cli.commands_audit import audit_command
 from causalmesh.cli.commands_doctor import doctor_command
 
 app = typer.Typer(
@@ -33,6 +34,8 @@ app.add_typer(commands_task.app, name="task")
 app.add_typer(commands_experiment.app, name="experiment")
 app.command("verify")(commands_verify.verify_command)
 app.command("analyze")(analyze_command)
+app.add_typer(commands_audit.app, name="manifest")
+app.command("audit")(audit_command)
 
 
 def main() -> None:
