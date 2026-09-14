@@ -317,6 +317,12 @@ class ExperimentRunner:
             "chain": result.records,
             "experiment_id": record.experiment_id,
             "plan_order": record.plan_order,
+            # §30: which code, which machine, which operator. Kept in the
+            # envelope rather than in the chain — the chain is
+            # bit-reproducible, and a hostname inside it would break that.
+            # `run_config` is whatever the caller supplied; an empty dict
+            # records "not captured" rather than inventing a value.
+            "provenance": dict(self.run_config),
             "repetition": record.repetition,
             "result": result.to_dict(),
             "run_id": record.run_id,
