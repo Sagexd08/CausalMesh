@@ -100,6 +100,9 @@ artifacts/certificates/**
 # Agent workspaces  (recreated per run)
 # ---------------------------------------------------------------------------
 workspace/
+# The CLI puts per-run agent workspaces under data/work/<experiment_id>/.
+# They are scratch copies of a fixture and are rebuilt on every run.
+data/work/**
 experiments/**
 !experiments/.gitkeep
 

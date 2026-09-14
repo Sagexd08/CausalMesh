@@ -198,17 +198,32 @@ with ExperimentRunner(plan=plan, tasks={task.task_id: task},
 Run the suite with `pytest`. The slow integration tests execute real
 subprocesses; `pytest -m "not slow"` skips them.
 
-### Planned CLI (Step 15)
+### The CLI
+
+Install the package, then run a collection and verify what it produced:
 
 ```bash
-causalmesh doctor                          # environment health check
-causalmesh task validate                   # validate the task suite
-causalmesh experiment plan --profile smoke # produce a run schedule
-causalmesh experiment run  --profile smoke # execute
-causalmesh verify --all                    # offline chain verification
-causalmesh analyze --latest                # statistical analysis
-causalmesh report  --latest                # figures, tables, report
+pip install -e .
+
+causalmesh doctor                           # environment health check
+causalmesh task list                        # the task suite
+causalmesh task validate                    # structural validation (§36)
+causalmesh experiment plan --profile smoke  # a run schedule, executed nothing
+causalmesh experiment run  --profile smoke  # execute; resumable and idempotent
+causalmesh experiment status --latest       # per-arm outcomes
+causalmesh verify --all                     # offline chain verification
 ```
+
+Every command takes `--json` for scripting, and exits `0` on success, `1`
+on a negative result, `2` on a bad invocation and `3` when it could not run
+— so a caller can branch without parsing output.
+
+`causalmesh verify --run <directory>` verifies a single exported run with no
+repository and no relay present, which is the §82 clean-room check.
+
+**Not yet built:** `analyze` and `report`. The analysis, metrics, reporting
+and provenance subsystems are empty — `causalmesh doctor` says so, and
+[`docs/backlog.md`](docs/backlog.md) records why.
 
 ## Design commitments
 
