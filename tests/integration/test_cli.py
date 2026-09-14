@@ -269,3 +269,85 @@ class TestAnalyze:
     def test_selecting_nothing_is_a_usage_error(self) -> None:
         result = invoke("analyze", "--root", str(REPO))
         assert result.exit_code == 2
+
+class TestManifestAndAudit:
+    """Provenance through the CLI (§31, §83).
+
+    Collections are built in `tmp_path` and passed with `--root`, so
+    nothing here touches `data/raw/`, which §31 makes immutable.
+    """
+
+    @staticmethod
+    def _checkout(tmp_path: Path) -> Path:
+        """A directory that `find_root` will accept as a checkout."""
+        (tmp_path / "pyproject.toml").write_text("", encoding="utf-8")
+        (tmp_path / "tasks").mkdir()
+        (tmp_path / "fixtures").mkdir()
+        run_dir = tmp_path / "data" / "raw" / "exp" / "exp__t__C0__r0000"
+        run_dir.mkdir(parents=True)
+        (run_dir / "run.json").write_text(
+            json.dumps({"arm": "C0", "chain": [], "result": {"run_id": "r"}}),
+            encoding="utf-8",
+        )
+        return tmp_path
+
+    def test_audit_reports_a_collection_with_no_manifest(self, tmp_path: Path) -> None:
+        """An unrecorded collection is not corrupt; it is unprovable."""
+        root = self._checkout(tmp_path)
+        result = invoke("audit", "--id", "exp", "--root", str(root), "--json")
+        assert result.exit_code == 1
+        report = payload(result)
+        assert report["clean"] is False
+        assert "no manifest recorded" in report["experiments"]["exp"]["findings"]
+
+    def test_a_manifest_can_be_written_and_then_audits_clean(self, tmp_path: Path) -> None:
+        root = self._checkout(tmp_path)
+        written = invoke("manifest", "write", "--id", "exp", "--root", str(root), "--json")
+        assert written.exit_code == 0, written.stdout
+        assert payload(written)["artifacts"] == 1
+
+        audited = invoke("audit", "--id", "exp", "--root", str(root), "--json")
+        entry = payload(audited)["experiments"]["exp"]
+        # The chain is empty in this fixture, so verification fails; the
+        # manifest itself must still report the artifact as intact.
+        assert entry["manifest"]["intact"] is True
+        assert entry["manifest"]["checked"] == 1
+
+    def test_audit_detects_a_mutated_artifact(self, tmp_path: Path) -> None:
+        """§31: raw data is immutable, and a change to it is a finding."""
+        root = self._checkout(tmp_path)
+        invoke("manifest", "write", "--id", "exp", "--root", str(root))
+
+        target = next((root / "data" / "raw" / "exp").rglob("run.json"))
+        target.write_text(json.dumps({"tampered": True}), encoding="utf-8")
+
+        result = invoke("audit", "--id", "exp", "--root", str(root), "--json")
+        assert result.exit_code == 1
+        findings = payload(result)["experiments"]["exp"]["findings"]
+        assert any("changed since recording" in f for f in findings)
+
+    def test_an_existing_manifest_is_not_silently_replaced(self, tmp_path: Path) -> None:
+        """Overwriting would destroy the record that a state differed."""
+        root = self._checkout(tmp_path)
+        assert invoke("manifest", "write", "--id", "exp", "--root", str(root)).exit_code == 0
+        second = invoke("manifest", "write", "--id", "exp", "--root", str(root))
+        assert second.exit_code == 1
+        forced = invoke("manifest", "write", "--id", "exp", "--root", str(root), "--force")
+        assert forced.exit_code == 0
+
+    def test_audit_reverifies_chains_rather_than_trusting_the_manifest(
+        self, tmp_path: Path
+    ) -> None:
+        """A manifest says the bytes are unchanged, not that they were valid.
+
+        Checking only the manifest would pass a collection whose chains
+        never verified in the first place — which is this fixture.
+        """
+        root = self._checkout(tmp_path)
+        invoke("manifest", "write", "--id", "exp", "--root", str(root))
+        entry = payload(invoke("audit", "--id", "exp", "--root", str(root), "--json"))[
+            "experiments"
+        ]["exp"]
+        assert entry["chains"]["runs"] == 1
+        assert entry["chains"]["verified"] == 0
+        assert any("failed verification" in f for f in entry["findings"])
