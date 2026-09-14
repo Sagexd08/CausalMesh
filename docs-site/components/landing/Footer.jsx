@@ -53,7 +53,7 @@ const COLUMNS = [
 ];
 
 const CHIPS = [
-  ["Test suite", "839 passing"],
+  ["Test suite", "865 passing"],
   ["Licence", "MIT"],
   ["Evidence", "Verifies offline"],
 ];

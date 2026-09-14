@@ -19,7 +19,7 @@ pip install -e ".[dev]"
 ## Run the test suite
 
 ```bash
-pytest                    # 839 tests
+pytest                    # 865 tests
 pytest -m "not slow"      # skips the integration tests that spawn subprocesses
 ```
 
@@ -36,6 +36,8 @@ causalmesh experiment plan --profile smoke  # what would run, without running it
 causalmesh experiment run  --profile smoke  # 1 task x 4 arms x 1 repetition
 causalmesh experiment status --latest       # per-arm successes, denials, bytes
 causalmesh analyze --latest                 # costs and the four contrasts
+causalmesh manifest write --latest          # record what the collection produced
+causalmesh audit --latest                   # evidence present, unchanged, valid
 ```
 
 `run` is resumable and idempotent: progress lives in the run index, not in
