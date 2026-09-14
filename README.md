@@ -229,7 +229,7 @@ data/         raw (immutable), processed, manifests, exports
 artifacts/    chains, metrics, plots, tables, reports, certificates
 tests/        unit, integration, property, adversarial, failure, reproducibility
 docs/         architecture, protocol, events, claims, security, analysis
-frontend/     landing page (React + Vite + Tailwind)
+docs-site/    the website: landing page and documentation (Next.js)
 ```
 
 ## Documentation
@@ -247,17 +247,21 @@ frontend/     landing page (React + Vite + Tailwind)
 
 ## Vercel deployment
 
-This repository contains two web applications deployed together as one Vercel
-project. Import the repository with the **root directory left as `.`**:
+The website is a single Next.js application in [`docs-site/`](docs-site/): the
+landing page is served at `/` and the documentation at `/docs`. Import the
+repository with the **root directory left as `.`**; the root
+[`vercel.json`](vercel.json) points Vercel at that app.
 
-| App | URL | Framework | Output directory |
-|---|---|---|---|
-| Landing page | `/` | Vite | `frontend/dist` |
-| Documentation | `/docs` | Next.js | Managed by Next.js |
+```bash
+npm install
+npm run dev      # http://localhost:3000 — landing at /, docs at /docs
+npm run build
+```
 
-The root [`vercel.json`](vercel.json) builds and routes both applications.
-The landing page's **Docs** link points to `/docs`, so both surfaces stay on
-the same deployment and domain. Use Node.js 20 or newer.
+The landing page and the docs were previously two separate applications
+stitched together by Vercel routing rules. They are now one build, which is
+why no route configuration is needed to move between them. Use Node.js 20 or
+newer.
 
 ## Requirements
 

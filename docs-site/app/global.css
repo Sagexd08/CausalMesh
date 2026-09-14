@@ -1,9 +1,16 @@
 @import 'tailwindcss';
 @import 'fumadocs-ui/css/neutral.css';
 @import 'fumadocs-ui/css/preset.css';
+@import './landing.css';
+
+/* The landing components live outside content/, so Tailwind's automatic
+   source detection has to be told about them explicitly. */
+@source '../components';
+@source '../lib';
 
 html {
   scrollbar-gutter: stable;
+  scroll-behavior: smooth;
 }
 
 html > body[data-scroll-locked] {

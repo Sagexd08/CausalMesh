@@ -1,6 +1,6 @@
 import { RootProvider } from 'fumadocs-ui/provider/next';
 import './global.css';
-import { Bricolage_Grotesque, Outfit } from 'next/font/google';
+import { Bricolage_Grotesque, JetBrains_Mono, Outfit } from 'next/font/google';
 import type { Metadata } from 'next';
 
 // Matches the landing page. Inter, the scaffold default, is banned by the
@@ -9,12 +9,18 @@ import type { Metadata } from 'next';
 const body = Outfit({ subsets: ['latin'], variable: '--font-body' });
 const display = Bricolage_Grotesque({
   subsets: ['latin'],
-  variable: '--font-display',
+  variable: '--font-display-face',
+});
+const mono = JetBrains_Mono({
+  subsets: ['latin'],
+  variable: '--font-mono-face',
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://causalmesh.vercel.app'),
   title: 'CausalMesh — Coordination you can prove',
-  description: 'Gate every action. Sign every action. Record every refusal with its reason.',
+  description:
+    'A coordination substrate for fleets of autonomous coding agents, with cryptographically verifiable evidence of everything every agent did.',
   openGraph: {
     title: 'CausalMesh — Coordination you can prove',
     description: 'Gate every action. Sign every action. Record every refusal with its reason.',
@@ -31,7 +37,11 @@ export const metadata: Metadata = {
 
 export default function Layout({ children }: LayoutProps<'/'>) {
   return (
-    <html lang="en" className={`${body.variable} ${display.variable} ${body.className}`} suppressHydrationWarning>
+    <html
+      lang="en"
+      className={`${body.variable} ${display.variable} ${mono.variable} ${body.className}`}
+      suppressHydrationWarning
+    >
       <body className="flex flex-col min-h-screen">
         <RootProvider>{children}</RootProvider>
       </body>

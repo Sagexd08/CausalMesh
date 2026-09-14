@@ -2,19 +2,15 @@
   "name": "causalmesh-web",
   "private": true,
   "version": "0.1.0",
-  "description": "Workspace root. `npm run dev` starts the landing page; the docs site is a separate app.",
+  "description": "Workspace root. The site is a single Next.js app: landing page at /, docs at /docs.",
   "workspaces": [
-    "frontend",
     "docs-site"
   ],
   "scripts": {
-    "dev": "npm run dev --workspace=frontend",
-    "build": "npm run build --workspace=frontend",
-    "preview": "npm run preview --workspace=frontend",
-    "dev:docs": "npm run dev --workspace=docs-site",
-    "build:docs": "npm run build --workspace=docs-site",
-    "build:all": "npm run build && npm run build:docs",
-    "dev:all": "npx concurrently \"npm run dev\" \"npm run dev:docs\""
+    "dev": "npm run dev --workspace=docs-site",
+    "build": "npm run build --workspace=docs-site",
+    "start": "npm run start --workspace=docs-site",
+    "types:check": "npm run types:check --workspace=docs-site"
   },
   "engines": {
     "node": ">=20"
