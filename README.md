@@ -215,7 +215,15 @@ causalmesh verify --all                     # offline chain verification
 causalmesh analyze --latest                 # costs and the four contrasts
 causalmesh manifest write --latest          # SHA-256 over every artifact
 causalmesh audit --all                      # evidence present, unchanged, valid
+causalmesh watch --latest                   # live view of a collection
+causalmesh connectors list                  # what this machine actually has
 ```
+
+`watch` is read-only: it opens the run index `mode=ro`, so attaching it to
+a collection executing in another terminal cannot interfere with it. That
+is possible because progress lives in the index rather than in the
+executing process — the same property that makes `experiment run`
+resumable.
 
 Every command takes `--json` for scripting, and exits `0` on success, `1`
 on a negative result, `2` on a bad invocation and `3` when it could not run
@@ -235,6 +243,20 @@ proves the bytes have not changed, not that they were ever valid.
 
 Manifests are tracked in git while `data/raw/` is not, so a published
 figure stays traceable to its run after the raw directory is gone.
+
+### Connecting real coding agents
+
+`causalmesh connectors list` probes this machine for installed agents and
+infrastructure. Every probe invokes the tool rather than trusting `PATH`,
+and reports one of three outcomes — `available`, `degraded` (installed,
+executable, not answering) or `absent`.
+
+This build can drive `claude` and `codex` headlessly. A run driven by a real
+agent is stamped **`reproducible: false`** in its artifact: hosted models
+are nondeterministic and the agent's own version moves under it. The chain
+still signs and verifies — it records what happened, which is a different
+property from being repeatable. Such a run also costs money, so nothing
+runs an agent unless you name it.
 
 **Not yet built:** `report`. The analysis and reporting subsystems are
 empty — `causalmesh doctor` says so, and

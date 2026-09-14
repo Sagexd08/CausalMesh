@@ -21,8 +21,15 @@ a deliberate scope decision, not a forgotten to-do.
 
 ## Built but not executed
 
-**No hosted model has been run.** No API key was available and none was
-requested. The adapters are tested over real HTTP against a server that
+**No hosted model has produced a measured result.** The connectors exist and
+work — `causalmesh connectors list` probes this machine, and `claude` and
+`codex` can be driven headlessly — but no collection in `data/raw/` was
+produced by one. A run driven that way is stamped `reproducible: false`,
+and none of this project's published figures come from such a run.
+
+No API key was configured for the HTTP adapters, and none was requested;
+the CLI connectors authenticate through the agent's own login rather than a
+key this project holds. The adapters are tested over real HTTP against a server that
 speaks both wire protocols — request shape, header placement, response
 parsing, token extraction, failure classification. Whether a real GPT or
 Claude follows the action protocol reliably enough to complete a task is
