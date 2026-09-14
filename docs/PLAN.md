@@ -139,8 +139,14 @@ The preregistered mixed-effects logistic model with task random intercepts, the 
 ### Step 14 — Provenance, manifests and reporting (§30–33, §60, §66–69)
 Manifests carrying SHA-256 hashes of every artifact, environment capture and a configuration freeze hash. The report generator ensures every number carries a traceable source reference and every figure and table is labeled ANALYTICAL, PILOT, CONFIRMATORY, EXPLORATORY or DERIVED.
 
-### Step 15 — CLI, doctor, audit and docs (§61, §62, §83, §94)
+### Step 15 — CLI, doctor, audit and docs (§61, §62, §83, §94) — **partially done**
 All §62 commands with `--help` and meaningful exit codes. `doctor` reports PASS/WARN/FAIL with actionable diagnostics. `audit` detects untested modules, missing provenance, unverified runs, dirty raw data and configuration mismatches. All ten `docs/*.md` files describe **actual** behavior.
+
+**Partially done.** Built and exercised: `doctor`, `task list`, `task validate`, `experiment plan`, `experiment run`, `experiment status`, `verify` (including `--run` for the §82 clean-room case). Every command takes `--json`; exit codes are 0 success, 1 negative result, 2 bad invocation, 3 could not run. A failed *run* exits 0, because §81 makes a failed run evidence.
+
+Not built: `analyze`, `report` and `audit`. The first two wait on `metrics/`, `analysis/` and `reporting/`, which are empty; `audit` waits on `provenance/`. `causalmesh doctor` names the unbuilt subsystems rather than leaving them to be discovered by use.
+
+Two defects surfaced by running the CLI against real artifacts, both the same shape as the enforcement-measurement defect in `docs/backlog.md`: a read of a field that does not exist, reporting a confident zero. The key ring was built from `event.actor_id` when the actor is at `event.identity.agent_id`, so every chain failed verification; and `status` counted `result.success` when success is `result.outcome.succeeded`, so every arm showed zero passes. The second now counts an absent outcome as `unknown` rather than as a failure.
 
 ### Step 16 — Acceptance execution
 Execute the §72 sequence for real, then §73 (four arms independently observable), §74 (collision, where C3 prevents the conflicting write and the trade-off is *measured* rather than assumed to be an improvement), §75 (fault injection) and §76 (pilot with parameter estimates stored separately from reference assumptions).

@@ -107,7 +107,7 @@ That last row is a real limitation, documented rather than hidden.
 
 ## Status
 
-**Substrate complete and exercised. 797 tests passing.**
+**Substrate complete and exercised. 813 tests passing.**
 
 The build follows a vertical slice first: a single scenario driven end-to-end
 through every subsystem, executed under all four arms, before breadth is

@@ -19,7 +19,7 @@ pip install -e ".[dev]"
 ## Run the test suite
 
 ```bash
-pytest                    # 797 tests
+pytest                    # 813 tests
 pytest -m "not slow"      # skips the integration tests that spawn subprocesses
 ```
 
@@ -29,8 +29,29 @@ they are doing the thing rather than asserting about it.
 
 ## Execute a collection
 
-There is no CLI yet — it is Step 15 of the build plan and is not written.
-The Python API is what exists:
+```bash
+causalmesh doctor                           # is this environment able to run?
+causalmesh task validate                    # is the task suite well-formed?
+causalmesh experiment plan --profile smoke  # what would run, without running it
+causalmesh experiment run  --profile smoke  # 1 task x 4 arms x 1 repetition
+causalmesh experiment status --latest       # per-arm successes, denials, bytes
+```
+
+`run` is resumable and idempotent: progress lives in the run index, not in
+the process, so a second invocation continues rather than restarts. Every
+command takes `--json`, and exit codes carry meaning — `0` success, `1` a
+negative result, `2` a bad invocation, `3` could not run.
+
+<Callout title="A failed run is evidence">
+`experiment run` exits `0` even when runs fail their task. C0 is *expected*
+to fail; a collection that refused to record that would be measuring
+nothing. Only an incomplete collection exits non-zero.
+</Callout>
+
+### The same thing from Python
+
+The CLI is a wrapper. Anything it does is reachable directly, which is what
+you want when a collection is one step inside a larger script:
 
 ```python title="run_smoke.py"
 import asyncio
@@ -96,6 +117,25 @@ one repetition per cell it estimates nothing, and the profile's own
 docstring says so.
 
 ## Verify a chain offline
+
+```bash
+causalmesh verify --id my_first_run         # every run in one collection
+causalmesh verify --all                     # every collection on disk
+causalmesh verify --run path/to/a/run_dir   # one exported run, anywhere
+```
+
+The last form is the one that matters for an audit: it needs no checkout, no
+index and no relay — just the directory. That is the clean-room check (§82).
+
+A tampered chain is refused with the mismatch named, rather than reported as
+a warning:
+
+```
+run: recorded digest d33b3d27... does not match recomputed 856b7e95...;
+the event content changed
+```
+
+### The same thing from Python
 
 ```python title="verify.py"
 import json
