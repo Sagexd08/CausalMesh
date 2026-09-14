@@ -11,6 +11,7 @@ that genuinely cannot encode them rather than against a mock.
 from __future__ import annotations
 
 import io
+import sys
 from pathlib import Path
 
 import pytest
@@ -125,10 +126,16 @@ class TestScene:
         spans = {
             scene.plain[span.start : span.end]: str(span.style) for span in scene.spans
         }
-        assert spans.get("REFUSED") == welcome.ACCENT
-        assert spans.get("src/config.py") != welcome.ACCENT
-        # The accent is spent once.
-        assert sum(1 for style in spans.values() if style == welcome.ACCENT) == 1
+        # The accent means one thing: a write was refused. C3 is the
+        # enforcing arm and was briefly given the same hue, which made the
+        # refused agent and the refusal itself indistinguishable.
+        accented = [
+            scene.plain[span.start : span.end]
+            for span in scene.spans
+            if str(span.style) == f"bold {welcome.ACCENT}"
+        ]
+        assert accented == ["REFUSED"]
+        assert welcome.arm_style("C3") != welcome.ACCENT
 
 
 class TestChoices:
@@ -151,8 +158,11 @@ class TestChoices:
         with console.capture() as capture:
             console.print(welcome.render(console, selected=2))
         output = capture.get()
-        assert "> 2." in output
-        assert "> 1." not in output
+        # The marker is a chevron where the terminal can draw one.
+        assert "2." in output and "1." in output
+        marker = "❯" if welcome.supports_blocks(console) else ">"
+        assert f"{marker} 2." in output
+        assert f"{marker} 1." not in output
 
 
 class TestSequence:
@@ -264,3 +274,76 @@ class TestPalette:
         from causalmesh.tui import palette
 
         assert palette.arm_style("C9") == palette.TEXT_MUTED
+
+
+class TestChoosing:
+    """The menu said "Pick a number" and then exited.
+
+    A UI that makes a promise it does not keep is worse than one that says
+    nothing, so the prompt is tested for both halves: that it returns what
+    was picked, and that it can always be escaped.
+    """
+
+    def test_a_number_returns_the_choice_it_names(self) -> None:
+        from unittest.mock import patch
+
+        console = Console(force_terminal=True, width=80)
+        with patch("rich.prompt.Prompt.ask", return_value="3"):
+            choice = welcome.choose(console)
+        assert choice is welcome.CHOICES[2]
+
+    def test_ctrl_c_leaves_rather_than_looping(self) -> None:
+        """A first-run screen that cannot be escaped is a trap."""
+        from unittest.mock import patch
+
+        console = Console(force_terminal=True, width=80)
+        with patch("rich.prompt.Prompt.ask", side_effect=KeyboardInterrupt):
+            assert welcome.choose(console) is None
+
+    def test_end_of_input_leaves(self) -> None:
+        from unittest.mock import patch
+
+        console = Console(force_terminal=True, width=80)
+        with patch("rich.prompt.Prompt.ask", side_effect=EOFError):
+            assert welcome.choose(console) is None
+
+    def test_a_non_interactive_stream_does_not_block(self) -> None:
+        """Piped output should print the menu and exit, not wait forever."""
+        console, _ = utf8_console()
+        assert console.is_terminal is False
+        assert welcome.choose(console) is None
+
+
+class TestDiscoverySpeed:
+    def test_probes_run_concurrently(self) -> None:
+        """Measured: sequential discovery cost 12.9s of which 11s was two
+        Node CLIs that take seconds to print their own version. They are
+        independent and blocked on process startup, so they run together.
+        """
+        import time
+
+        from causalmesh.connectors.discovery import ToolSpec, discover
+
+        slow = tuple(
+            ToolSpec(f"slow{index}", "infra", sys.executable, version_args=("-c", SLOW))
+            for index in range(4)
+        )
+        started = time.monotonic()
+        discover(slow)
+        elapsed = time.monotonic() - started
+
+        # Four 0.4s probes: ~1.6s sequential, well under 1s together. The
+        # bound is loose because CI machines are slow, but it cannot pass
+        # if they ran one after another.
+        assert elapsed < 1.2, f"probes appear sequential: {elapsed:.2f}s"
+
+    def test_order_is_preserved_regardless_of_finish_order(self) -> None:
+        """A list that reshuffles between runs is harder to read than a
+        slow one."""
+        from causalmesh.connectors.discovery import AGENT_SPECS, discover
+
+        names = [probe.name for probe in discover(AGENT_SPECS)]
+        assert names == [spec.name for spec in AGENT_SPECS]
+
+
+SLOW = "import time; time.sleep(0.4); print('1.0.0')"

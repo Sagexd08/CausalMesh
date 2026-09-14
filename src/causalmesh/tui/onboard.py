@@ -62,6 +62,9 @@ class Step:
     detail: str = ""
     ok: bool | None = None
     optional: bool = False
+    # Shown while the probe runs. A spinner with no subject makes a slow
+    # check look broken; naming the reason makes the same wait legible.
+    waiting: str = ""
 
     @property
     def resolved(self) -> bool:
@@ -120,6 +123,8 @@ def _step_line(step: Step, frame: int) -> Text:
     if step.ok is None:
         line.append(FRAMES[frame % len(FRAMES)], style=LIVE)
         line.append(f"  {step.label}", style="white")
+        if step.waiting:
+            line.append(f"  {step.waiting}", style="grey42")
         return line
 
     if step.ok:
@@ -240,7 +245,16 @@ def build_sequence(root: Any) -> Sequence:
             Step("tasks", tasks_probe),
             Step("fixtures", fixtures_probe),
             Step("evidence on disk", evidence_probe, optional=True),
-            Step("coding agents", agents_probe, optional=True),
+            Step(
+                "coding agents",
+                agents_probe,
+                optional=True,
+                # This one really is slow: it starts every agent binary on
+                # the machine, and some take six seconds to say their own
+                # version. Saying so is better than a spinner that looks
+                # stuck.
+                waiting="starting each one to check it runs",
+            ),
         ]
     )
 
