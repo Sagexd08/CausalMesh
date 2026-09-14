@@ -127,8 +127,16 @@ Executed: the smoke profile against `schema_handler_widen`, 4 runs, order **C3, 
 
 Three guarantees were mutation-tested rather than assumed: replacing the atomic claim transaction produced 19 claims for 12 runs; forcing every run to execute as C0 while the index recorded the planned arm was caught; corrupting one exported event was caught by offline verification.
 
-### Step 11 — Metrics and staleness (§23, §44, §45)
+### Step 11 — Metrics and staleness (§23, §44, §45) — **partially done**
 Per-turn coordination-token accounting that separates task-reasoning cost from coordination cost. Staleness instrumentation estimating λ̂, δ̂ and Δ̂, keeping **observed** values strictly distinct from **predicted** curves.
+
+**Built:** `metrics/` aggregates the cost the channel recorded — bytes, tokens, events available versus injected, per run, per arm and per task — and applies the four planned contrasts from `experiments/arms.py`. It measures nothing itself: recomputing a cost from event payloads would produce a second figure for the same quantity, and the two would diverge the moment the channel's accounting changed.
+
+`causalmesh analyze` reports it, per task by default. Pooling is opt-in behind `--pooled` because on this design the pooled enforcement contrast is actively misleading: enforcement costs nothing on `schema_handler_widen` (disjoint ownership, nothing to block) and every success on `concurrent_edit_collision` (contested path), and the mean of 0.00 and −1.00 describes neither task.
+
+An absent outcome is counted as `unknown`, never as a failure — a crashed run recorded as a failure would inflate every failure rate by however many runs crashed before evaluating.
+
+**Not built:** the staleness estimators. λ̂, δ̂ and Δ̂ are named here and defined nowhere in this repository; they come from §23 and §45, which are not checked in. The per-turn observations would support *an* estimator, but one derived from its own inputs would carry the specified symbol while possibly measuring something else. Recorded in `docs/backlog.md` rather than guessed.
 
 ### Step 12 — Analytical module (§46, §47)
 Pure mathematics with zero storage dependency, unit-tested against hand-computed values: `C_tr`, `C_md`, `ρ(T)`, `T*`, `P_stale`, `P_floor`.

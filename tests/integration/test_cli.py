@@ -213,3 +213,59 @@ class TestStatus:
         assert per_arm["C0"]["bytes"] == 0
         # C2 carries the same information as C3 for the same cost.
         assert per_arm["C2"]["bytes"] == per_arm["C3"]["bytes"]
+
+class TestAnalyze:
+    """`analyze` reports what the runs did, and says what it is not."""
+
+    def test_the_pilot_analyses(self) -> None:
+        result = invoke("analyze", "--id", "pilot_landing", "--root", str(REPO), "--json")
+        assert result.exit_code == 0, result.stdout
+        report = payload(result)
+        assert report["runs"] == 24
+        assert report["balanced"] is True
+        assert report["label"] == "PILOT"
+
+    def test_arm_figures_match_the_published_results(self) -> None:
+        result = invoke("analyze", "--id", "pilot_landing", "--root", str(REPO), "--json")
+        arms = payload(result)["arms"]
+        assert arms["C1"]["mean_coordination_bytes"] == 361.0
+        assert arms["C2"]["mean_coordination_bytes"] == 196.0
+        assert arms["C3"]["success_rate"] == 0.5
+        assert arms["C3"]["denials"] == 3
+
+    def test_contrasts_are_reported_per_task(self) -> None:
+        """Pooling enforcement across these two tasks describes neither."""
+        result = invoke("analyze", "--id", "pilot_landing", "--root", str(REPO), "--json")
+        by_task = payload(result)["contrasts_by_task"]
+
+        def enforcement(task: str) -> float:
+            return next(
+                c for c in by_task[task] if c["name"] == "enforcement_benefit"
+            )["success_delta"]
+
+        assert enforcement("schema_handler_widen") == 0.0
+        assert enforcement("concurrent_edit_collision") == -1.0
+
+    def test_a_single_task_can_be_selected(self) -> None:
+        result = invoke(
+            "analyze",
+            "--id",
+            "pilot_landing",
+            "--task",
+            "schema_handler_widen",
+            "--root",
+            str(REPO),
+            "--json",
+        )
+        assert result.exit_code == 0, result.stdout
+        assert list(payload(result)["contrasts_by_task"]) == ["schema_handler_widen"]
+
+    def test_an_unknown_task_is_a_usage_error(self) -> None:
+        result = invoke(
+            "analyze", "--id", "pilot_landing", "--task", "nope", "--root", str(REPO)
+        )
+        assert result.exit_code == 2
+
+    def test_selecting_nothing_is_a_usage_error(self) -> None:
+        result = invoke("analyze", "--root", str(REPO))
+        assert result.exit_code == 2

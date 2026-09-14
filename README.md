@@ -107,7 +107,7 @@ That last row is a real limitation, documented rather than hidden.
 
 ## Status
 
-**Substrate complete and exercised. 813 tests passing.**
+**Substrate complete and exercised. 839 tests passing.**
 
 The build follows a vertical slice first: a single scenario driven end-to-end
 through every subsystem, executed under all four arms, before breadth is
@@ -212,6 +212,7 @@ causalmesh experiment plan --profile smoke  # a run schedule, executed nothing
 causalmesh experiment run  --profile smoke  # execute; resumable and idempotent
 causalmesh experiment status --latest       # per-arm outcomes
 causalmesh verify --all                     # offline chain verification
+causalmesh analyze --latest                 # costs and the four contrasts
 ```
 
 Every command takes `--json` for scripting, and exits `0` on success, `1`
@@ -221,8 +222,12 @@ on a negative result, `2` on a bad invocation and `3` when it could not run
 `causalmesh verify --run <directory>` verifies a single exported run with no
 repository and no relay present, which is the §82 clean-room check.
 
-**Not yet built:** `analyze` and `report`. The analysis, metrics, reporting
-and provenance subsystems are empty — `causalmesh doctor` says so, and
+`analyze` is descriptive: it reports what the runs did, per arm and per
+task, and makes no claim that a difference is distinguishable from noise.
+The statistics layer that would support such a claim is not built.
+
+**Not yet built:** `report` and `audit`. The analysis, reporting and
+provenance subsystems are empty — `causalmesh doctor` says so, and
 [`docs/backlog.md`](docs/backlog.md) records why.
 
 ## Design commitments

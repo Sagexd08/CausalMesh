@@ -210,6 +210,31 @@ accepted. The relay's monotonic sequence is authoritative, and a denied
 write produces no event at all, so a blocked agent cannot win a contested
 path by construction.
 
+### Staleness estimation (§23, §45)
+
+**Status:** not built. The coordination-cost half of Step 11 is.
+
+`metrics/` aggregates what the channel recorded — bytes, tokens, events
+available versus injected, per-arm and per-task — and `causalmesh analyze`
+reports it alongside the four planned contrasts. That part needed no new
+instrumentation: the run artifacts already carried every figure.
+
+The staleness half does. `docs/PLAN.md` names λ̂, δ̂ and Δ̂ as the estimators
+to produce, and no definition of them exists in this repository. They come
+from §23 and §45 of the specification, which the build has been working
+from but which is not checked in.
+
+**Why it was not inferred from the data.** The per-turn observations record
+which events each agent saw and when, so *an* estimator could be derived
+from them. A derived estimator would carry the same symbol as the specified
+one while possibly measuring something else, and a number whose definition
+is reconstructed from its inputs is exactly the kind of figure §68 exists to
+prevent. The honest form of "not specified here" is an empty module and this
+entry, not a plausible formula.
+
+**What it would take:** the §23 and §45 definitions. The instrumentation to
+feed them is already persisted.
+
 ### A channel bypass passed every test (Phase 1)
 
 **Status:** fixed.

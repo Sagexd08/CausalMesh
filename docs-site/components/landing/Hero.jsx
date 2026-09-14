@@ -45,7 +45,7 @@ export default function Hero() {
             <span className="inline-flex h-5 w-5 items-center justify-center bg-ink-900 text-marker">
               <Check className="h-3 w-3" />
             </span>
-            813 tests &middot; 24 runs &middot; every chain verified
+            839 tests &middot; 24 runs &middot; every chain verified
           </div>
 
           <h1 className="mt-7 font-display text-[2.7rem] font-extrabold leading-[1.05] tracking-tightest text-ink-900 sm:text-[3.4rem] lg:text-[3.9rem]">

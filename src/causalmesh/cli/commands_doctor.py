@@ -118,12 +118,19 @@ def _unbuilt_check() -> Check:
             unbuilt.append(subsystem)
     if not unbuilt:
         return Check("coverage", "PASS", "every subsystem has an implementation")
-    return Check(
-        "coverage",
-        "WARN",
-        f"not built: {', '.join(unbuilt)}",
-        "`analyze` and `report` are unavailable. See docs/backlog.md.",
+    # Name the command each gap actually costs, rather than a fixed list
+    # that goes stale the moment one of them is built.
+    blocked = []
+    if "reporting" in unbuilt:
+        blocked.append("`report`")
+    if "provenance" in unbuilt:
+        blocked.append("`audit`")
+    hint = (
+        f"{' and '.join(blocked)} unavailable. See docs/backlog.md."
+        if blocked
+        else "See docs/backlog.md."
     )
+    return Check("coverage", "WARN", f"not built: {', '.join(unbuilt)}", hint)
 
 
 def doctor_command(
