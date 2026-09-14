@@ -178,4 +178,25 @@ def welcome_command(
 
     out_console.print(welcome.render(out_console, selected=1))
     out_console.print()
+
+    choice = welcome.choose(out_console)
+    if choice is None:
+        # Piped, or the operator left. Printing the menu was still the right
+        # thing; blocking on a read that will never come was not.
+        raise typer.Exit(Exit.OK)
+
+    out_console.print()
+    note(f"running: {choice.command}")
+    out_console.print()
+
+    # The chosen command is invoked in this process rather than shelled out:
+    # a first run that spawned `causalmesh` again would lose the exit code
+    # and depend on the binary being on PATH, which is exactly what a first
+    # run cannot assume.
+    from causalmesh.cli.main import app
+
+    try:
+        app(args=choice.command.split()[1:], standalone_mode=False)
+    except SystemExit as exc:  # typer.Exit propagates as SystemExit
+        raise typer.Exit(int(exc.code or 0)) from None
     raise typer.Exit(Exit.OK)

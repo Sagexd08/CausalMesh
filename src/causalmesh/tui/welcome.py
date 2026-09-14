@@ -26,6 +26,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from rich.console import Console, Group, RenderableType
+from rich.prompt import Prompt
 from rich.rule import Rule
 from rich.text import Text
 
@@ -187,26 +188,44 @@ def supports_blocks(console: Console) -> bool:
 
 
 def _scene(console: Console) -> Text:
-    """The drawn scene, in whichever material this terminal can render."""
-    lines = _draw_scene(supports_blocks(console))
+    """The drawn scene, coloured by what each part of it means.
 
+    Drawn in a single grey first, which made four agents, a contested file
+    and a refused write read as one undifferentiated object. Each agent now
+    carries the colour of the arm it stands for, so the picture and the
+    monitor's tables use one vocabulary; the file is lit because it is what
+    they are all reaching for; and the refusal is the only warm mark.
+    """
+    lines = _draw_scene(supports_blocks(console))
     scene = Text()
+
     for index, line in enumerate(lines):
         if index:
             scene.append("\n")
-        base = "grey62" if "agent_" in line else DIM
-        scene.append(line, style=base)
+        start = len(scene)
+        scene.append(line, style=DIM)
 
-        # REFUSED and the contested filename share a row, so emphasis is
-        # applied as a span over the words that earn it rather than as a
-        # style over the whole line — which painted the filename in the
-        # denial accent and spent the screen's one warm mark twice.
-        offset = len(scene) - len(line)
-        for markers, style in ((ACCENT_MARKERS, ACCENT), (FILE_MARKERS, "grey70")):
-            for marker in markers:
-                at = line.find(marker)
-                if at >= 0:
-                    scene.stylize(style, offset + at, offset + at + len(marker))
+        # Agents are coloured at their own columns, so a body and the name
+        # under it share one hue and the eye groups them without a box.
+        for column, arm in zip(AGENT_COLUMNS, ("C0", "C1", "C2", "C3")):
+            if column >= len(line) or line[column] == " ":
+                continue
+            left = column
+            while left > 0 and line[left - 1] != " ":
+                left -= 1
+            right = column
+            while right < len(line) - 1 and line[right + 1] != " ":
+                right += 1
+            scene.stylize(f"bold {arm_style(arm)}", start + left, start + right + 1)
+
+        for marker, style in (
+            (CONTESTED_FILE.strip(), f"bold {TEXT}"),
+            ("REFUSED", f"bold {ACCENT}"),
+        ):
+            at = line.find(marker)
+            if at >= 0:
+                scene.stylize(style, start + at, start + at + len(marker))
+
     return scene
 
 
@@ -242,22 +261,41 @@ def _lead() -> Group:
     return Group(first, second)
 
 
-def _choices(selected: int) -> Group:
-    """The numbered list, with one option marked as the place to start."""
+def _choices(selected: int, unicode_ok: bool = True) -> Group:
+    """The numbered list, with the command each option will run.
+
+    Every row looked identical in the first version — same weight, same
+    colour, four times — so the list read as a wall rather than as a set of
+    choices. Each option now shows the command it runs, in the colour the
+    rest of the interface uses for a command, which also answers "what is
+    this actually going to do" without the operator running it to find out.
+    """
+    marker = "❯" if unicode_ok else ">"
     rows: list[RenderableType] = []
+
     for index, choice in enumerate(CHOICES, start=1):
         active = index == selected
+
         line = Text()
-        line.append("> " if active else "  ", style=LIVE if active else DIM)
-        line.append(f"{index}. ", style=TEXT_MUTED)
-        line.append(choice.label, style=f"bold {PASS}" if active else "white")
+        line.append(f" {marker} " if active else "   ", style=LIVE if active else DIM)
+        line.append(f"{index}", style=f"bold {TEXT}" if active else TEXT_MUTED)
+        line.append(". ", style=DIM)
+        line.append(choice.label, style=f"bold {PASS}" if active else f"bold {TEXT}")
         if choice.recommended:
-            line.append("  recommended", style=DIM)
+            line.append("   start here", style=f"bold {ACCENT}")
         rows.append(line)
 
         detail = Text("     ")
-        detail.append(choice.detail, style=DIM)
+        detail.append(choice.detail, style=TEXT_MUTED)
         rows.append(detail)
+
+        command = Text("     ")
+        command.append(choice.command, style=LIVE if active else DIM)
+        rows.append(command)
+
+        if index < len(CHOICES):
+            rows.append(Text())
+
     return Group(*rows)
 
 
@@ -286,7 +324,38 @@ def render(console: Console, *, version: str = "0.1.0", selected: int = 1) -> Re
         Text(),
         Text("Let's get started.", style=f"bold {TEXT}"),
         Text(),
-        _choices(selected),
+        _choices(selected, supports_blocks(console)),
         Text(),
         _footer(),
     )
+
+def choose(console: Console, *, default: int = 1) -> Choice | None:
+    """Ask for a number, and return the choice it names.
+
+    The screen said "Pick a number" and then exited, which is a UI making a
+    promise it does not keep. It asks now.
+
+    Returns None when the operator leaves (Ctrl-C, Ctrl-D, or a
+    non-interactive stream), because a first-run screen that cannot be
+    escaped is worse than one that does nothing.
+    """
+    if not console.is_terminal:
+        # Piped or redirected: printing the menu is right, blocking on a
+        # read that will never come is not.
+        return None
+
+    valid = [str(index) for index in range(1, len(CHOICES) + 1)]
+    while True:
+        try:
+            answer = Prompt.ask(
+                "",
+                choices=valid,
+                console=console,
+                default=str(default),
+                show_choices=False,
+                show_default=False,
+            )
+        except (KeyboardInterrupt, EOFError):
+            return None
+        if answer in valid:
+            return CHOICES[int(answer) - 1]

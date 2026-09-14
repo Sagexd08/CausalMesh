@@ -44,11 +44,16 @@ PLANNED = "bright_black"
 # Arms are the experiment's four conditions and appear on every screen, so
 # they get stable hues. Ordered as a gradient of involvement: none, full,
 # bounded, bounded plus enforcement.
+# C3 is deliberately NOT the denial colour, even though it is the enforcing
+# arm. Sharing that hue made the refused agent and the refusal itself one
+# mark, so the accent stopped meaning "a write was refused" and started
+# meaning "something to do with C3". Magenta keeps the arm identifiable
+# while leaving the accent to say one thing.
 ARM_COLORS = {
     "C0": "bright_red",
     "C1": "bright_blue",
     "C2": "bright_green",
-    "C3": "bright_yellow",
+    "C3": "bright_magenta",
 }
 
 # -- surface ---------------------------------------------------------------
