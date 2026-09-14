@@ -103,7 +103,7 @@ class TestSnapshotFromArtifacts:
 
         snapshot = read_snapshot(directory)
         assert snapshot.reproducible is False
-        assert "NOT REPRODUCIBLE" in plain(render(snapshot))
+        assert "not reproducible" in plain(render(snapshot))
 
     def test_an_artifact_predating_the_field_stays_reproducible(self, tmp_path: Path) -> None:
         """Absent means MockAgent-driven, which is the deterministic case."""
@@ -123,8 +123,27 @@ class TestAgainstThePilot:
     def test_only_the_enforcing_arm_shows_denials(self) -> None:
         snapshot = read_snapshot(PILOT)
         by_arm = snapshot.by_arm()
-        assert sum(r.denials for r in by_arm["C3"]) == 3
-        assert sum(r.denials for r in by_arm["C2"]) == 0
+        assert by_arm["C3"].denials == 3
+        assert by_arm["C2"].denials == 0
+
+    def test_the_split_arm_is_detected_rather_than_left_to_be_noticed(self) -> None:
+        """The finding the whole view is built around.
+
+        C3 passes schema_handler_widen and fails concurrent_edit_collision.
+        No per-arm average can say that, and the 50% rate is exactly the
+        number that hides it.
+        """
+        by_arm = read_snapshot(PILOT).by_arm()
+        assert by_arm["C3"].splits() is True
+        assert by_arm["C2"].splits() is False
+        assert by_arm["C0"].splits() is False
+
+    def test_the_comparison_names_the_split_arm(self) -> None:
+        output = plain(render(read_snapshot(PILOT)))
+        assert "C3 behaves differently by task" in output
+        # And evidences it with the per-task breakdown.
+        assert "concurrent_edit_collision" in output
+        assert "0/3" in output and "3/3" in output
 
     def test_the_monitor_never_writes_to_the_index(self) -> None:
         """The property that makes it safe to attach to a live run.
@@ -142,7 +161,7 @@ class TestAgainstThePilot:
 
 
 class TestRendering:
-    def test_a_frame_shows_arms_progress_and_denials(self) -> None:
+    def test_a_frame_compares_the_arms(self) -> None:
         snapshot = Snapshot(experiment_id="demo")
         snapshot.runs = [
             RunView("demo__t__C2__r0000", "C2", "t", "COMPLETED", 196, 0, 4, True),
@@ -153,10 +172,65 @@ class TestRendering:
 
         assert "demo" in output
         assert "C2" in output and "C3" in output
+        # Each arm states its condition, so the reader need not hold the
+        # experimental design in their head.
+        assert "bounded metadata" in output
         assert "196" in output
-        assert "RUNNING" in output
         # 2 of 3 have reached a terminal state.
         assert "2/3" in output
+
+    def test_the_live_run_is_named_while_it_executes(self) -> None:
+        """"Which run is this" is the question an operator actually has."""
+        snapshot = Snapshot(experiment_id="demo")
+        snapshot.runs = [
+            RunView("demo__widen__C0__r0000", "C0", "widen", "RUNNING"),
+            RunView("demo__widen__C1__r0000", "C1", "widen", "PLANNED"),
+        ]
+        output = plain(render(snapshot))
+        assert "running" in output
+        assert "widen" in output
+        # Pending work is listed while it is pending.
+        assert "IN FLIGHT" in output
+
+    def test_a_finished_collection_drops_the_in_flight_section(self) -> None:
+        """Detail an operator wants during a run and never after one."""
+        snapshot = Snapshot(experiment_id="demo")
+        snapshot.runs = [RunView("demo__t__C2__r0000", "C2", "t", "COMPLETED", 196, 0, 4, True)]
+        output = plain(render(snapshot))
+        assert "IN FLIGHT" not in output
+        assert "complete" in output
+
+    def test_a_uniform_collection_shows_no_breakdown(self) -> None:
+        """A breakdown that is always present is another table to scan."""
+        snapshot = Snapshot(experiment_id="demo")
+        snapshot.runs = [
+            RunView("demo__a__C2__r0000", "C2", "a", "COMPLETED", 196, 0, 4, True),
+            RunView("demo__b__C2__r0000", "C2", "b", "COMPLETED", 196, 0, 4, True),
+        ]
+        assert "behaves differently" not in plain(render(snapshot))
+
+    def test_it_holds_at_eighty_columns(self) -> None:
+        """The width the development terminal actually reports.
+
+        The split marker used to live inside a ratio column and truncated to
+        "differs by ..." here, which reads as a rendering fault rather than
+        a finding.
+        """
+        from rich.console import Console
+
+        snapshot = Snapshot(experiment_id="demo")
+        snapshot.runs = [
+            RunView("demo__widen__C3__r0000", "C3", "widen", "COMPLETED", 196, 0, 4, True),
+            RunView("demo__collide__C3__r0000", "C3", "collide", "COMPLETED", 196, 1, 4, False),
+        ]
+        console = Console(width=80)
+        with console.capture() as capture:
+            console.print(render(snapshot))
+        output = capture.get()
+
+        assert "C3 behaves differently by task" in output
+        assert "…" not in output and "..." not in output
+        assert max(len(line) for line in output.splitlines()) <= 80
 
     def test_an_empty_collection_renders_without_dividing_by_zero(self) -> None:
         output = plain(render(Snapshot(experiment_id="empty")))
@@ -168,9 +242,9 @@ class TestRendering:
         interface must not let that fact be missed."""
         snapshot = Snapshot(experiment_id="live", reproducible=False)
         snapshot.runs = [RunView("live__t__C2__r0000", "C2", "t", "COMPLETED")]
-        assert "NOT REPRODUCIBLE" in plain(render(snapshot))
+        assert "not reproducible" in plain(render(snapshot))
 
     def test_a_reproducible_collection_carries_no_warning(self) -> None:
         snapshot = Snapshot(experiment_id="mock")
         snapshot.runs = [RunView("mock__t__C2__r0000", "C2", "t", "COMPLETED")]
-        assert "NOT REPRODUCIBLE" not in plain(render(snapshot))
+        assert "not reproducible" not in plain(render(snapshot))

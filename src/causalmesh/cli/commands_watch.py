@@ -67,19 +67,19 @@ def watch_command(
     started = time.monotonic()
 
     if once:
-        out_console.print(render(read_snapshot(directory, started_at=started)))
+        out_console.print(render(read_snapshot(directory, started_at=started), console=out_console))
         raise typer.Exit(Exit.OK)
 
     try:
         with Live(
-            render(read_snapshot(directory, started_at=started)),
+            render(read_snapshot(directory, started_at=started), console=out_console),
             console=out_console,
             refresh_per_second=REFRESH_HZ,
             screen=False,
         ) as live:
             while True:
                 snapshot = read_snapshot(directory, started_at=started)
-                live.update(render(snapshot))
+                live.update(render(snapshot, console=out_console))
                 # Stop when the collection is done rather than spinning
                 # forever: a watcher left running on a finished collection
                 # is a process the operator has to remember to kill.
@@ -137,4 +137,45 @@ def connectors_command(
         )
         note("a real agent is nondeterministic and costs money per run")
 
+    raise typer.Exit(Exit.OK)
+
+def welcome_command(
+    no_animation: Annotated[
+        bool, typer.Option("--no-animation", help="Skip the check sequence's motion.")
+    ] = False,
+    check: Annotated[
+        bool, typer.Option("--check", help="Only run the environment checks.")
+    ] = False,
+    root_option: Annotated[Path | None, typer.Option("--root")] = None,
+) -> None:
+    """The first-run screen: what this is, and where to start.
+
+    The checks run for real before the screen is drawn — every line that
+    resolves is a probe, and the slow one invokes every agent binary
+    installed here. A machine that cannot run a collection is told so
+    instead of being offered a menu that would fail.
+    """
+    from causalmesh.tui import welcome
+    from causalmesh.tui.onboard import build_sequence, run
+
+    root = root_option.resolve() if root_option else find_root()
+    if root is None:
+        fail("no CausalMesh checkout found", hint="Run from inside the repository, or pass --root.")
+        raise typer.Exit(Exit.USAGE)
+
+    out_console.print()
+    sequence = run(build_sequence(root), out_console, animate=not no_animation)
+    out_console.print()
+
+    if check:
+        raise typer.Exit(Exit.OK if sequence.ready else Exit.FAILED)
+
+    if not sequence.ready:
+        # Offering a menu whose every option would fail is worse than
+        # saying plainly that the environment is not ready.
+        note("fix the failures above, then run `causalmesh welcome` again")
+        raise typer.Exit(Exit.FAILED)
+
+    out_console.print(welcome.render(out_console, selected=1))
+    out_console.print()
     raise typer.Exit(Exit.OK)
