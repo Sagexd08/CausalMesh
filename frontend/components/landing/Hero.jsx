@@ -47,16 +47,11 @@ export default function Hero() {
               characters. It links to the licence rather than decorating,
               because a badge that goes nowhere is an image of a badge. */}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-[13px]">
-            <a
-              href="https://github.com/Sagexd08/CausalMesh"
-              className="group inline-flex items-center gap-1.5 rounded-full border border-ink-900 px-2.5 py-1 text-ink-900 transition-colors hover:bg-ink-900 hover:text-paper"
-            >
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-ink-900 px-2.5 py-1 text-ink-900">
               <GitHubMark className="h-3.5 w-3.5" />
-              <span className="font-medium">Open source</span>
-              <span className="text-ink-500 transition-colors group-hover:text-paper/70">
-                MIT
-              </span>
-            </a>
+              <span className="font-medium">Releasing soon</span>
+              <span className="text-ink-500">MIT</span>
+            </span>
 
             <span className="flex items-center gap-2 text-ink-600">
               <span className="inline-flex h-5 w-5 items-center justify-center bg-ink-900 text-marker">

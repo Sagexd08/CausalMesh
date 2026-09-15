@@ -35,7 +35,6 @@ const COLUMNS = [
   [
     "Project",
     [
-      ["Repository", "https://github.com/Sagexd08/CausalMesh"],
       [
         "Security model",
         "https://github.com/Sagexd08/CausalMesh/blob/main/docs/security.md",
