@@ -39,8 +39,8 @@ function Defs({ id }) {
         <path
           d="M1 1 L8 4.5 L1 8"
           fill="none"
-          stroke="var(--color-ink-400)"
-          strokeWidth="1.2"
+          stroke="var(--color-ink-500)"
+          strokeWidth="1.4"
           strokeLinecap="round"
           strokeLinejoin="round"
         />
@@ -108,7 +108,7 @@ function WideDiagram({ id, live }) {
   return (
     <svg
       className="fd-wide"
-      viewBox="0 0 520 192"
+      viewBox="0 0 520 214"
       role="img"
       aria-labelledby={`${id}-t ${id}-d`}
       style={{ width: "100%", height: "auto" }}
@@ -130,7 +130,6 @@ function WideDiagram({ id, live }) {
             y={rowY[i] - 14}
             width="88"
             height="28"
-            rx="1"
             className="fd-node"
           />
           <text x={agentX + 44} y={rowY[i] + 4} textAnchor="middle" className="fd-label">
@@ -140,15 +139,24 @@ function WideDiagram({ id, live }) {
       ))}
 
       {/* agent -> gate */}
-      {PATHS.map((p, i) => (
-        <path
-          key={p.id}
-          className={`fd-line fd-flow${live ? " fd-seen" : ""}`}
-          style={{ transitionDelay: `${i * 140}ms` }}
-          markerEnd={`url(#${id}-arrow)`}
-          d={`M${agentX + 88} ${rowY[i]} C${(agentX + 88 + gateX) / 2} ${rowY[i]}, ${(agentX + 88 + gateX) / 2} ${gateMidY}, ${gateX - 6} ${gateMidY}`}
-        />
-      ))}
+      {PATHS.map((p, i) => {
+        const d = `M${agentX + 88} ${rowY[i]} C${(agentX + 88 + gateX) / 2} ${rowY[i]}, ${(agentX + 88 + gateX) / 2} ${gateMidY}, ${gateX - 6} ${gateMidY}`;
+        return (
+          <g key={p.id}>
+            <path
+              className={`fd-line fd-flow${live ? " fd-seen" : ""}`}
+              style={{ transitionDelay: `${i * 140}ms` }}
+              markerEnd={`url(#${id}-arrow)`}
+              d={d}
+            />
+            <path
+              className={`fd-pulse fd-pulse--in${live ? " fd-seen" : ""}`}
+              style={{ animationDelay: `${i * 420}ms` }}
+              d={d}
+            />
+          </g>
+        );
+      })}
 
       {/* gate */}
       <rect
@@ -166,38 +174,43 @@ function WideDiagram({ id, live }) {
       </text>
 
       {/* gate -> repo (granted) */}
-      {PATHS.filter((p) => p.outcome === "granted").map((p, i) => (
-        <path
-          key={p.id}
-          className={`fd-line fd-line--granted fd-flow${live ? " fd-seen" : ""}`}
-          style={{ transitionDelay: `${400 + i * 140}ms` }}
-          markerEnd={`url(#${id}-arrow-live)`}
-          d={`M${gateX + 72} ${gateMidY - 22 + i * 44} C${(gateX + 72 + repoX) / 2} ${gateMidY - 22 + i * 44}, ${(gateX + 72 + repoX) / 2} 96, ${repoX - 6} 96`}
-        />
-      ))}
+      {PATHS.filter((p) => p.outcome === "granted").map((p, i) => {
+        const d = `M${gateX + 72} ${gateMidY - 22 + i * 44} C${(gateX + 72 + repoX) / 2} ${gateMidY - 22 + i * 44}, ${(gateX + 72 + repoX) / 2} 96, ${repoX - 6} 96`;
+        return (
+          <g key={p.id}>
+            <path
+              className={`fd-line fd-line--granted fd-flow${live ? " fd-seen" : ""}`}
+              style={{ transitionDelay: `${400 + i * 140}ms` }}
+              markerEnd={`url(#${id}-arrow-live)`}
+              d={d}
+            />
+            <path
+              className={`fd-pulse fd-pulse--granted${live ? " fd-seen" : ""}`}
+              style={{ animationDelay: `${1300 + i * 420}ms` }}
+              d={d}
+            />
+          </g>
+        );
+      })}
 
-      {/* gate -> refused, turned back rather than reaching the repo */}
+      {/* The refusal turns back toward the agent that asked, rather than
+          curling into empty space. A refused write has a destination -
+          the agent is told no - and a path that ends nowhere reads as an
+          unfinished stroke instead of the mechanism this diagram exists
+          to show. */}
       <path
         className={`fd-line fd-line--refused fd-flow${live ? " fd-seen" : ""}`}
         style={{ transitionDelay: "680ms" }}
         markerEnd={`url(#${id}-arrow-refused)`}
-        d={`M${gateX + 36} ${gateTop + gateH} C${gateX + 36} ${gateTop + gateH + 26}, ${gateX - 40} ${gateTop + gateH + 26}, ${gateX - 40} ${gateTop + gateH - 4}`}
+        d={`M${gateX - 2} ${gateMidY + 30} C${gateX - 60} ${gateMidY + 48}, ${agentX + 130} ${rowY[2] + 34}, ${agentX + 46} ${rowY[2] + 20}`}
       />
       <text
-        x={gateX - 40}
-        y={gateTop + gateH + 44}
+        x={gateX - 66}
+        y={rowY[2] + 44}
         textAnchor="middle"
         className="fd-label fd-label--refused"
       >
-        refused
-      </text>
-      <text
-        x={gateX - 40}
-        y={gateTop + gateH + 58}
-        textAnchor="middle"
-        className="fd-label fd-label--dim"
-      >
-        recorded, not dropped
+        refused, and recorded
       </text>
 
       {/* repo */}
@@ -233,7 +246,7 @@ function NarrowDiagram({ id, live }) {
 
       {PATHS.map((p, i) => (
         <g key={p.id}>
-          <rect x={colX - 46} y={rowY[i] - 12} width="92" height="24" rx="1" className="fd-node" />
+          <rect x={colX - 46} y={rowY[i] - 12} width="92" height="24" className="fd-node" />
           <text x={colX} y={rowY[i] + 4} textAnchor="middle" className="fd-label">
             {p.agent}
           </text>
@@ -285,9 +298,13 @@ export default function FlowDiagram() {
 
   return (
     <div ref={ref} className="fd-host">
-      <div className="mb-2 flex items-center justify-between gap-4 font-mono text-[10px] uppercase tracking-[0.16em] text-ink-500">
+      {/* Column labels, tied to the diagram by a rule rather than floating
+          above it as three unrelated words. */}
+      <div className="mb-5 flex items-center gap-3 border-b border-rule-soft pb-2 font-mono text-[10px] uppercase tracking-[0.16em] text-ink-500">
         <span>fleet</span>
-        <span className="text-marker-deep">every call is accounted for</span>
+        <span className="h-px flex-1 bg-rule-soft" />
+        <span className="text-ink-700">every call is accounted for</span>
+        <span className="h-px flex-1 bg-rule-soft" />
         <span>repo</span>
       </div>
       <WideDiagram id="fd" live={seen} />

@@ -834,12 +834,9 @@ export default function Paper() {
 
             {/* One way out of the document, to the thing it describes. */}
             <div className="mt-16 flex flex-wrap items-center gap-x-5 gap-y-3 border-t border-rule pt-7">
-              <a
-                href="https://github.com/Sagexd08/CausalMesh"
-                className="inline-flex items-center gap-2 bg-marker px-5 py-2.5 text-[14px] font-medium text-ink-900 transition-colors hover:bg-marker-deep"
-              >
-                Read the source
-              </a>
+              <span className="inline-flex items-center gap-2 bg-marker px-5 py-2.5 text-[14px] font-medium text-ink-900">
+                Source releasing soon
+              </span>
               <a
                 href="/docs"
                 className="text-[14px] text-ink-700 underline decoration-rule-soft underline-offset-4 transition-colors hover:text-ink-900 hover:decoration-marker-deep"

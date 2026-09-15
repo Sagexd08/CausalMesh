@@ -291,13 +291,19 @@
     .fd-narrow { display: block; }
   }
 
+  /* Ink on paper. Hierarchy comes from stroke weight and one accent, never
+     from fills or glows: a neon halo on an editorial page reads as a
+     different product. The gate is the only element that carries the
+     marker, because it is the only element that decides anything. */
   .fd-node {
     fill: var(--color-paper);
-    stroke: var(--color-ink-800);
+    stroke: var(--color-ink-300);
     stroke-width: 1;
   }
   .fd-node--accent {
-    stroke: var(--color-marker-deep);
+    fill: var(--color-paper);
+    stroke: var(--color-ink-900);
+    stroke-width: 1.5;
   }
 
   .fd-label {
@@ -305,19 +311,20 @@
     fill: var(--color-ink-700);
     letter-spacing: 0.02em;
   }
-  .fd-label--accent { fill: var(--color-marker-deep); font-weight: 600; }
+  .fd-label--accent { fill: var(--color-ink-900); font-weight: 600; }
   .fd-label--dim { fill: var(--color-ink-500); }
-  .fd-label--refused { fill: var(--color-arm-c0); font-weight: 600; }
+  .fd-label--refused { fill: var(--color-arm-c0); }
 
   .fd-line {
     fill: none;
     stroke: var(--color-ink-300);
-    stroke-width: 1.2;
+    stroke-width: 1;
     stroke-dasharray: 260;
     stroke-dashoffset: 260;
   }
   .fd-line--granted {
     stroke: var(--color-marker-deep);
+    stroke-width: 1.5;
   }
   .fd-line--refused {
     stroke: var(--color-arm-c0);
@@ -326,6 +333,43 @@
   .fd-flow.fd-seen {
     stroke-dashoffset: 0;
     transition: stroke-dashoffset 620ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  /* Traffic, not decoration: a short dash travelling the same path the
+     connector draws, so the reader sees calls moving toward the gate and
+     on to the repo. Drawn as a second overlaid stroke rather than by
+     animating the connector itself, because the connector's dasharray is
+     already spoken for by the draw-in above.
+
+     Only `stroke-dashoffset` animates, which the compositor handles, and
+     the whole layer is gated behind the draw-in finishing and behind
+     `prefers-reduced-motion`. */
+  .fd-pulse {
+    fill: none;
+    stroke-width: 3;
+    stroke-linecap: round;
+    /* A travelling segment long enough to read as a moving call rather
+       than a speck. The gap is the rest of the path, so exactly one
+       segment is in flight at a time. */
+    stroke-dasharray: 46 214;
+    stroke-dashoffset: 260;
+    opacity: 0;
+  }
+  /* Darker than the connector it rides, or the dash disappears into it. */
+  .fd-pulse--in { stroke: var(--color-ink-800); }
+  .fd-pulse--granted { stroke: var(--color-ink-900); }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .fd-seen .fd-pulse,
+    .fd-pulse.fd-seen {
+      opacity: 1;
+      animation: fd-travel 3.2s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+    }
+  }
+
+  @keyframes fd-travel {
+    from { stroke-dashoffset: 260; }
+    to { stroke-dashoffset: -46; }
   }
 
   /* ---------------------------------------------------------------------
