@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { ChevronDown } from "./Icons.jsx";
 import { ButtonPrimary } from "./Primitives.jsx";
 
@@ -17,13 +18,26 @@ const NAV = [
     ],
   },
   { label: "Evidence", href: "#integrity" },
+  { label: "Whitepaper", href: "/whitepaper" },
   { label: "Docs", href: "/docs" },
 ];
 
+/**
+ * Resolve a section anchor against the page it is being rendered on.
+ *
+ * The nav is shared by `/` and `/whitepaper`, and a bare `#architecture`
+ * scrolls to nothing on a page that has no such section. Prefixing with `/`
+ * when away from the landing page sends the reader home and then to the
+ * section, which is what the label promised.
+ */
+function resolve(href, onLanding) {
+  return href.startsWith("#") && !onLanding ? `/${href}` : href;
+}
+
 /** The wordmark is text. No logo — the name is the mark. */
-function Wordmark() {
+function Wordmark({ onLanding = true }) {
   return (
-    <a href="#main" className="flex items-baseline gap-2">
+    <a href={onLanding ? "#main" : "/"} className="flex items-baseline gap-2">
       <span className="text-[19px] font-semibold tracking-tightest text-ink-900">
         CausalMesh
       </span>
@@ -37,6 +51,9 @@ function Wordmark() {
 export default function Nav() {
   const [open, setOpen] = useState(null);
   const [scrolled, setScrolled] = useState(false);
+
+  const pathname = usePathname();
+  const onLanding = pathname === "/";
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 12);
@@ -67,7 +84,7 @@ export default function Nav() {
           aria-label="Primary"
           className="mx-auto flex h-16 w-full max-w-[1180px] items-center justify-between gap-6 px-6 sm:px-10 lg:px-16"
         >
-          <Wordmark />
+          <Wordmark onLanding={onLanding} />
 
           <ul className="hidden items-center gap-7 lg:flex">
             {NAV.map((entry) => (
@@ -78,7 +95,7 @@ export default function Nav() {
                 onMouseLeave={() => setOpen(null)}
               >
                 <a
-                  href={entry.href}
+                  href={resolve(entry.href, onLanding)}
                   className="inline-flex items-center gap-1 py-2 text-[14px] text-ink-700 transition-colors hover:text-ink-900"
                   aria-expanded={entry.items ? open === entry.label : undefined}
                 >
@@ -93,7 +110,7 @@ export default function Nav() {
                     {entry.items.map(([label, href]) => (
                       <li key={label}>
                         <a
-                          href={href}
+                          href={resolve(href, onLanding)}
                           className="block px-3.5 py-2 text-[13.5px] text-ink-700 transition-colors hover:bg-paper-sunk hover:text-ink-900"
                         >
                           {label}
@@ -108,7 +125,7 @@ export default function Nav() {
 
           <div className="flex items-center gap-3">
             <a
-              href="#results"
+              href={resolve("#results", onLanding)}
               className="hidden text-[14px] text-ink-700 transition-colors hover:text-ink-900 sm:inline"
             >
               Results
