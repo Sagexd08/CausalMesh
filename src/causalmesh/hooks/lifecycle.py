@@ -114,6 +114,16 @@ class GateDecision:
     reason: str
     holder_agent: str | None = None
     blocked_path: str | None = None
+    # Which rule refused, as a stable identifier: "claim", "ownership",
+    # "allowlist", "ceiling", "budget". The reason says the same thing in a
+    # sentence, but a sentence is written for a person reading a terminal
+    # and changes when the wording improves. Analysis needs a key it can
+    # group by, and parsing prose to recover one is how a measurement
+    # quietly stops counting when someone rewords an error.
+    #
+    # Empty for a gate that does not distinguish rules, which is the
+    # unenforced case and `ClaimGate` before it was given one.
+    rule: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -121,6 +131,7 @@ class GateDecision:
             "blocked_path": self.blocked_path,
             "holder_agent": self.holder_agent,
             "reason": self.reason,
+            "rule": self.rule,
         }
 
 

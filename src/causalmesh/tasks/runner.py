@@ -64,6 +64,16 @@ class RunConfig:
     operator_id: str = "unknown"
     machine_id: str = "unknown"
     git_commit: str = "unknown"
+    # A declared contract, when the operator has one. Absent is the
+    # experiment's own case: the arms install `ClaimGate`, which refuses on
+    # exactly one factor, and that is what the C2 to C3 contrast measures.
+    # Present, the contract gate is installed instead and can also refuse on
+    # ownership, allowlists, ceilings and budgets.
+    #
+    # A path rather than a Contract so RunConfig stays serialisable: it is
+    # recorded in the run artifact, and an object with a Decimal in it is
+    # not JSON.
+    contract_path: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -103,6 +113,10 @@ class RunResult:
     denials: list[dict[str, Any]] = field(default_factory=list)
     relay_summary: dict[str, Any] = field(default_factory=dict)
     boundary_summaries: dict[str, dict[str, Any]] = field(default_factory=dict)
+    # What the contract gate decided, when one was installed. Empty for a
+    # run driven by the arms' own gate, which is the experiment's default
+    # and has no contract to report against.
+    gate_summary: dict[str, Any] = field(default_factory=dict)
     error: str | None = None
 
     @property
@@ -125,6 +139,7 @@ class RunResult:
             "denials": self.denials,
             "error": self.error,
             "events": len(self.records),
+            "gate": self.gate_summary,
             "head_hash": self.head_hash,
             "outcome": self.outcome.to_dict(),
             "relay_summary": self.relay_summary,
@@ -158,6 +173,33 @@ def _make_channel(
         arm=arm,
         window=window,
         interests=AgentInterests(agent_id=agent_id, owned_paths=owns, dependency_paths=depends_on),
+    )
+
+
+def _gate_for(config: RunConfig, *, registry: Any):
+    """The gate this run installs, and why.
+
+    Without a contract the arms install their own gate: `AllowAllGate` for
+    C0, C1 and C2, `ClaimGate` for C3. That is the experiment's factor, and
+    it stays the default because the C2 to C3 contrast is only clean if the
+    two arms differ by exactly one thing.
+
+    With a contract, `ContractGate` is installed instead. It can also refuse
+    on ownership, allowlists, ceilings and budgets, and it keeps the arm's
+    enforcement semantics: C3 enforces, the others reach a verdict and allow
+    anyway so the counterfactual stays measurable.
+    """
+    if config.contract_path is None:
+        return gate_for_arm(config.arm, registry=registry, run_id=config.run_id)
+
+    from ..hooks.policy_gate import ContractGate
+    from ..policy import Contract
+
+    return ContractGate.build(
+        Contract.load(config.contract_path),
+        run_id=config.run_id,
+        registry=registry,
+        enforcing=config.arm == "C3",
     )
 
 
@@ -199,7 +241,7 @@ async def execute_task(
         claims=claims,
         participants=agent_ids,
     )
-    gate = gate_for_arm(config.arm, registry=claims, run_id=config.run_id)
+    gate = _gate_for(config, registry=claims)
     room = Room(config.run_id, task.task_id)
 
     agents: dict[str, MockAgent] = {}
@@ -315,6 +357,10 @@ async def execute_task(
         },
         claim_history=[c.to_dict() for c in claims.history(run_id=config.run_id)] if claims else [],
         denials=claims.denials(run_id=config.run_id) if claims else [],
+        # `to_dict` only exists on the contract gate. The arms' gates have
+        # no contract to report against, so an absent summary is the honest
+        # answer rather than an empty one that implies a gate was consulted.
+        gate_summary=gate.to_dict() if hasattr(gate, "to_dict") else {},
         relay_summary=relay.summary(),
         boundary_summaries={
             agent_id: boundary.summary() for agent_id, boundary in boundaries.items()

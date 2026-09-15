@@ -130,6 +130,7 @@ class ContractGate:
                 reason=verdict.reason,
                 holder_agent=verdict.holder,
                 blocked_path=path,
+                rule=verdict.rule,
             )
 
         return GateDecision(allowed=True, reason="the contract permits this call")
