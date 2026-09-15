@@ -230,3 +230,46 @@ class TestChatMessage:
             "content": "hi",
             "role": "user",
         }
+
+
+class TestTransportRefusesNonHttpSchemes:
+    """The adapter is the one place in the substrate that opens a URL.
+
+    `urllib.request.urlopen` honours `file://`, `ftp://` and anything else a
+    handler is registered for. A base URL reaching the transport from a
+    config file or an environment variable could therefore read a local path
+    and hand its contents back as a model reply, which the agent layer would
+    treat as a decision the model made.
+
+    Found by a static scan rather than by a failing test, which is the
+    argument for running one.
+    """
+
+    def test_https_is_permitted(self) -> None:
+        from causalmesh.adapters.transport import _http_url
+
+        assert _http_url("https://api.example.com", "/v1/chat") == (
+            "https://api.example.com/v1/chat"
+        )
+
+    def test_http_is_permitted(self) -> None:
+        """Plain HTTP stays allowed: a local model server is the normal case."""
+        from causalmesh.adapters.transport import _http_url
+
+        assert _http_url("http://localhost:11434", "/v1/chat") == ("http://localhost:11434/v1/chat")
+
+    @pytest.mark.parametrize(
+        "base",
+        [
+            "file:///etc/passwd",
+            "ftp://example.com",
+            "data:text/plain;base64,aGk=",
+            # No scheme at all. urlopen would treat this as a local path.
+            "/etc/passwd",
+        ],
+    )
+    def test_everything_else_is_refused(self, base: str) -> None:
+        from causalmesh.adapters.transport import TransportError, _http_url
+
+        with pytest.raises(TransportError, match="refusing to open"):
+            _http_url(base, "/v1/chat")

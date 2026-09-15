@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import typer
 
@@ -261,8 +261,12 @@ def status_command(
         bucket["denials"] += len(result.get("denials") or ())
         bucket["bytes"] += int(result.get("coordination_bytes") or 0)
 
-    payload = {"experiment_id": experiment_id, "per_arm": per_arm, "runs": len(run_dirs)}
-    if not emit(payload, as_json=as_json):
+    status_payload: dict[str, Any] = {
+        "experiment_id": experiment_id,
+        "per_arm": per_arm,
+        "runs": len(run_dirs),
+    }
+    if not emit(status_payload, as_json=as_json):
         rendered = table(
             f"status: {experiment_id}", ["arm", "runs", "passed", "denials", "mean bytes"]
         )

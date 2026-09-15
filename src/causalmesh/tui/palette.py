@@ -20,6 +20,8 @@ them importing the other's layout.
 
 from __future__ import annotations
 
+from typing import Any
+
 from rich.console import Console
 from rich.theme import Theme
 
@@ -85,7 +87,7 @@ def arm_style(arm: str) -> str:
     return ARM_COLORS.get(arm, TEXT_MUTED)
 
 
-def console(**kwargs) -> Console:
+def console(**kwargs: Any) -> Console:
     """A console carrying this palette.
 
     `theme` rather than inline styles so a surface names a role and the

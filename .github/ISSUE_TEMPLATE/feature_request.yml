@@ -1,0 +1,41 @@
+name: Proposal
+description: Something the substrate should do and does not.
+labels: [proposal]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Three things this project is deliberately not looking for, listed so
+        you do not write a proposal that was never going to land:
+
+        - **A new orchestration library.** The value here is the layer
+          underneath one. Working with LangGraph beats replacing it.
+        - **Benchmarks against other frameworks** without the methodology to
+          support them. The whole argument is that measurement is the hard
+          part.
+        - **Claims about agent behaviour.** Every run so far used a
+          deterministic mock agent.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What you cannot do today, and what you do instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you propose
+    validations:
+      required: true
+
+  - type: textarea
+    id: measurement
+    attributes:
+      label: How you would know it worked
+      description: >
+        This project can run a convention as C2 against C3 and measure
+        whether it paid for itself. If your proposal is a coordination rule,
+        say what you would expect that contrast to show.

@@ -66,11 +66,18 @@ jobs:
       - name: Ruff format
         run: ruff format --check src tests
 
-      # Not yet gating. The codebase predates a strict mypy pass and the
-      # config asks for `disallow_untyped_defs`, so turning this red today
-      # would block every pull request on unrelated debt. It reports, and
-      # the intent is to make it gate once the existing errors are cleared.
-      - name: Mypy
+      # Gating, on the modules that carry the project's guarantees. These
+      # are clean under `disallow_untyped_defs` and stay that way: the chain,
+      # the claim registry, the gate and the verifier are where a type error
+      # would be a correctness error rather than an inconvenience.
+      - name: Mypy (enforced)
+        run: |
+          mypy src/causalmesh/crypto                src/causalmesh/claims                src/causalmesh/events                src/causalmesh/verifier                src/causalmesh/policy                src/causalmesh/hooks
+
+      # Reporting, on everything else. The CLI and the analysis layer predate
+      # a strict pass; gating them today would block every pull request on
+      # debt unrelated to it. The count only goes down.
+      - name: Mypy (whole tree, reporting)
         run: mypy src || true
         continue-on-error: true
 
@@ -173,6 +180,38 @@ jobs:
           causalmesh policy check --root . --agent agent_a             --kind path --name src/causalmesh/policy/gate.py
           ! causalmesh policy check --root . --agent agent_b             --kind path --name src/causalmesh/policy/gate.py
           rm ./causalmesh.yaml
+
+  security:
+    name: security scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e . "bandit==1.8.0" "pip-audit==2.7.3"
+
+      # Static analysis over the shipped source. Tests are excluded: they
+      # assert on things a scanner reads as findings (asserts, subprocess
+      # calls into a fake server) and including them would train everyone
+      # to ignore the output.
+      #
+      # This found a real one: the model transport opened any URL urllib
+      # had a handler for, so a `file://` base URL from a config would have
+      # read a local path and returned it as a model reply.
+      - name: Bandit
+        run: bandit -r src -ll -ii
+
+      # Known CVEs in the dependency tree. The runtime core is deliberately
+      # small, which is most of why this stays quiet.
+      - name: Dependency audit
+        run: pip-audit --progress-spinner off
 
   web:
     name: site builds

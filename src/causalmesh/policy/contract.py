@@ -102,7 +102,7 @@ class Contract:
                 owned_name = Resource.path(owned).to_dict()["name"]
                 if _covers(owned_name, normalized) and (best is None or len(owned_name) > best[0]):
                     best = (len(owned_name), role.agent_id)
-        return best[1] if best else None
+        return str(best[1]) if best else None
 
     def allowlist_for(self, agent_id: str) -> set[str] | None:
         """Hosts this agent may reach, or None for unrestricted."""
@@ -307,8 +307,11 @@ def _budget_key(resource: Resource) -> str | None:
         return "usd_total"
     if resource.kind is ResourceKind.BUDGET:
         # A budget resource names its own allowance: Resource.budget(
-        # name="tokens", ...) is governed by the `tokens` key.
-        return resource.to_dict()["name"]
+        # name="tokens", ...) is governed by the `tokens` key. `to_dict`
+        # returns a mixed mapping, so the name is narrowed here rather than
+        # handed back as Any.
+        name: str = resource.to_dict()["name"]
+        return name
     return None
 
 

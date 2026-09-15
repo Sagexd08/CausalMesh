@@ -1,0 +1,67 @@
+name: Bug report
+description: Something behaves differently from what the documentation says.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before filing: `docs/backlog.md` records every known gap with its
+        reason. If what you hit is listed there it is a tracked limitation
+        rather than a bug, and saying so saves you writing this out.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What you ran
+      description: The exact command, or the code if you called the library.
+      render: shell
+      placeholder: causalmesh experiment run --profile smoke
+    validations:
+      required: true
+
+  - type: textarea
+    id: happened
+    attributes:
+      label: What happened
+      description: Output, and the traceback if there was one.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+
+  - type: textarea
+    id: doctor
+    attributes:
+      label: causalmesh doctor
+      description: >
+        Paste the output. It reports the interpreter, the signing library,
+        the task suite and the agents this machine has, which is the fastest
+        way to tell an environment problem from a code one.
+      render: shell
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options: [Linux, macOS, Windows, Other]
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: evidence
+    attributes:
+      label: If this concerns a measurement
+      description: >
+        Every figure in this project comes from a run artifact, so a
+        disagreement about a number can always be settled by pointing at
+        one. This is the most valuable kind of report the project receives.
+      options:
+        - label: I can name the run artifact the wrong number came from.

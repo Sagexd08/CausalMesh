@@ -1,6 +1,6 @@
 import { RESULTS, armResult } from "@/lib/landing/data.js";
 import Chart from "./Chart.jsx";
-import { Check } from "./Icons.jsx";
+import { Check, GitHubMark } from "./Icons.jsx";
 import { ButtonGhost, ButtonPrimary, Mark, Section } from "./Primitives.jsx";
 
 export default function Hero() {
@@ -41,11 +41,29 @@ export default function Hero() {
     <Section className="pt-16 pb-20 md:pt-24">
       <div className="grid grid-cols-1 items-start gap-x-16 gap-y-14 lg:grid-cols-[1fr_1.15fr]">
         <div>
-          <div className="flex items-center gap-2 text-[13px] text-ink-600">
-            <span className="inline-flex h-5 w-5 items-center justify-center bg-ink-900 text-marker">
-              <Check className="h-3 w-3" />
+          {/* Two facts, and the licence is the first of them. Someone
+              deciding whether to read further asks "can I use this" before
+              they ask "does it work", and MIT answers that in three
+              characters. It links to the licence rather than decorating,
+              because a badge that goes nowhere is an image of a badge. */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-[13px]">
+            <a
+              href="https://github.com/Sagexd08/CausalMesh"
+              className="group inline-flex items-center gap-1.5 rounded-full border border-ink-900 px-2.5 py-1 text-ink-900 transition-colors hover:bg-ink-900 hover:text-paper"
+            >
+              <GitHubMark className="h-3.5 w-3.5" />
+              <span className="font-medium">Open source</span>
+              <span className="text-ink-500 transition-colors group-hover:text-paper/70">
+                MIT
+              </span>
+            </a>
+
+            <span className="flex items-center gap-2 text-ink-600">
+              <span className="inline-flex h-5 w-5 items-center justify-center bg-ink-900 text-marker">
+                <Check className="h-3 w-3" />
+              </span>
+              982 tests &middot; 24 runs &middot; every chain verified
             </span>
-            865 tests &middot; 24 runs &middot; every chain verified
           </div>
 
           <h1 className="mt-7 font-display text-[2.7rem] font-extrabold leading-[1.05] tracking-tightest text-ink-900 sm:text-[3.4rem] lg:text-[3.9rem]">

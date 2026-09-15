@@ -445,9 +445,10 @@ def _integrate_workspaces(
         writer = _last_writer(relative, records or [])
         candidates = [writer] if writer else sorted(workspaces)
         for agent_id in candidates:
-            workspace = workspaces.get(agent_id)
-            if workspace is None or not workspace.contains(relative):
+            candidate_workspace = workspaces.get(agent_id)
+            if candidate_workspace is None or not candidate_workspace.contains(relative):
                 continue
+            workspace = candidate_workspace
             origin = workspace.resolve(relative)
             if not origin.is_file():
                 continue
