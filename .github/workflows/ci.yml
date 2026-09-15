@@ -51,10 +51,14 @@ jobs:
           python-version: "3.12"
           cache: pip
 
+      # Pinned. An unpinned `pip install ruff` installs whatever is newest
+      # that morning, so a pull request that changed nothing can fail on a
+      # rule that did not exist when it was opened. Bumping this is a commit
+      # somebody makes on purpose, with the fixes in the same change.
       - name: Install
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]" ruff mypy
+          pip install -e ".[dev]" "ruff==0.9.6" "mypy==1.14.1"
 
       - name: Ruff lint
         run: ruff check src tests

@@ -25,6 +25,18 @@ from causalmesh.cli.main import app
 pytestmark = [pytest.mark.integration]
 
 REPO = Path(__file__).resolve().parents[2]
+
+# The committed pilot. `data/raw/**` is gitignored, so a fresh clone and
+# every CI checkout has no runs in it: a test that reads the pilot must say
+# so rather than failing as though the CLI were broken.
+#
+# `tests/unit/test_tui.py` already guards this way. These did not, and CI's
+# first run reported eighteen failures on Linux and macOS that were entirely
+# "the evidence is not in the repository", which is true by design.
+PILOT = REPO / "data" / "raw" / "pilot_landing"
+needs_pilot = pytest.mark.skipif(
+    not PILOT.is_dir(), reason="pilot artifacts are not in this checkout"
+)
 runner = CliRunner()
 
 
@@ -123,6 +135,7 @@ class TestPlan:
         assert result.exit_code == 2
 
 
+@needs_pilot
 class TestVerify:
     """Verification through the CLI, against the pilot artifacts on disk."""
 
@@ -179,6 +192,7 @@ class TestVerify:
         assert result.exit_code == 2
 
 
+@needs_pilot
 class TestStatus:
     def test_status_counts_successes_from_the_outcome(self) -> None:
         """Regression: success lives on `result.outcome.succeeded`.
@@ -215,6 +229,7 @@ class TestStatus:
         assert per_arm["C2"]["bytes"] == per_arm["C3"]["bytes"]
 
 
+@needs_pilot
 class TestAnalyze:
     """`analyze` reports what the runs did, and says what it is not."""
 
@@ -270,6 +285,7 @@ class TestAnalyze:
         assert result.exit_code == 2
 
 
+@needs_pilot
 class TestManifestAndAudit:
     """Provenance through the CLI (§31, §83).
 
