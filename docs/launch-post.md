@@ -143,7 +143,7 @@ to hear them.
 Every figure is checkable:
 
 - `865 tests` — `pytest` output, 2026-09-14
-- `24 runs`, arm figures — `docs-site/lib/landing/results.json`, generated from
+- `24 runs`, arm figures — `frontend/lib/landing/results.json`, generated from
   `data/raw/pilot_landing/`
 - `46%` — 196 B / 361 B = 0.543. C2 costs 54% of C1, i.e. **46% less**. Say
   "46% less" or "46% cheaper" — never "46% of", which is a different number.

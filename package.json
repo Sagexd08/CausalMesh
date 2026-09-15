@@ -4,15 +4,21 @@
   "version": "0.1.0",
   "description": "Workspace root. The site is a single Next.js app: landing page at /, docs at /docs.",
   "workspaces": [
-    "docs-site"
+    "frontend"
   ],
   "scripts": {
-    "dev": "npm run dev --workspace=docs-site",
-    "build": "npm run build --workspace=docs-site",
-    "start": "npm run start --workspace=docs-site",
-    "types:check": "npm run types:check --workspace=docs-site"
+    "dev": "npm run dev --workspace=frontend",
+    "build": "npm run build --workspace=frontend",
+    "start": "npm run start --workspace=frontend",
+    "types:check": "npm run types:check --workspace=frontend"
   },
   "engines": {
     "node": ">=20"
+  },
+  "//": "Vercel detects the framework by looking for `next` in the ROOT package.json. The real dependency lives in frontend/; these are declared here so detection succeeds from the repository root. Keep the versions in step with frontend/package.json.",
+  "dependencies": {
+    "next": "16.3.4",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
   }
 }
