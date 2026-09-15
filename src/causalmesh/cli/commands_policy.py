@@ -16,11 +16,14 @@ an earlier build reported a confident zero for enforcement.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 import typer
 
 from causalmesh.cli._output import Exit, emit, fail, note, out_console, table
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from causalmesh.policy import Contract, Resource
 
 app = typer.Typer(
     help="Read the contract, and ask the gate what it would do.", no_args_is_help=True
@@ -30,7 +33,7 @@ app = typer.Typer(
 KINDS = ("path", "spend", "endpoint", "budget")
 
 
-def _load_or_exit(root_option: Path | None):
+def _load_or_exit(root_option: Path | None) -> Contract:
     from causalmesh.policy import Contract, ContractError
 
     try:
@@ -131,7 +134,7 @@ def check_command(
     raise typer.Exit(Exit.OK if verdict.allowed else Exit.FAILED)
 
 
-def _build(*, kind: str, name: str, amount: str | None, unit: str):
+def _build(*, kind: str, name: str, amount: str | None, unit: str) -> Resource:
     from causalmesh.policy import Resource, ResourceError
 
     if kind not in KINDS:

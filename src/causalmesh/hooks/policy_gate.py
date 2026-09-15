@@ -34,9 +34,13 @@ boundary, so a refusal here is a blocked write rather than a question.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any
 
 from causalmesh.hooks.lifecycle import GateDecision, ToolCall
 from causalmesh.policy import Contract, Gate as PolicyGate, Resource, Verdict
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from causalmesh.claims.registry import ClaimRegistry
 
 __all__ = ["ContractGate"]
 
@@ -54,7 +58,7 @@ class ContractGate:
     # The registry, when there is one. Held so a refusal on the `claim`
     # rule can be recorded as a denial; the lease *check* itself belongs to
     # the policy gate, which consults the registry through `may_write`.
-    registry: object | None = None
+    registry: ClaimRegistry | None = None
     # Every verdict this gate reached, in order. The run artifact records
     # these so a refusal can be read back with its rule and reason months
     # later, which is the whole point of the evidence plane.
@@ -66,7 +70,7 @@ class ContractGate:
         contract: Contract,
         *,
         run_id: str,
-        registry: object | None = None,
+        registry: ClaimRegistry | None = None,
         enforcing: bool = True,
         ledger: object | None = None,
     ) -> ContractGate:
@@ -150,7 +154,7 @@ class ContractGate:
         """
         return [verdict for verdict in self.verdicts if verdict.detail.get("would_refuse") is True]
 
-    def to_dict(self) -> dict[str, object]:
+    def to_dict(self) -> dict[str, Any]:
         """The gate's own record, for the run artifact."""
         return {
             "enforcing": self.policy.enforcing,

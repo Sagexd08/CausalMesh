@@ -29,6 +29,7 @@ from __future__ import annotations
 import json
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
 from typing import Any
@@ -103,6 +104,31 @@ class ChatResponse:
         }
 
 
+# Schemes this transport will open. `urllib.request.urlopen` honours
+# `file://`, `ftp://` and anything else a handler is registered for, so a
+# base URL that reached here from a config file or an environment variable
+# could read a local path and return its contents as a model reply. The
+# adapter is the one place in the substrate that talks to the network, and
+# it is the one place an unvalidated scheme would matter.
+_ALLOWED_SCHEMES = frozenset({"http", "https"})
+
+
+def _http_url(base_url: str, path: str) -> str:
+    """Join a base and a path, refusing anything that is not HTTP.
+
+    Raises rather than falling back, because the fallback for "this is not
+    a URL I will open" is not to open something else.
+    """
+    url = f"{base_url.rstrip('/')}/{path.lstrip('/')}"
+    scheme = urllib.parse.urlsplit(url).scheme.lower()
+    if scheme not in _ALLOWED_SCHEMES:
+        raise TransportError(
+            f"refusing to open {scheme or 'a schemeless'} URL: "
+            f"only {', '.join(sorted(_ALLOWED_SCHEMES))} are permitted"
+        )
+    return url
+
+
 @dataclass
 class HttpTransport:
     """A minimal JSON-over-HTTP client for chat-completion endpoints.
@@ -128,7 +154,7 @@ class HttpTransport:
         become an empty model reply, which the agent layer would then treat
         as a decision the model made.
         """
-        url = f"{self.base_url.rstrip('/')}/{path.lstrip('/')}"
+        url = _http_url(self.base_url, path)
         payload = json.dumps(body).encode("utf-8")
 
         request = urllib.request.Request(url, data=payload, method="POST")
@@ -140,7 +166,13 @@ class HttpTransport:
 
         started = time.monotonic()
         try:
-            with urllib.request.urlopen(request, timeout=self.timeout_s) as response:
+            # The scheme is validated in `_http_url` above, which raises for
+            # anything that is not http or https. Bandit cannot see across
+            # the helper, and a standing finding everyone learns to scroll
+            # past is worse than a suppression that says why.
+            with urllib.request.urlopen(  # nosec B310
+                request, timeout=self.timeout_s
+            ) as response:
                 body_bytes = response.read()
                 status = response.status
         except urllib.error.HTTPError as exc:

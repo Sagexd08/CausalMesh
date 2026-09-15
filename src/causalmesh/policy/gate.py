@@ -293,7 +293,8 @@ class Gate:
         ledger = getattr(self, "_ledger", None)
         if ledger is None:
             return Decimal(0)
-        return ledger.total(agent_id=agent_id, resource=resource)
+        total: Decimal = ledger.total(agent_id=agent_id, resource=resource)
+        return total
 
     def attach_ledger(self, ledger: Any) -> None:
         """Give the gate a record of what has already been consumed."""
