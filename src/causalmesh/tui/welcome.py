@@ -90,7 +90,7 @@ def _draw_scene(block: bool) -> list[str]:
     rows.append(row)
 
     row = blank()
-    for column, name in zip(AGENT_COLUMNS, AGENT_NAMES):
+    for column, name in zip(AGENT_COLUMNS, AGENT_NAMES, strict=False):
         put(row, column - len(name) // 2, name)
     rows.append(row)
 
@@ -207,7 +207,7 @@ def _scene(console: Console) -> Text:
 
         # Agents are coloured at their own columns, so a body and the name
         # under it share one hue and the eye groups them without a box.
-        for column, arm in zip(AGENT_COLUMNS, ("C0", "C1", "C2", "C3")):
+        for column, arm in zip(AGENT_COLUMNS, ("C0", "C1", "C2", "C3"), strict=False):
             if column >= len(line) or line[column] == " ":
                 continue
             left = column
@@ -255,9 +255,7 @@ def _lead() -> Group:
     first.append("Three writes land; one is refused and recorded.", style=TEXT_MUTED)
 
     second = Text()
-    second.append(
-        "This measures what that refusal buys, and what it costs.", style=TEXT_MUTED
-    )
+    second.append("This measures what that refusal buys, and what it costs.", style=TEXT_MUTED)
     return Group(first, second)
 
 
@@ -328,6 +326,7 @@ def render(console: Console, *, version: str = "0.1.0", selected: int = 1) -> Re
         Text(),
         _footer(),
     )
+
 
 def choose(console: Console, *, default: int = 1) -> Choice | None:
     """Ask for a number, and return the choice it names.

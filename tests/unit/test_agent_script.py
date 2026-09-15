@@ -84,9 +84,7 @@ class TestCompactForm:
 
     def test_the_expanded_form_is_equivalent(self) -> None:
         compact = AgentScript.from_dict("a", {"actions": [{"read": "src/x.py"}]})
-        expanded = AgentScript.from_dict(
-            "a", {"actions": [{"kind": "read", "path": "src/x.py"}]}
-        )
+        expanded = AgentScript.from_dict("a", {"actions": [{"kind": "read", "path": "src/x.py"}]})
         assert compact.actions[0] == expanded.actions[0]
 
 
@@ -127,9 +125,7 @@ class TestValidation:
     def test_the_error_names_the_offending_action(self) -> None:
         # A scenario may be long; the message must locate the problem.
         with pytest.raises(ScriptError, match=r"agent_a\.actions\[1\]"):
-            AgentScript.from_dict(
-                "agent_a", {"actions": [{"read": "a.py"}, {"nonsense": "x"}]}
-            )
+            AgentScript.from_dict("agent_a", {"actions": [{"read": "a.py"}, {"nonsense": "x"}]})
 
 
 class TestFailureModes:
@@ -146,9 +142,7 @@ class TestFailureModes:
         assert script.actions[0].duration_us == 5_000_000
 
     def test_retries_parse(self) -> None:
-        script = AgentScript.from_dict(
-            "a", {"actions": [{"write": "a.py", "retries": 3}]}
-        )
+        script = AgentScript.from_dict("a", {"actions": [{"write": "a.py", "retries": 3}]})
         assert script.actions[0].retries == 3
 
 
@@ -198,9 +192,7 @@ class TestCoordinationSensitivity:
         scenario = Scenario.from_dict(
             {
                 "agent_a": {"actions": [{"write": "src/x.py"}]},
-                "agent_b": {
-                    "actions": [{"modify": {"path": "src/x.py", "old": "a", "new": "b"}}]
-                },
+                "agent_b": {"actions": [{"modify": {"path": "src/x.py", "old": "a", "new": "b"}}]},
             }
         )
         assert scenario.contested_paths() == frozenset({"src/x.py"})
@@ -222,29 +214,28 @@ class TestDeclaredInterests:
         assert script.dependency_paths == frozenset({"src/schema.py"})
 
     def test_paths_touched_covers_both_ends_of_a_rename(self) -> None:
-        script = AgentScript.from_dict(
-            "a", {"actions": [{"rename": "old.py", "to": "new.py"}]}
-        )
+        script = AgentScript.from_dict("a", {"actions": [{"rename": "old.py", "to": "new.py"}]})
         assert script.paths_touched() == frozenset({"old.py", "new.py"})
 
 
 class TestSerialisation:
     def test_a_scenario_round_trips_through_dicts(self) -> None:
         # Scenarios reach the run manifest (§32), so they must serialise.
-        original = Scenario.from_dict(
-            {"agent_a": {"actions": [{"read": "a.py"}, {"wait": "1s"}]}}
-        )
-        assert Scenario.from_dict(
-            {
-                agent_id: {
-                    "actions": [
-                        {k: v for k, v in action.items() if v not in (None, 0)}
-                        for action in data["actions"]
-                    ]
+        original = Scenario.from_dict({"agent_a": {"actions": [{"read": "a.py"}, {"wait": "1s"}]}})
+        assert (
+            Scenario.from_dict(
+                {
+                    agent_id: {
+                        "actions": [
+                            {k: v for k, v in action.items() if v not in (None, 0)}
+                            for action in data["actions"]
+                        ]
+                    }
+                    for agent_id, data in original.to_dict().items()
                 }
-                for agent_id, data in original.to_dict().items()
-            }
-        ).agent_ids() == original.agent_ids()
+            ).agent_ids()
+            == original.agent_ids()
+        )
 
     def test_actions_serialise_with_every_field(self) -> None:
         action = AgentScript.from_dict(

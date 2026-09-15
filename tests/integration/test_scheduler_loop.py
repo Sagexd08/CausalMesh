@@ -49,12 +49,16 @@ def build_runner(task: TaskDefinition, root: Path, *, experiment_id: str = "exp_
         workspace_root=root / "work",
         index_path=root / "raw" / "index.db",
     )
-    return ExperimentRunner(
-        plan=plan,
-        tasks={task.task_id: task},
-        environment=environment,
-        master_seed=SEED,
-    ), plan, environment
+    return (
+        ExperimentRunner(
+            plan=plan,
+            tasks={task.task_id: task},
+            environment=environment,
+            master_seed=SEED,
+        ),
+        plan,
+        environment,
+    )
 
 
 @pytest.fixture(scope="module")
@@ -134,9 +138,7 @@ class TestEvidence:
         assert payload["result"]["outcome"]
         assert payload["arm"] == record.arm
 
-    async def test_every_chain_verifies_offline_from_its_artifact(
-        self, executed: dict
-    ) -> None:
+    async def test_every_chain_verifies_offline_from_its_artifact(self, executed: dict) -> None:
         """§26: the evidence must stand on its own, read back from disk.
 
         Verifying the in-memory result would prove only that the relay
@@ -149,9 +151,7 @@ class TestEvidence:
 
         raw = executed["environment"].raw_root
         for record in executed["runner"].index.runs("exp_loop"):
-            payload = json.loads(
-                (raw / record.run_id / "run.json").read_text(encoding="utf-8")
-            )
+            payload = json.loads((raw / record.run_id / "run.json").read_text(encoding="utf-8"))
             chain = payload["chain"]
             if not chain:
                 continue
@@ -168,9 +168,7 @@ class TestEvidence:
         for record in executed["runner"].index.runs("exp_loop"):
             assert record.task_hash == task.content_hash()
 
-    async def test_an_existing_artifact_is_never_overwritten(
-        self, executed: dict
-    ) -> None:
+    async def test_an_existing_artifact_is_never_overwritten(self, executed: dict) -> None:
         """§31: raw evidence is immutable.
 
         A second execution under the same run id must fail loudly rather
@@ -180,9 +178,7 @@ class TestEvidence:
         runner = executed["runner"]
         record = runner.index.runs("exp_loop")[0]
         with pytest.raises(FileExistsError, match="immutable"):
-            runner._write_artifact(
-                executed["environment"].raw_root / record.run_id, {"x": 1}
-            )
+            runner._write_artifact(executed["environment"].raw_root / record.run_id, {"x": 1})
 
 
 class TestIdempotency:
@@ -240,9 +236,7 @@ class TestResume:
         RUNNING here exactly as a kill would leave it, and a fresh runner
         — a new process, in effect — must pick it up.
         """
-        runner, plan, environment = build_runner(
-            task, tmp_path, experiment_id="exp_crash"
-        )
+        runner, plan, environment = build_runner(task, tmp_path, experiment_id="exp_crash")
         runner.prepare()
         await runner.run(limit=2)
         stranded = runner.index.claim_next("exp_crash", now_us=1)
@@ -401,9 +395,7 @@ class TestGuards:
         assert not status["complete"]
         fresh.close()
 
-    async def test_each_run_gets_its_own_derived_seed(
-        self, executed: dict
-    ) -> None:
+    async def test_each_run_gets_its_own_derived_seed(self, executed: dict) -> None:
         """§40: a run must be re-executable on its own.
 
         Sharing one seed across the collection would make two runs of the

@@ -142,9 +142,7 @@ class FakeModelServer:
         system = body.get("system", "") if anthropic else ""
         if not system:
             system = "\n".join(
-                m.get("content", "")
-                for m in body.get("messages", [])
-                if m.get("role") == "system"
+                m.get("content", "") for m in body.get("messages", []) if m.get("role") == "system"
             )
         with self._lock:
             for agent_id, queue in self._replies.items():
@@ -156,7 +154,11 @@ class FakeModelServer:
     def _openai_envelope(text: str, request: dict[str, Any]) -> dict[str, Any]:
         return {
             "choices": [
-                {"finish_reason": "stop", "index": 0, "message": {"content": text, "role": "assistant"}}
+                {
+                    "finish_reason": "stop",
+                    "index": 0,
+                    "message": {"content": text, "role": "assistant"},
+                }
             ],
             "id": "chatcmpl-fake",
             "model": request.get("model", "fake-model"),

@@ -86,9 +86,7 @@ class TestToolSurface:
 
     def test_there_is_no_general_shell_tool(self, toolbox: Toolbox) -> None:
         # A shell would void every isolation claim in docs/security.md.
-        assert not any(
-            hasattr(toolbox, name) for name in ("shell", "exec", "system", "eval")
-        )
+        assert not any(hasattr(toolbox, name) for name in ("shell", "exec", "system", "eval"))
 
 
 class TestReads:
@@ -121,9 +119,7 @@ class TestWrites:
         assert toolbox.modify_file("src/schema.py", "original", "modified") == 1
         assert toolbox.read_file("src/schema.py") == "# modified\n"
 
-    def test_modify_file_refuses_when_the_target_is_absent(
-        self, toolbox: Toolbox
-    ) -> None:
+    def test_modify_file_refuses_when_the_target_is_absent(self, toolbox: Toolbox) -> None:
         with pytest.raises(ToolError, match="not found"):
             toolbox.modify_file("src/schema.py", "absent text", "x")
 
@@ -212,9 +208,7 @@ class TestCommandExecution:
 
     def test_a_timeout_is_recorded_not_raised(self, toolbox: Toolbox) -> None:
         # §22 treats a hung command as an injectable failure the run survives.
-        result = toolbox.run_command(
-            ["python", "-c", "import time; time.sleep(30)"], timeout=1
-        )
+        result = toolbox.run_command(["python", "-c", "import time; time.sleep(30)"], timeout=1)
         assert result.timed_out
         assert result.exit_code == -1
 
@@ -229,7 +223,11 @@ class TestCommandExecution:
         os.environ["CAUSALMESH_LEAK_CANARY"] = "should-not-appear"
         try:
             result = toolbox.run_command(
-                ["python", "-c", "import os; print(os.environ.get('CAUSALMESH_LEAK_CANARY', 'ABSENT'))"]
+                [
+                    "python",
+                    "-c",
+                    "import os; print(os.environ.get('CAUSALMESH_LEAK_CANARY', 'ABSENT'))",
+                ]
             )
             assert result.stdout.strip() == "ABSENT"
         finally:
@@ -463,9 +461,7 @@ class TestClaimGate:
             )
             gate = ClaimGate(registry=registry, run_id=RUN)
             decision = gate.check(
-                ToolCall(
-                    tool="write_file", agent_id="agent_b", paths=("src/a.py", "src/b.py")
-                ),
+                ToolCall(tool="write_file", agent_id="agent_b", paths=("src/a.py", "src/b.py")),
                 SECOND,
             )
             assert not decision.allowed

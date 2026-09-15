@@ -122,9 +122,7 @@ PROFILES: dict[str, Profile] = {
             "the gate stays closed so confirmatory numbers cannot be produced "
             "by accident and later quoted as planned."
         ),
-        description=(
-            "The full 4 arms x 4 tasks x 120 repetitions = 1920-run design."
-        ),
+        description=("The full 4 arms x 4 tasks x 120 repetitions = 1920-run design."),
     ),
 }
 
@@ -142,9 +140,7 @@ def profile(name: str, *, allow_gated: bool = False) -> Profile:
     try:
         found = PROFILES[name]
     except KeyError:
-        raise ProfileError(
-            f"unknown profile {name!r}; defined: {sorted(PROFILES)}"
-        ) from None
+        raise ProfileError(f"unknown profile {name!r}; defined: {sorted(PROFILES)}") from None
     if found.gated and not allow_gated:
         raise ProfileError(f"profile {name!r} is gated. {found.gate_reason}")
     return found

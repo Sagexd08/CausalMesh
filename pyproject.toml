@@ -108,7 +108,28 @@ ignore = [
     # delta) and its section signs. Transliterating them would make the code
     # harder to check against the spec, which is the point of citing it.
     "RUF002",
+    # The TUI draws with box and chevron glyphs, and tests assert on the
+    # exact characters it renders. RUF001 reads those as typos for ASCII
+    # lookalikes; here they are the subject, not a slip.
+    "RUF001",
+    # `noqa: BLE001` appears on every broad `except` in the CLI and TUI,
+    # where reporting a failure is the correct behaviour and crashing is
+    # not. BLE001 is not in `select`, so ruff calls those directives unused
+    # and offers to delete them. They are documentation: each one states why
+    # the broad catch is deliberate, and stripping them would remove the
+    # reasoning while leaving the code. Enabling RUF100 here would make
+    # `--fix` quietly do that, which it did once already.
+    "RUF100",
 ]
+
+[tool.ruff.lint.isort]
+# Keep aliased imports inside the block they belong to. Without this, ruff
+# splits `from x import (A as B, C)` into one `from x import` statement per
+# aliased name, turning a readable six-name block into four statements from
+# the same module. Sorting is worth having; shattering a block to achieve it
+# is not.
+force-single-line = false
+combine-as-imports = true
 
 [tool.mypy]
 python_version = "3.11"

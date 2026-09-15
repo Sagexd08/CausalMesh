@@ -181,7 +181,7 @@ async def invoke(
 
     try:
         stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout_s)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         process.kill()
         await process.wait()
         raise ConnectorError(

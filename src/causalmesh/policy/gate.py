@@ -154,9 +154,7 @@ class Gate:
     # None rather than an allowing verdict so the caller above can tell
     # "this rule permitted it" from "this rule did not apply".
 
-    def _rule_ownership(
-        self, *, agent_id: str, resource: Resource, now_us: int
-    ) -> Verdict | None:
+    def _rule_ownership(self, *, agent_id: str, resource: Resource, now_us: int) -> Verdict | None:
         """Declared ownership. Paths only, and only where someone owns it.
 
         A path nobody declared is not refused: the contract states exceptions,
@@ -177,9 +175,7 @@ class Gate:
             holder=owner,
         )
 
-    def _rule_allowlist(
-        self, *, agent_id: str, resource: Resource, now_us: int
-    ) -> Verdict | None:
+    def _rule_allowlist(self, *, agent_id: str, resource: Resource, now_us: int) -> Verdict | None:
         """Where an agent may send money or traffic.
 
         Applies only when the role declares an allowlist. An absent allowlist

@@ -42,7 +42,11 @@ def contract() -> Contract:
         {
             "version": 1,
             "roles": [
-                {"agent_id": "agent_a", "archetype": "writer", "owns": ["src/schema.py", "src/models/"]},
+                {
+                    "agent_id": "agent_a",
+                    "archetype": "writer",
+                    "owns": ["src/schema.py", "src/models/"],
+                },
                 {"agent_id": "agent_b", "archetype": "writer", "owns": ["src/handlers/"]},
                 {
                     "agent_id": "buyer",
@@ -138,9 +142,7 @@ class TestContract:
 
     def test_duplicate_agents_are_refused(self) -> None:
         with pytest.raises(ContractError, match="duplicate agent_id"):
-            Contract.from_dict(
-                {"version": 1, "roles": [{"agent_id": "a"}, {"agent_id": "a"}]}
-            )
+            Contract.from_dict({"version": 1, "roles": [{"agent_id": "a"}, {"agent_id": "a"}]})
 
     def test_the_longest_declaration_wins(self) -> None:
         """Carving one contested file out of a directory must be expressible."""
@@ -247,7 +249,9 @@ class TestAllowlist:
             {"version": 1, "roles": [{"agent_id": "locked", "allow": []}]}
         )
         verdict = gate_for(contract).check(
-            agent_id="locked", resource=Resource.spend(to="api.example.com", amount="0.01"), now_us=NOW
+            agent_id="locked",
+            resource=Resource.spend(to="api.example.com", amount="0.01"),
+            now_us=NOW,
         )
         assert verdict.refused
 
@@ -262,9 +266,7 @@ class TestBudgets:
         assert verdict.refused
         assert verdict.rule == "ceiling"
 
-    def test_the_total_holds_exactly_at_the_limit(
-        self, contract: Contract, ledger: Ledger
-    ) -> None:
+    def test_the_total_holds_exactly_at_the_limit(self, contract: Contract, ledger: Ledger) -> None:
         """100 x 0.05 is 5.00 exactly, and the limit is inclusive.
 
         Float arithmetic reaches 5.000000000000004 here and refuses a spend
@@ -320,9 +322,7 @@ class TestBudgets:
         with Ledger(tmp_path / "shared.db", run_id="run1") as second:
             assert second.total(agent_id="buyer", resource=spend) == Decimal("1.00")
 
-    def test_a_gate_without_a_ledger_allows_rather_than_failing(
-        self, contract: Contract
-    ) -> None:
+    def test_a_gate_without_a_ledger_allows_rather_than_failing(self, contract: Contract) -> None:
         """Missing data must not silently refuse everything."""
         verdict = gate_for(contract).check(
             agent_id="buyer",
@@ -354,9 +354,7 @@ class TestClaims:
         assert verdict.rule == "claim"
         assert verdict.holder == "agent_a"
 
-    def test_the_holder_may_still_write(
-        self, contract: Contract, registry: ClaimRegistry
-    ) -> None:
+    def test_the_holder_may_still_write(self, contract: Contract, registry: ClaimRegistry) -> None:
         resource = Resource.path("src/config.py")
         registry.acquire(
             claim_id="c1",

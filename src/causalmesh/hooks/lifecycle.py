@@ -131,8 +131,7 @@ class Gate(Protocol):
     rather than a conditional inside the boundary.
     """
 
-    def check(self, call: ToolCall, now_us: int) -> GateDecision:
-        ...
+    def check(self, call: ToolCall, now_us: int) -> GateDecision: ...
 
 
 @dataclass(frozen=True, slots=True)

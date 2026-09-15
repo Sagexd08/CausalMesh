@@ -169,9 +169,7 @@ class Toolbox:
         if not resolved.is_dir():
             raise ToolError(f"{subdirectory!r} is not a directory")
         return sorted(
-            self.workspace.relative(child)
-            for child in resolved.rglob("*")
-            if child.is_file()
+            self.workspace.relative(child) for child in resolved.rglob("*") if child.is_file()
         )
 
     # -- writes -----------------------------------------------------------
@@ -255,8 +253,7 @@ class Toolbox:
         executable = os.path.basename(parts[0]).lower().removesuffix(".exe")
         if executable not in ALLOWED_COMMANDS:
             raise ToolError(
-                f"command {executable!r} is not allowlisted "
-                f"(allowed: {sorted(ALLOWED_COMMANDS)})"
+                f"command {executable!r} is not allowlisted (allowed: {sorted(ALLOWED_COMMANDS)})"
             )
 
         try:

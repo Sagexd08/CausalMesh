@@ -62,9 +62,7 @@ class TestExclusivity:
         assert outcome.holder.agent_id == "agent_a"
 
     def test_only_one_of_many_contenders_succeeds(self, registry: ClaimRegistry) -> None:
-        results = [
-            acquire(registry, f"c{i}", "src/schema.py", f"agent_{i}", i) for i in range(6)
-        ]
+        results = [acquire(registry, f"c{i}", "src/schema.py", f"agent_{i}", i) for i in range(6)]
         assert sum(1 for r in results if r.granted) == 1
 
     def test_different_paths_do_not_block_each_other(self, registry: ClaimRegistry) -> None:
@@ -170,7 +168,9 @@ class TestRenewal:
 
     def test_renewal_keeps_the_path_blocked(self, registry: ClaimRegistry) -> None:
         acquire(registry, "c1", "src/schema.py", "agent_a", 0, duration=10 * SECOND)
-        registry.renew(claim_id="c1", agent_id="agent_a", now_us=5 * SECOND, duration_us=100 * SECOND)
+        registry.renew(
+            claim_id="c1", agent_id="agent_a", now_us=5 * SECOND, duration_us=100 * SECOND
+        )
         assert not acquire(registry, "c2", "src/schema.py", "agent_b", 50 * SECOND).granted
 
     def test_an_expired_claim_cannot_be_renewed(self, registry: ClaimRegistry) -> None:
@@ -182,9 +182,7 @@ class TestRenewal:
         assert not outcome.granted
         assert "expired" in outcome.reason
 
-    def test_another_agent_cannot_renew_someone_elses_claim(
-        self, registry: ClaimRegistry
-    ) -> None:
+    def test_another_agent_cannot_renew_someone_elses_claim(self, registry: ClaimRegistry) -> None:
         acquire(registry, "c1", "src/schema.py", "agent_a", 0)
         outcome = registry.renew(
             claim_id="c1", agent_id="agent_b", now_us=SECOND, duration_us=LEASE
@@ -193,9 +191,7 @@ class TestRenewal:
         assert "belongs to" in outcome.reason
 
     def test_renewing_an_unknown_claim_is_reported(self, registry: ClaimRegistry) -> None:
-        outcome = registry.renew(
-            claim_id="nope", agent_id="agent_a", now_us=0, duration_us=LEASE
-        )
+        outcome = registry.renew(claim_id="nope", agent_id="agent_a", now_us=0, duration_us=LEASE)
         assert not outcome.granted
         assert "no such claim" in outcome.reason
 
@@ -305,9 +301,7 @@ class TestHistory:
         acquire(registry, "c2", "src/a.py", "agent_b", 2 * SECOND)
         assert [c.claim_id for c in registry.history(run_id=RUN)] == ["c1", "c2"]
 
-    def test_active_claims_excludes_expired_and_released(
-        self, registry: ClaimRegistry
-    ) -> None:
+    def test_active_claims_excludes_expired_and_released(self, registry: ClaimRegistry) -> None:
         acquire(registry, "c1", "src/a.py", "agent_a", 0, duration=10 * SECOND)
         acquire(registry, "c2", "src/b.py", "agent_a", 0, duration=100 * SECOND)
         acquire(registry, "c3", "src/c.py", "agent_a", 0, duration=100 * SECOND)

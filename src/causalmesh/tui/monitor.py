@@ -409,7 +409,9 @@ def _arm_table(snapshot: Snapshot) -> Table:
             Text(arm_id, style=f"bold {arm_style(arm_id)}"),
             condition,
             Text(f"{arm.passed}/{known}" if known else "-", style="white"),
-            Text(f"{arm.passed / known:.0%}" if known else "-", style=_rate_style(arm.passed, known)),
+            Text(
+                f"{arm.passed / known:.0%}" if known else "-", style=_rate_style(arm.passed, known)
+            ),
             Text(f"{mean:,.0f}" if mean is not None else "-", style="white"),
             Text(
                 str(arm.denials) if arm.denials else "-",
@@ -484,7 +486,10 @@ def _active_runs(snapshot: Snapshot) -> Table | None:
         )
     if len(ordered) > 6:
         table.add_row(
-            Text(""), Text(f"+{len(ordered) - 6} more planned", style=TEXT_FAINT), Text(""), Text("")
+            Text(""),
+            Text(f"+{len(ordered) - 6} more planned", style=TEXT_FAINT),
+            Text(""),
+            Text(""),
         )
     return table
 

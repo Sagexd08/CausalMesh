@@ -134,8 +134,6 @@ class VerificationResult:
                 f"anchor={self.anchor_status}, unanchored_suffix={self.unanchored_suffix}"
             )
         kinds = ", ".join(
-            f"{kind.value}={self.count(kind)}"
-            for kind in FailureKind
-            if self.count(kind)
+            f"{kind.value}={self.count(kind)}" for kind in FailureKind if self.count(kind)
         )
         return f"INVALID — {self.events} events, {len(self.failures)} failures ({kinds})"

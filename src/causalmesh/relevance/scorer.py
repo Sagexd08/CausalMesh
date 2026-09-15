@@ -183,9 +183,7 @@ class RelevanceScorer:
             reason="; ".join(reasons) if reasons else "no relevance signal matched",
         )
 
-    def _path_overlap(
-        self, event: Event, interests: AgentInterests, reasons: list[str]
-    ) -> float:
+    def _path_overlap(self, event: Event, interests: AgentInterests, reasons: list[str]) -> float:
         """Does this event touch a path the agent cares about?
 
         The strongest signal: a peer writing a file this agent owns or has

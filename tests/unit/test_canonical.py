@@ -60,9 +60,9 @@ class TestFormatting:
 
 class TestUnicodeNormalization:
     def test_composed_and_decomposed_strings_agree(self) -> None:
-        composed = "café"       # é as one code point
-        decomposed = "café"    # e + combining acute
-        assert composed != decomposed          # distinct in Python
+        composed = "café"  # é as one code point
+        decomposed = "café"  # e + combining acute
+        assert composed != decomposed  # distinct in Python
         assert canonicalize(composed) == canonicalize(decomposed)
 
     def test_normalization_applies_to_keys(self) -> None:

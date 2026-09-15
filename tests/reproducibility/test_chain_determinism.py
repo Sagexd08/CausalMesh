@@ -40,9 +40,7 @@ def build_runtime(tmp_path: Path, label: str) -> tuple[Relay, ToolExecutor]:
     fixture = tmp_path / "fixture"
     (fixture / "src").mkdir(parents=True, exist_ok=True)
     (fixture / "src" / "schema.py").write_text("FIELDS = ['id']\n", encoding="utf-8")
-    (fixture / "test_ok.py").write_text(
-        "def test_ok():\n    assert True\n", encoding="utf-8"
-    )
+    (fixture / "test_ok.py").write_text("def test_ok():\n    assert True\n", encoding="utf-8")
 
     workspaces = build_run_workspaces(
         base=tmp_path / label / "ws", run_id=RUN, agent_ids=["agent_a"], fixture=fixture
@@ -70,9 +68,7 @@ def build_runtime(tmp_path: Path, label: str) -> tuple[Relay, ToolExecutor]:
 
 
 class TestPayloadDeterminism:
-    def test_two_identical_file_runs_produce_the_same_chain(
-        self, tmp_path: Path
-    ) -> None:
+    def test_two_identical_file_runs_produce_the_same_chain(self, tmp_path: Path) -> None:
         heads = []
         for index in range(2):
             relay, executor = build_runtime(tmp_path, f"run_{index}")
@@ -89,9 +85,7 @@ class TestPayloadDeterminism:
             heads.append(relay.head_hash)
         assert heads[0] == heads[1]
 
-    def test_wall_clock_duration_never_reaches_the_payload(
-        self, tmp_path: Path
-    ) -> None:
+    def test_wall_clock_duration_never_reaches_the_payload(self, tmp_path: Path) -> None:
         """The first leak, pinned.
 
         Duration is measured — the boundary records it — but it varies
@@ -108,9 +102,7 @@ class TestPayloadDeterminism:
         assert result.duration_us >= 0
         assert executor.boundary.results[0].duration_us >= 0
 
-    def test_running_tests_twice_produces_the_same_chain(
-        self, tmp_path: Path
-    ) -> None:
+    def test_running_tests_twice_produces_the_same_chain(self, tmp_path: Path) -> None:
         """The second leak, pinned.
 
         `pytest -q` reports its own elapsed time, so including command
@@ -147,13 +139,14 @@ class TestPayloadDeterminism:
         executor.call("run_tests", now_us=BASE_TIME, paths=())
         assert "output_sha256" not in relay.records()[0]["event"]["payload"]
 
-    def test_a_failing_command_still_records_its_exit_code(
-        self, tmp_path: Path
-    ) -> None:
+    def test_a_failing_command_still_records_its_exit_code(self, tmp_path: Path) -> None:
         # §38: success is decided from the exit code, so it must survive.
         relay, executor = build_runtime(tmp_path, "failing")
         executor.call(
-            "run_command", now_us=BASE_TIME, paths=(), command=["python", "-c", "raise SystemExit(3)"]
+            "run_command",
+            now_us=BASE_TIME,
+            paths=(),
+            command=["python", "-c", "raise SystemExit(3)"],
         )
         assert relay.records()[0]["event"]["payload"]["exit_code"] == 3
 
@@ -168,9 +161,7 @@ class TestCommandResultSeparation:
 
     def test_the_full_dict_retains_output_for_artifacts(self) -> None:
         # Debugging a failed run needs the output; it just lives elsewhere.
-        result = CommandResult(
-            command=("pytest", "-q"), exit_code=1, stdout="F", stderr="boom"
-        )
+        result = CommandResult(command=("pytest", "-q"), exit_code=1, stdout="F", stderr="boom")
         assert result.to_dict()["stdout"] == "F"
         assert result.to_dict()["stderr"] == "boom"
 

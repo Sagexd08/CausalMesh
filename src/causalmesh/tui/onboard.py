@@ -279,7 +279,9 @@ def run(sequence: Sequence, console: Console, *, animate: bool = True) -> Sequen
                 step.ok, step.detail = step.probe()
             except Exception as exc:  # noqa: BLE001 — a first run reports
                 step.ok, step.detail = False, f"{type(exc).__name__}"
-        console.print(_frame(sequence, revealed=len("causalmesh"), active=len(sequence.steps), tick=0))
+        console.print(
+            _frame(sequence, revealed=len("causalmesh"), active=len(sequence.steps), tick=0)
+        )
         return sequence
 
     name_length = len("causalmesh")

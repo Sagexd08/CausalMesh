@@ -122,11 +122,7 @@ class InjectionAccounting:
         an empty-but-attempted injection; checking availability alone would
         miss a channel that injected something it invented itself.
         """
-        return (
-            self.total_bytes == 0
-            and self.events_injected == 0
-            and self.events_available == 0
-        )
+        return self.total_bytes == 0 and self.events_injected == 0 and self.events_available == 0
 
     def to_dict(self) -> dict[str, Any]:
         return {

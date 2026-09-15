@@ -123,9 +123,7 @@ class TestScene:
         # codes: the exact escape depends on the terminal's colour depth,
         # and pinning it would make this test about the capture, not the
         # design.
-        spans = {
-            scene.plain[span.start : span.end]: str(span.style) for span in scene.spans
-        }
+        #
         # The accent means one thing: a write was refused. C3 is the
         # enforcing arm and was briefly given the same hue, which made the
         # refused agent and the refusal itself indistinguishable.
@@ -232,9 +230,7 @@ class TestPalette:
         import re
 
         buffer = io.StringIO()
-        console = Console(
-            file=buffer, force_terminal=True, color_system="windows", width=120
-        )
+        console = Console(file=buffer, force_terminal=True, color_system="windows", width=120)
         from rich.text import Text
 
         text = Text()

@@ -34,11 +34,13 @@ def _rate(value: float | None) -> str:
 
 
 def analyze_command(
-    experiment_id: Annotated[str | None, typer.Option("--id", help="Experiment to analyze.")] = None,
-    latest: Annotated[bool, typer.Option("--latest", help="Analyze the most recent experiment.")] = False,
-    task_filter: Annotated[
-        str | None, typer.Option("--task", help="Restrict to one task.")
+    experiment_id: Annotated[
+        str | None, typer.Option("--id", help="Experiment to analyze.")
     ] = None,
+    latest: Annotated[
+        bool, typer.Option("--latest", help="Analyze the most recent experiment.")
+    ] = False,
+    task_filter: Annotated[str | None, typer.Option("--task", help="Restrict to one task.")] = None,
     pooled: Annotated[
         bool, typer.Option("--pooled", help="Also show contrasts pooled across tasks.")
     ] = False,
@@ -60,7 +62,9 @@ def analyze_command(
         raise typer.Exit(Exit.FAILED)
     if experiment_id is None:
         if not latest:
-            fail("nothing selected", hint=f"Pass --latest or --id. Available: {', '.join(available)}")
+            fail(
+                "nothing selected", hint=f"Pass --latest or --id. Available: {', '.join(available)}"
+            )
             raise typer.Exit(Exit.USAGE)
         experiment_id = available[0]
     elif experiment_id not in available:
@@ -97,7 +101,16 @@ def analyze_command(
     if not emit(payload, as_json=as_json):
         cost = table(
             f"{metrics.experiment_id} - cost and outcome by arm  [PILOT]",
-            ["arm", "runs", "passed", "success", "bytes/run", "tokens/run", "bytes/turn", "denials"],
+            [
+                "arm",
+                "runs",
+                "passed",
+                "success",
+                "bytes/run",
+                "tokens/run",
+                "bytes/turn",
+                "denials",
+            ],
         )
         for arm_id, arm in sorted(metrics.arms.items()):
             cost.add_row(
@@ -144,6 +157,8 @@ def analyze_command(
             out_console.print(rendered)
             note("pooled figures average across tasks whose enforcement behaviour differs")
 
-        note("descriptive only: no interval, no significance test; the statistics layer is not built")
+        note(
+            "descriptive only: no interval, no significance test; the statistics layer is not built"
+        )
 
     raise typer.Exit(Exit.OK)

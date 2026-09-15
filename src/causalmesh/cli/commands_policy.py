@@ -15,7 +15,6 @@ an earlier build reported a confident zero for enforcement.
 
 from __future__ import annotations
 
-from decimal import Decimal
 from pathlib import Path
 from typing import Annotated
 
@@ -23,7 +22,9 @@ import typer
 
 from causalmesh.cli._output import Exit, emit, fail, note, out_console, table
 
-app = typer.Typer(help="Read the contract, and ask the gate what it would do.", no_args_is_help=True)
+app = typer.Typer(
+    help="Read the contract, and ask the gate what it would do.", no_args_is_help=True
+)
 
 # How a resource is named on the command line, and how to build one.
 KINDS = ("path", "spend", "endpoint", "budget")
@@ -99,7 +100,7 @@ def check_command(
     Exits 0 when allowed and 1 when refused, so a script can branch on the
     answer without parsing anything.
     """
-    from causalmesh.policy import Gate, Resource, ResourceError
+    from causalmesh.policy import Gate, ResourceError
 
     contract = _load_or_exit(root_option)
 

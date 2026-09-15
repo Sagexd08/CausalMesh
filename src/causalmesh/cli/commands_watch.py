@@ -20,7 +20,9 @@ import typer
 from causalmesh.cli._context import Repo, find_root
 from causalmesh.cli._output import Exit, emit, fail, note, out_console, table
 
-app = typer.Typer(help="Inspect the agents and infrastructure on this machine.", no_args_is_help=True)
+app = typer.Typer(
+    help="Inspect the agents and infrastructure on this machine.", no_args_is_help=True
+)
 
 # Fast enough to feel live, slow enough that a monitor costs nothing next to
 # the run it is watching.
@@ -37,10 +39,10 @@ def _repo_or_exit(root_option: Path | None) -> Repo:
 
 def watch_command(
     experiment_id: Annotated[str | None, typer.Option("--id", help="Collection to watch.")] = None,
-    latest: Annotated[bool, typer.Option("--latest", help="Watch the most recent collection.")] = False,
-    once: Annotated[
-        bool, typer.Option("--once", help="Render a single frame and exit.")
+    latest: Annotated[
+        bool, typer.Option("--latest", help="Watch the most recent collection.")
     ] = False,
+    once: Annotated[bool, typer.Option("--once", help="Render a single frame and exit.")] = False,
     root_option: Annotated[Path | None, typer.Option("--root")] = None,
 ) -> None:
     """Watch a collection execute, live."""
@@ -56,7 +58,9 @@ def watch_command(
 
     if experiment_id is None:
         if not latest:
-            fail("nothing selected", hint=f"Pass --latest or --id. Available: {', '.join(available)}")
+            fail(
+                "nothing selected", hint=f"Pass --latest or --id. Available: {', '.join(available)}"
+            )
             raise typer.Exit(Exit.USAGE)
         experiment_id = available[0]
     elif experiment_id not in available:
@@ -138,6 +142,7 @@ def connectors_command(
         note("a real agent is nondeterministic and costs money per run")
 
     raise typer.Exit(Exit.OK)
+
 
 def welcome_command(
     no_animation: Annotated[

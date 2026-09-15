@@ -143,7 +143,10 @@ class TestInsertion:
         assert kinds(result) & {FailureKind.CHAIN_BREAK, FailureKind.ORDERING_INVALID}
 
     def test_inserting_a_validly_signed_event_from_elsewhere_is_detected(
-        self, clean_records: list[dict[str, Any]], keypairs: dict[str, KeyPair], key_ring: PublicKeyRing
+        self,
+        clean_records: list[dict[str, Any]],
+        keypairs: dict[str, KeyPair],
+        key_ring: PublicKeyRing,
     ) -> None:
         """Replaying a genuinely signed event into a different position.
 

@@ -188,8 +188,7 @@ def _parse_action(raw: Any, *, index: int, agent_id: str) -> Action:
         keys = [key for key in raw if key in verbs]
         if not keys:
             raise ScriptError(
-                f"{where}: unknown action; expected one of {sorted(verbs)}, "
-                f"got {sorted(raw)}"
+                f"{where}: unknown action; expected one of {sorted(verbs)}, got {sorted(raw)}"
             )
         if len(keys) > 1:
             raise ScriptError(
@@ -294,10 +293,7 @@ class AgentScript:
 
     def paths_touched(self) -> frozenset[str]:
         return frozenset(
-            path
-            for action in self.actions
-            for path in (action.path, action.destination)
-            if path
+            path for action in self.actions for path in (action.path, action.destination) if path
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -331,7 +327,9 @@ class Scenario:
         """Load a scenario from YAML text or a file path."""
         import yaml
 
-        text = Path(source).read_text(encoding="utf-8") if Path(str(source)).exists() else str(source)
+        text = (
+            Path(source).read_text(encoding="utf-8") if Path(str(source)).exists() else str(source)
+        )
         loaded = yaml.safe_load(text)
         if loaded is None:
             raise ScriptError("scenario is empty")

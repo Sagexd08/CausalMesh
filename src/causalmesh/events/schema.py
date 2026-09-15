@@ -163,7 +163,9 @@ class Event:
         if self.sequence < 0:
             raise EventValidationError(f"sequence must be non-negative, got {self.sequence}")
         if self.timestamp_us < 0:
-            raise EventValidationError(f"timestamp_us must be non-negative, got {self.timestamp_us}")
+            raise EventValidationError(
+                f"timestamp_us must be non-negative, got {self.timestamp_us}"
+            )
 
         for name in ("paths", "references"):
             value = getattr(self, name)
@@ -178,9 +180,7 @@ class Event:
             _require_identifier(self.parent_id, "parent_id")
 
         if not isinstance(self.payload, dict):
-            raise EventValidationError(
-                f"payload must be a dict, got {type(self.payload).__name__}"
-            )
+            raise EventValidationError(f"payload must be a dict, got {type(self.payload).__name__}")
 
     def to_canonical_dict(self) -> dict[str, Any]:
         """Return the exact structure that gets hashed and signed.

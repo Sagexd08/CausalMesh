@@ -93,7 +93,9 @@ def _tasks_check(root: Path | None) -> Check:
 
         tasks = load_tasks(root / "tasks")
     except Exception as exc:  # noqa: BLE001 — doctor reports, never crashes
-        return Check("tasks", "FAIL", f"{type(exc).__name__}: {exc}", "Run `causalmesh task validate`.")
+        return Check(
+            "tasks", "FAIL", f"{type(exc).__name__}: {exc}", "Run `causalmesh task validate`."
+        )
     if not tasks:
         return Check("tasks", "WARN", "no tasks found", "Nothing to run until a task exists.")
     ids = ", ".join(sorted(task.task_id for task in tasks))

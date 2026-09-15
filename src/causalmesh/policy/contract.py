@@ -214,7 +214,9 @@ class Contract:
         if not isinstance(evidence, dict):
             raise ContractError("`evidence` must be a mapping")
 
-        roles = tuple(_parse_role(entry, index) for index, entry in enumerate(raw.get("roles") or []))
+        roles = tuple(
+            _parse_role(entry, index) for index, entry in enumerate(raw.get("roles") or [])
+        )
         seen: set[str] = set()
         for role in roles:
             if role.agent_id in seen:

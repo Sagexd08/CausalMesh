@@ -141,9 +141,7 @@ class ToolExecutor:
             # The relay refusing an event means the record would be
             # incomplete, which invalidates the run's evidence. Better to
             # fail loudly here than to finish a run whose log has holes.
-            raise RuntimeError(
-                f"relay refused an event for {result.call.tool}: {ingested.reason}"
-            )
+            raise RuntimeError(f"relay refused an event for {result.call.tool}: {ingested.reason}")
 
     def observe(self, now_us: int) -> tuple[Event, ...]:
         """Drain delivered peer events and record the causal parent.

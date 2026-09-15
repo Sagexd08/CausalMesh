@@ -183,9 +183,7 @@ class TestValidationRules:
     def test_an_unwritten_divergence_file_is_an_error(self) -> None:
         # The marker could never change, so the check would be vacuous.
         task = TaskDefinition.from_dict(
-            minimal_task(
-                success={"divergence_file": "never/written.py", "divergence_marker": "X"}
-            )
+            minimal_task(success={"divergence_file": "never/written.py", "divergence_marker": "X"})
         )
         report = validate_structure(task)
         assert any(i.code == "divergence_unreachable" for i in report.errors)
@@ -203,9 +201,7 @@ class TestValidationRules:
         assert report.valid
 
     def test_a_half_specified_divergence_check_is_an_error(self) -> None:
-        task = TaskDefinition.from_dict(
-            minimal_task(success={"divergence_marker": "X"})
-        )
+        task = TaskDefinition.from_dict(minimal_task(success={"divergence_marker": "X"}))
         report = validate_structure(task)
         assert any(i.code == "incomplete_divergence_check" for i in report.errors)
 
@@ -240,9 +236,7 @@ class TestValidationRules:
         assert any(i.code == "dependency_untouched" for i in report.warnings)
 
     def test_a_declared_contention_that_does_not_happen_is_an_error(self) -> None:
-        task = TaskDefinition.from_dict(
-            minimal_task(contested_paths=["src/schema.py"])
-        )
+        task = TaskDefinition.from_dict(minimal_task(contested_paths=["src/schema.py"]))
         report = validate_structure(task)
         assert any(i.code == "contention_mismatch" for i in report.errors)
 
@@ -291,9 +285,7 @@ class TestOutcome:
         assert outcome.tests_passed
         assert outcome.divergence_found_in == "src/handler.py"
 
-    def test_a_missing_divergence_file_is_not_treated_as_clean(
-        self, workspace: Workspace
-    ) -> None:
+    def test_a_missing_divergence_file_is_not_treated_as_clean(self, workspace: Workspace) -> None:
         # The check could not be performed; reporting success on that basis
         # would be a false negative in the primary outcome.
         outcome = evaluate_outcome(
@@ -307,9 +299,7 @@ class TestOutcome:
     def test_tests_that_never_ran_are_distinguishable_from_failure(
         self, workspace: Workspace
     ) -> None:
-        outcome = evaluate_outcome(
-            SuccessCriteria(), workspace=workspace, test_exit_code=None
-        )
+        outcome = evaluate_outcome(SuccessCriteria(), workspace=workspace, test_exit_code=None)
         assert not outcome.succeeded
         assert "integration_test_never_ran" in outcome.evidence
 

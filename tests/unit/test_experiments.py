@@ -296,9 +296,7 @@ class TestPlanning:
         assert [r.order for r in plan.runs] == list(range(len(plan)))
 
     def test_a_different_seed_reorders_the_same_runs(self) -> None:
-        kwargs = dict(
-            experiment_id="exp", profile=profile("small"), task_ids=["t1", "t2"]
-        )
+        kwargs = dict(experiment_id="exp", profile=profile("small"), task_ids=["t1", "t2"])
         first = plan_experiment(master_seed=SEED, **kwargs)
         second = plan_experiment(master_seed=b"different-seed-entirely!!", **kwargs)
         assert {r.run_id for r in first.runs} == {r.run_id for r in second.runs}
@@ -307,9 +305,7 @@ class TestPlanning:
     def test_the_plan_hash_covers_the_order(self) -> None:
         # Two collections that ran the same runs in different orders are
         # not the same experiment: order is what randomization protects.
-        kwargs = dict(
-            experiment_id="exp", profile=profile("small"), task_ids=["t1", "t2"]
-        )
+        kwargs = dict(experiment_id="exp", profile=profile("small"), task_ids=["t1", "t2"])
         first = plan_experiment(master_seed=SEED, **kwargs)
         second = plan_experiment(master_seed=b"different-seed-entirely!!", **kwargs)
         assert first.content_hash() != second.content_hash()

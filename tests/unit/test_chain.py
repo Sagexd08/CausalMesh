@@ -56,9 +56,7 @@ class TestChainHash:
     def test_matches_the_specified_rule(self) -> None:
         # Recompute independently: SHA256(raw_prev_bytes || canonical(event)).
         event = make_event()
-        expected = hashlib.sha256(
-            bytes.fromhex(GENESIS_HASH) + event.canonical_bytes()
-        ).hexdigest()
+        expected = hashlib.sha256(bytes.fromhex(GENESIS_HASH) + event.canonical_bytes()).hexdigest()
         assert compute_chain_hash(GENESIS_HASH, event) == expected
 
     def test_is_deterministic(self) -> None:
@@ -78,7 +76,9 @@ class TestChainHash:
     def test_genesis_is_domain_separated(self) -> None:
         # Not 32 zero bytes: a chain from another system must never validate here.
         assert GENESIS_HASH != "00" * 32
-        assert bytes.fromhex(GENESIS_HASH) == hashlib.sha256(b"causalmesh/chain/genesis/v1").digest()
+        assert (
+            bytes.fromhex(GENESIS_HASH) == hashlib.sha256(b"causalmesh/chain/genesis/v1").digest()
+        )
 
     @pytest.mark.parametrize(
         "bad_previous", ["", "zz", "ab" * 31, "ab" * 33], ids=["empty", "not-hex", "short", "long"]

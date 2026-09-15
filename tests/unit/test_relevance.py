@@ -255,9 +255,7 @@ class TestExplainability:
         assert score.reason
         assert "src/api.py" in score.reason
 
-    def test_an_unmatched_event_says_so_explicitly(
-        self, scorer: RelevanceScorer
-    ) -> None:
+    def test_an_unmatched_event_says_so_explicitly(self, scorer: RelevanceScorer) -> None:
         # Silence would be indistinguishable from a missing reason.
         bare = AgentInterests(agent_id="agent_b")
         score = scorer.score(
@@ -273,9 +271,7 @@ class TestExplainability:
     ) -> None:
         # A reviewer must be able to check any score by hand.
         weights = scorer.weights
-        score = scorer.score(
-            make_event(), interests=interests, current_turn=3, event_turn=2
-        )
+        score = scorer.score(make_event(), interests=interests, current_turn=3, event_turn=2)
         expected = (
             weights.path_overlap * score.path_overlap
             + weights.dependency_overlap * score.dependency_overlap

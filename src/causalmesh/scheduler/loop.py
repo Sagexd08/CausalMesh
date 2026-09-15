@@ -197,9 +197,7 @@ class ExperimentRunner:
             experiment_id=self.plan.experiment_id,
             planned=len(self.plan),
             already_done=(
-                before[RunState.COMPLETED]
-                + before[RunState.FAILED]
-                + before[RunState.TIMED_OUT]
+                before[RunState.COMPLETED] + before[RunState.FAILED] + before[RunState.TIMED_OUT]
             ),
         )
 
@@ -260,9 +258,7 @@ class ExperimentRunner:
                 note="harness raised",
             )
             report.failed += 1
-            report.errors.append(
-                {"run_id": record.run_id, "error": f"{type(exc).__name__}: {exc}"}
-            )
+            report.errors.append({"run_id": record.run_id, "error": f"{type(exc).__name__}: {exc}"})
             if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                 raise
             return

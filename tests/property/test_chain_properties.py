@@ -11,8 +11,7 @@ from __future__ import annotations
 from itertools import pairwise
 
 import pytest
-from hypothesis import HealthCheck, given, settings
-from hypothesis import strategies as st
+from hypothesis import HealthCheck, given, settings, strategies as st
 
 from causalmesh.crypto.chain import GENESIS_HASH, ChainedEvent, compute_chain_hash, link_event
 from causalmesh.crypto.keys import KeyPair

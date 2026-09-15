@@ -170,8 +170,7 @@ def validate_structure(
         if unused:
             report.warn(
                 "dependency_untouched",
-                f"role {role.agent_id!r} declares dependencies it never touches: "
-                f"{sorted(unused)}",
+                f"role {role.agent_id!r} declares dependencies it never touches: {sorted(unused)}",
             )
 
     # -- coordination structure -------------------------------------------

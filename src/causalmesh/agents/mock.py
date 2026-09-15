@@ -55,9 +55,7 @@ def _was_injected(event_id: str, injection: Any) -> bool:
     if injection.events_injected == 0:
         return False
 
-    per_event = [
-        reason for reason in injection.selection_reasons if "event_id" in reason
-    ]
+    per_event = [reason for reason in injection.selection_reasons if "event_id" in reason]
     if not per_event:
         # No per-event selection was performed, so nothing was filtered out.
         return True
@@ -145,9 +143,7 @@ class MockAgent(CodingAgent):
             if _was_injected(event.event_id, injection):
                 self.informed_paths.update(event.paths)
 
-        self.observations.append(
-            (context.turn, tuple(event.event_id for event in delivered))
-        )
+        self.observations.append((context.turn, tuple(event.event_id for event in delivered)))
 
     async def plan(self, context: AgentContext) -> None:
         """Decide this turn's action.
@@ -179,9 +175,7 @@ class MockAgent(CodingAgent):
             # An induced crash is data: the run records it and stops this
             # agent, rather than the exception escaping and losing the
             # surrounding evidence (§81).
-            result = TurnResult(
-                turn=context.turn, crashed=True, finished=True, error=str(crash)
-            )
+            result = TurnResult(turn=context.turn, crashed=True, finished=True, error=str(crash))
 
         self.clock_us += self.tick_us
         self.turns.append(result)
@@ -203,9 +197,7 @@ class MockAgent(CodingAgent):
             # finding, and it is the mechanism by which information changes
             # an outcome.
             self.skipped_actions.append((context.turn, skip_reason))
-            return TurnResult(
-                turn=context.turn, actions=0, notes={"skipped": skip_reason}
-            )
+            return TurnResult(turn=context.turn, actions=0, notes={"skipped": skip_reason})
 
         if action.kind is ActionKind.CRASH:
             raise MockAgentCrashError(action.note or "scripted crash")
@@ -223,9 +215,7 @@ class MockAgent(CodingAgent):
             )
 
         if action.kind is ActionKind.INTENT:
-            result = self.executor.call(
-                "list_files", now_us=now, paths=(), subdirectory=None
-            )
+            result = self.executor.call("list_files", now_us=now, paths=(), subdirectory=None)
             self.tool_results.append(result)
             return TurnResult(turn=context.turn, actions=1, notes={"intent": action.note})
 

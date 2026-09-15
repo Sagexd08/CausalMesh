@@ -129,7 +129,9 @@ def _canonicalize_value(value: Any, depth: int, path: str) -> Any:
                 raise CanonicalizationError(
                     f"at {path}: keys collide after Unicode NFC normalization: {normalized_key!r}"
                 )
-            result[normalized_key] = _canonicalize_value(item, depth + 1, f"{path}.{normalized_key}")
+            result[normalized_key] = _canonicalize_value(
+                item, depth + 1, f"{path}.{normalized_key}"
+            )
         return result
 
     raise CanonicalizationError(
@@ -148,10 +150,10 @@ def canonical_json(value: Any) -> str:
     prepared = _canonicalize_value(value, depth=0, path="$")
     return json.dumps(
         prepared,
-        sort_keys=True,           # order independent of dict insertion order
-        ensure_ascii=False,       # emit real UTF-8, not \uXXXX escapes
-        separators=(",", ":"),    # no insignificant whitespace
-        allow_nan=False,          # belt-and-braces; floats already rejected
+        sort_keys=True,  # order independent of dict insertion order
+        ensure_ascii=False,  # emit real UTF-8, not \uXXXX escapes
+        separators=(",", ":"),  # no insignificant whitespace
+        allow_nan=False,  # belt-and-braces; floats already rejected
         check_circular=True,
     )
 

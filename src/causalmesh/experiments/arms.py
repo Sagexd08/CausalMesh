@@ -231,7 +231,4 @@ def contrast(name: str) -> Contrast:
     for item in PRIMARY_CONTRASTS:
         if item.name == name:
             return item
-    raise ValueError(
-        f"unknown contrast {name!r}; defined: "
-        f"{[c.name for c in PRIMARY_CONTRASTS]}"
-    )
+    raise ValueError(f"unknown contrast {name!r}; defined: {[c.name for c in PRIMARY_CONTRASTS]}")

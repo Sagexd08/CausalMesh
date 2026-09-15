@@ -364,9 +364,7 @@ class RunIndex:
         result and must appear in the denominator (§81).
         """
         with self._write() as connection:
-            row = connection.execute(
-                "SELECT * FROM runs WHERE run_id = ?", (run_id,)
-            ).fetchone()
+            row = connection.execute("SELECT * FROM runs WHERE run_id = ?", (run_id,)).fetchone()
             if row is None:
                 raise KeyError(f"no run {run_id!r} in the index")
             current = RunRecord._from_row(row)
@@ -392,9 +390,7 @@ class RunIndex:
                 (run_id, current.state, state, now_us, note or state),
             )
             return RunRecord._from_row(
-                connection.execute(
-                    "SELECT * FROM runs WHERE run_id = ?", (run_id,)
-                ).fetchone()
+                connection.execute("SELECT * FROM runs WHERE run_id = ?", (run_id,)).fetchone()
             )
 
     def abandon_running(self, experiment_id: str, *, now_us: int, note: str = "") -> int:
@@ -432,9 +428,7 @@ class RunIndex:
     # -- reading ----------------------------------------------------------
 
     def get(self, run_id: str) -> RunRecord | None:
-        row = self._connection.execute(
-            "SELECT * FROM runs WHERE run_id = ?", (run_id,)
-        ).fetchone()
+        row = self._connection.execute("SELECT * FROM runs WHERE run_id = ?", (run_id,)).fetchone()
         return RunRecord._from_row(row) if row else None
 
     def runs(self, experiment_id: str, *, state: str | None = None) -> list[RunRecord]:
