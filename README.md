@@ -217,7 +217,18 @@ causalmesh manifest write --latest          # SHA-256 over every artifact
 causalmesh audit --all                      # evidence present, unchanged, valid
 causalmesh watch --latest                   # live view of a collection
 causalmesh connectors list                  # what this machine actually has
+
+causalmesh policy init                      # write a starter causalmesh.yaml
+causalmesh policy show                      # the contract, as the gate reads it
+causalmesh policy check --agent buyer \
+    --kind spend --name evil.io --amount 2.40
 ```
+
+`policy check` asks the gate whether an action would be allowed, without
+running an agent or spending anything, and exits `0` for allowed and `1` for
+refused. It records nothing: a denial count that included questions would
+measure how often the gate was consulted rather than how much work was
+blocked. See [`docs/policy.md`](docs/policy.md).
 
 `watch` is read-only: it opens the run index `mode=ro`, so attaching it to
 a collection executing in another terminal cannot interfere with it. That
@@ -294,6 +305,8 @@ docs-site/    the website: landing page and documentation (Next.js)
 | [`docs/adapters.md`](docs/adapters.md) | Model adapters, and what has not been executed |
 | [`docs/scheduler.md`](docs/scheduler.md) | The run loop, state machine and randomization |
 | [`docs/claims.md`](docs/claims.md) | Write leases and enforcement |
+| [`docs/policy.md`](docs/policy.md) | The contract, the gate, and resources of every kind |
+| [`docs/FRAMEWORK-PLAN.md`](docs/FRAMEWORK-PLAN.md) | Where this is going, and the research behind it |
 | [`docs/tasks.md`](docs/tasks.md) | Task definitions and the §37 sensitivity gate |
 | [`docs/backlog.md`](docs/backlog.md) | Every known gap, with its reason |
 

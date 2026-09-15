@@ -54,10 +54,10 @@ export default function Hero() {
             you can <Mark>prove</Mark>
           </h1>
 
-          <p className="mt-7 max-w-[44ch] text-[16px] leading-relaxed text-ink-600">
+          <p className="mt-7 max-w-[46ch] text-[16px] leading-relaxed text-ink-600">
             Gate every action. Sign every action. Record every refusal with its
-            reason. One substrate for fleets of coding agents — and the evidence
-            to settle who changed what.
+            reason. Every other layer tells agents what to do — this is the one
+            that proves what they did, and refuses what they shouldn&rsquo;t.
           </p>
 
           <div className="mt-9 flex flex-wrap items-center gap-4">
