@@ -8,12 +8,13 @@ import Integrity from '@/components/landing/Integrity.jsx';
 import Nav from '@/components/landing/Nav.jsx';
 import Problem from '@/components/landing/Problem.jsx';
 import Routing from '@/components/landing/Routing.jsx';
+import Framework from '@/components/landing/Framework.jsx';
 import Footer from '@/components/landing/Footer.jsx';
 
 export const metadata = {
-  title: 'CausalMesh — Information or enforcement?',
+  title: 'CausalMesh — Coordination you can prove',
   description:
-    'A coordination substrate for fleets of autonomous coding agents, with cryptographically verifiable evidence of everything every agent did.',
+    'The accountability substrate for AI agents. Gate every action, sign every action, record every refusal — for agents that write code, spend money, or run unattended.',
 };
 
 function ConsoleBand() {
@@ -34,6 +35,7 @@ export default function Page() {
         <Hero />
         <ConsoleBand />
         <Problem />
+        <Framework />
         <Routing />
         <Cost />
         <Contrasts />

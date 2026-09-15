@@ -98,6 +98,61 @@ is passed explicitly.
 change — the code is finished and `test_the_confirmatory_profile_is_the_1920_run_design`
 confirms the scale.
 
+## The policy plane (built 2026-09-15, not yet wired)
+
+`docs/policy.md` describes a contract, a gate and a ledger that generalise
+enforcement from file paths to resources of four kinds — paths, spend,
+endpoints and budgets. 38 tests cover it and `causalmesh policy check`
+interrogates it. These are the gaps it has, recorded before anyone has to
+discover them.
+
+### Nothing calls the gate during a run
+
+**Status:** the plane is built and interrogable; the run loop does not use it.
+
+**What this means in practice:** `causalmesh policy check` answers what the
+gate *would* do, and that answer is correct. But a real write during a real
+run still goes through the original path-only claim gate, which is unchanged
+and still correct — so measured C3 results are unaffected by any of this.
+
+**Why it was left:** wiring the gate into the run loop changes what the
+experiment measures, and the substrate should be proven interrogable before
+it is proven load-bearing. Doing both in one step would leave a failure
+ambiguous between "the gate is wrong" and "the wiring is wrong".
+
+**What it blocks:** every claim that the policy plane enforces anything at
+run time. Today it enforces nothing; it decides, and the decision is tested.
+
+### Spend is enforced, but nothing speaks x402
+
+**Status:** `spend` resources pass through allowlists, per-call ceilings and
+totals, with exact decimal arithmetic. No adapter obtains one from an
+`HTTP 402` response.
+
+**What it would take:** a client that reads the 402 challenge, forms a
+`Resource.spend`, asks the gate, and only then pays. The gate half is done;
+the protocol half is not started.
+
+### Verdicts do not enter the signed chain
+
+**Status:** `Verdict.to_dict()` is chain-shaped and tested, but no event type
+is defined for it, so a refusal by the new gate is not yet evidence in the
+§82 sense.
+
+**Why this matters more than it looks:** the project's central claim is that
+a refusal is recorded evidence rather than a log line. Until the verdict has
+an event type, the policy plane's refusals are the one kind of refusal that
+is not provable — which is precisely the property that distinguishes this
+from a linter.
+
+### Checkpoints and identity are parsed and ignored
+
+`policy.checkpoints` (human-in-the-loop) and `identity` (per-agent keys) are
+accepted by the contract parser and read by nothing. They are in the schema
+because the shape is known and leaving them out would force a version bump
+later; they are listed here because a key that parses and does nothing is
+exactly the silent gap this file exists to prevent.
+
 ## Items discovered during the build
 
 Recorded as they were found, with the step that surfaced them.

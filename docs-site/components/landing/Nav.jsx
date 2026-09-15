@@ -5,6 +5,7 @@ import { ChevronDown } from "./Icons.jsx";
 import { ButtonPrimary } from "./Primitives.jsx";
 
 const NAV = [
+  { label: "Framework", href: "#framework" },
   { label: "How it works", href: "#architecture" },
   {
     label: "Experiment",
