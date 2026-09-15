@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { ChevronDown, MenuToggle } from "./Icons.jsx";
-import { ButtonPrimary } from "./Primitives.jsx";
 
 /**
  * Three destinations, plus the source.
@@ -151,10 +150,11 @@ export default function Nav() {
 
           <div className="flex items-center gap-2">
             {/* One action. "Results" used to sit here and now lives in the
-                Research menu, where a reader looking for it will already be. */}
-            <ButtonPrimary href="https://github.com/Sagexd08/CausalMesh">
-              Get the source
-            </ButtonPrimary>
+                Research menu, where a reader looking for it will already be.
+                Not linked: there is nothing to clone yet. */}
+            <span className="inline-flex items-center gap-2 bg-marker px-5 py-2.5 text-[14px] font-medium text-ink-900">
+              Releasing soon
+            </span>
 
             {/* Below lg the links are hidden, and until now nothing replaced
                 them: every section was unreachable on a phone. */}
