@@ -2,23 +2,43 @@
 
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { ChevronDown } from "./Icons.jsx";
+import { ChevronDown, MenuToggle } from "./Icons.jsx";
 import { ButtonPrimary } from "./Primitives.jsx";
 
+/**
+ * Three destinations, plus the source.
+ *
+ * The bar carried eight items at one level, several of which meant the same
+ * thing to a reader who had not already read the page: "Framework", "How it
+ * works" and "Experiment" are three names for the same subject, and
+ * "Results" appeared both in the bar and inside the Experiment menu.
+ *
+ * It is grouped now by the question a visitor is actually asking, in the
+ * order they ask it: what is this, does it work, how do I use it. Each
+ * group's own trigger goes to the best answer, and the menu under it lists
+ * the rest. The count is what changed; nothing became unreachable.
+ */
 const NAV = [
-  { label: "Framework", href: "#framework" },
-  { label: "How it works", href: "#architecture" },
   {
-    label: "Experiment",
+    label: "Product",
+    href: "#framework",
+    items: [
+      ["The framework", "#framework"],
+      ["How it works", "#architecture"],
+      ["What it costs", "#calculator"],
+      ["Works with your agent", "#agents"],
+    ],
+  },
+  {
+    label: "Research",
     href: "#question",
     items: [
       ["The question", "#question"],
-      ["Routing", "#routing"],
-      ["Results", "#results"],
+      ["Measured results", "#results"],
+      ["Evidence model", "#integrity"],
+      ["Whitepaper", "/whitepaper"],
     ],
   },
-  { label: "Evidence", href: "#integrity" },
-  { label: "Whitepaper", href: "/whitepaper" },
   { label: "Docs", href: "/docs" },
 ];
 
@@ -41,7 +61,7 @@ function Wordmark({ onLanding = true }) {
       <span className="text-[19px] font-semibold tracking-tightest text-ink-900">
         CausalMesh
       </span>
-      <span className="hidden text-[12px] text-ink-500 sm:inline">
+      <span className="hidden text-[12px] text-ink-500 lg:inline">
         coordination substrate
       </span>
     </a>
@@ -50,6 +70,7 @@ function Wordmark({ onLanding = true }) {
 
 export default function Nav() {
   const [open, setOpen] = useState(null);
+  const [menu, setMenu] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
   const pathname = usePathname();
@@ -84,9 +105,13 @@ export default function Nav() {
           aria-label="Primary"
           className="mx-auto flex h-16 w-full max-w-[1180px] items-center justify-between gap-6 px-6 sm:px-10 lg:px-16"
         >
-          <Wordmark onLanding={onLanding} />
+          {/* Wordmark and nav are one left-hand cluster. As three separate
+              children of a justify-between row, the links floated in the
+              middle of the gap and read as unanchored. */}
+          <div className="flex items-center gap-8">
+            <Wordmark onLanding={onLanding} />
 
-          <ul className="hidden items-center gap-7 lg:flex">
+            <ul className="hidden items-center gap-1 lg:flex">
             {NAV.map((entry) => (
               <li
                 key={entry.label}
@@ -96,7 +121,7 @@ export default function Nav() {
               >
                 <a
                   href={resolve(entry.href, onLanding)}
-                  className="inline-flex items-center gap-1 py-2 text-[14px] text-ink-700 transition-colors hover:text-ink-900"
+                  className="inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-[14px] text-ink-700 transition-colors hover:bg-paper-sunk hover:text-ink-900"
                   aria-expanded={entry.items ? open === entry.label : undefined}
                 >
                   {entry.label}
@@ -106,12 +131,12 @@ export default function Nav() {
                 </a>
 
                 {entry.items && open === entry.label && (
-                  <ul className="absolute left-0 top-full z-30 w-44 border border-rule-soft bg-paper py-1 shadow-[0_12px_28px_-16px_rgba(16,16,16,0.35)]">
+                  <ul className="absolute left-0 top-full z-30 w-52 overflow-hidden rounded-lg border border-rule-soft bg-paper py-1 shadow-[0_16px_40px_-24px_rgb(16_16_16_/_0.4)]">
                     {entry.items.map(([label, href]) => (
                       <li key={label}>
                         <a
                           href={resolve(href, onLanding)}
-                          className="block px-3.5 py-2 text-[13.5px] text-ink-700 transition-colors hover:bg-paper-sunk hover:text-ink-900"
+                          className="block px-4 py-2 text-[13.5px] text-ink-700 transition-colors hover:bg-paper-sunk hover:text-ink-900"
                         >
                           {label}
                         </a>
@@ -119,22 +144,71 @@ export default function Nav() {
                     ))}
                   </ul>
                 )}
-              </li>
-            ))}
-          </ul>
+                </li>
+              ))}
+            </ul>
+          </div>
 
-          <div className="flex items-center gap-3">
-            <a
-              href={resolve("#results", onLanding)}
-              className="hidden text-[14px] text-ink-700 transition-colors hover:text-ink-900 sm:inline"
-            >
-              Results
-            </a>
+          <div className="flex items-center gap-2">
+            {/* One action. "Results" used to sit here and now lives in the
+                Research menu, where a reader looking for it will already be. */}
             <ButtonPrimary href="https://github.com/Sagexd08/CausalMesh">
               Get the source
             </ButtonPrimary>
+
+            {/* Below lg the links are hidden, and until now nothing replaced
+                them: every section was unreachable on a phone. */}
+            <button
+              type="button"
+              onClick={() => setMenu((value) => !value)}
+              aria-expanded={menu}
+              aria-controls="cm-mobile-nav"
+              aria-label={menu ? "Close menu" : "Open menu"}
+              className="-mr-2 inline-flex h-11 w-11 items-center justify-center rounded-md text-ink-700 transition-colors hover:bg-paper-sunk hover:text-ink-900 lg:hidden"
+            >
+              <MenuToggle open={menu} />
+            </button>
           </div>
         </nav>
+
+        {/* The mobile panel. Flat and grouped rather than nested and
+            collapsible: with three groups and eleven destinations there is
+            nothing to save by hiding half of them behind another tap. */}
+        {menu && (
+          <div
+            id="cm-mobile-nav"
+            className="border-t border-rule-soft bg-paper lg:hidden"
+          >
+            <div className="mx-auto w-full max-w-[1180px] px-6 py-5 sm:px-10">
+              {NAV.map((entry) => (
+                <div key={entry.label} className="border-b border-rule-soft py-4 last:border-0">
+                  <a
+                    href={resolve(entry.href, onLanding)}
+                    onClick={() => setMenu(false)}
+                    className="flex min-h-11 items-center text-[15px] font-medium text-ink-900"
+                  >
+                    {entry.label}
+                  </a>
+                  {entry.items && (
+                    <ul className="mt-2.5 space-y-0.5">
+                      {entry.items.map(([label, href]) => (
+                        <li key={label}>
+                          <a
+                            href={resolve(href, onLanding)}
+                            onClick={() => setMenu(false)}
+                            className="flex min-h-11 items-center text-[14px] text-ink-600 transition-colors hover:text-ink-900"
+                          >
+                            {label}
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </header>
     </>
   );

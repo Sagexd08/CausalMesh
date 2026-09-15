@@ -100,3 +100,49 @@ export function Blocked({ className = "h-3.5 w-3.5" }) {
     </svg>
   );
 }
+
+/**
+ * The menu toggle, drawn in both states.
+ *
+ * One component rather than two so the bars can animate between them: the
+ * top and bottom rules rotate into the cross and the middle one fades,
+ * which shows that the same control closes what it opened.
+ */
+export function MenuToggle({ open = false, className = "h-5 w-5" }) {
+  return (
+    <svg {...base} className={className}>
+      <line
+        x1="4"
+        y1={open ? "12" : "7"}
+        x2="20"
+        y2={open ? "12" : "7"}
+        style={{
+          transformOrigin: "center",
+          transform: open ? "rotate(45deg)" : "none",
+          transition: "transform 260ms cubic-bezier(0.22,1,0.36,1), y1 200ms, y2 200ms",
+        }}
+      />
+      <line
+        x1="4"
+        y1="12"
+        x2="20"
+        y2="12"
+        style={{
+          opacity: open ? 0 : 1,
+          transition: "opacity 160ms ease-out",
+        }}
+      />
+      <line
+        x1="4"
+        y1={open ? "12" : "17"}
+        x2="20"
+        y2={open ? "12" : "17"}
+        style={{
+          transformOrigin: "center",
+          transform: open ? "rotate(-45deg)" : "none",
+          transition: "transform 260ms cubic-bezier(0.22,1,0.36,1), y1 200ms, y2 200ms",
+        }}
+      />
+    </svg>
+  );
+}
