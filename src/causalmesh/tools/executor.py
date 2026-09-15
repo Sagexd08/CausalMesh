@@ -117,6 +117,16 @@ class ToolExecutor:
             if result.outcome == ToolOutcome.DENIED and result.decision:
                 payload["holder_agent"] = result.decision.holder_agent
                 payload["blocked_path"] = result.decision.blocked_path
+                # Which rule refused, as a key rather than as prose. The
+                # reason is already here and is what a person reads; this is
+                # what analysis groups by, so rewording an error message
+                # cannot silently change what a measurement counts.
+                #
+                # Reproducible: the rule is a fixed identifier chosen by the
+                # gate, not a timestamp, a path or anything the machine
+                # supplies.
+                if result.decision.rule:
+                    payload["rule"] = result.decision.rule
 
         # Wall-clock duration is deliberately NOT written into the payload.
         # It varies between runs, and the payload is inside the signed hash

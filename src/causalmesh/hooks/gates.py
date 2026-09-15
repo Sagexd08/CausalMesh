@@ -54,6 +54,7 @@ class ClaimGate:
                     reason=outcome.reason,
                     holder_agent=outcome.holder.agent_id if outcome.holder else None,
                     blocked_path=path,
+                    rule="claim",
                 )
         return GateDecision(allowed=True, reason="no conflicting claim on any path")
 
