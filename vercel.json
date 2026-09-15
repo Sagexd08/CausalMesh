@@ -3,5 +3,5 @@
   "framework": "nextjs",
   "buildCommand": "npm run build",
   "installCommand": "npm install --include=optional",
-  "outputDirectory": "docs-site/.next"
+  "outputDirectory": "frontend/.next"
 }

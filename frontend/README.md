@@ -1,7 +1,8 @@
-# docs-site
+# frontend
 
 The CausalMesh website: one Next.js app serving both the landing page and the
-documentation.
+documentation. The whole site lives here — `/` is the landing page and `/docs`
+is the documentation, from the same app.
 
 | Route                     | Description                                          |
 | ------------------------- | ---------------------------------------------------- |

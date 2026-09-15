@@ -292,7 +292,7 @@ data/         raw (immutable), processed, manifests, exports
 artifacts/    chains, metrics, plots, tables, reports, certificates
 tests/        unit, integration, property, adversarial, failure, reproducibility
 docs/         architecture, protocol, events, claims, security, analysis
-docs-site/    the website: landing page and documentation (Next.js)
+frontend/     the website: landing page and documentation (Next.js)
 ```
 
 ## Documentation
@@ -312,10 +312,17 @@ docs-site/    the website: landing page and documentation (Next.js)
 
 ## Vercel deployment
 
-The website is a single Next.js application in [`docs-site/`](docs-site/): the
+The website is a single Next.js application in [`frontend/`](frontend/): the
 landing page is served at `/` and the documentation at `/docs`. Import the
 repository with the **root directory left as `.`**; the root
 [`vercel.json`](vercel.json) points Vercel at that app.
+
+Vercel detects the framework by looking for `next` in the *root*
+`package.json`, which in a workspace layout is not where the dependency
+actually lives. It is declared in both: the real one in `frontend/`, and a
+matching entry at the root so detection succeeds. Keep the two versions in
+step — a stale root entry makes Vercel resolve a version the app does not
+use.
 
 ```bash
 npm install
