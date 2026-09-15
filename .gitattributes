@@ -1,0 +1,44 @@
+# Line endings, settled once.
+#
+# Without this, a checkout on Windows converts LF to CRLF and every file a
+# Windows contributor touches shows as fully rewritten in the diff. That is
+# noise on its own, and on this project it is worse than noise: the chain is
+# bit-reproducible, and a fixture whose line endings changed underfoot is a
+# fixture that hashes differently on one platform than another.
+#
+# So text is normalised to LF in the repository and checked out as LF
+# everywhere. Editors have handled LF on Windows for a decade.
+* text=auto eol=lf
+
+# Binary, never touched.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.woff binary
+*.woff2 binary
+*.db binary
+*.sqlite binary
+*.sqlite3 binary
+
+# Windows-native scripts need CRLF to run. A .bat or .ps1 checked out with
+# LF fails in ways that are hard to read.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Lockfiles and generated data are collapsed in review. They are still
+# diffable when someone asks; this only changes the default view.
+package-lock.json linguist-generated=true -diff
+frontend/lib/landing/results.json linguist-generated=true
+
+# Fixtures are experimental material rather than project source: they are
+# copied into agent workspaces and edited by agents under test. Excluding
+# them from language statistics keeps the repository's reported composition
+# about the substrate.
+fixtures/** linguist-vendored=true
+
+# The site is a real part of the project, not vendored.
+frontend/** -linguist-vendored
