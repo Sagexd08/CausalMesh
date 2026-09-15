@@ -26,6 +26,73 @@ import { RESULTS, armResult } from "@/lib/landing/data.js";
  * position rather than decorate it.
  */
 
+/**
+ * The references, in citation order.
+ *
+ * One array drives both the superscript markers in the text and the list at
+ * the end, so a marker and its entry cannot disagree about a number. Adding
+ * a source in the middle renumbers both at once, which is the failure a
+ * hand-numbered bibliography always eventually has.
+ */
+const REFERENCES = [
+  {
+    id: "governance-gaps",
+    title:
+      "Governance Gaps in Agent Interoperability Protocols: What MCP, A2A, and ACP Cannot Express",
+    href: "https://arxiv.org/pdf/2606.31498",
+    venue: "arXiv 2606.31498",
+  },
+  {
+    id: "agenticflict",
+    title:
+      "When Agents Collide: What 33,596 Pull Requests Reveal About Merge Conflicts",
+    href: "https://codex.danielvaughan.com/2026/07/28/agent-pr-merge-conflicts-concurrent-coding-agents-codex-cli-worktree-isolation-coordination-defence/",
+    venue: "AIware 2026",
+  },
+  {
+    id: "otel-genai",
+    title: "Inside the LLM Call: GenAI Observability with OpenTelemetry",
+    href: "https://opentelemetry.io/blog/2026/genai-observability/",
+    venue: "OpenTelemetry",
+  },
+  {
+    id: "nist-caisi",
+    title: "Announcing the AI Agent Standards Initiative",
+    href: "https://www.nist.gov/news-events/news/2026/02/announcing-ai-agent-standards-initiative-interoperable-and-secure",
+    venue: "NIST CAISI, February 2026",
+  },
+  {
+    id: "imda",
+    title: "Model AI Governance Framework for Agentic AI",
+    href: "https://www.imda.gov.sg/",
+    venue: "IMDA Singapore, January 2026",
+  },
+  {
+    id: "trust-without-trusting",
+    title:
+      "Trust Without Trusting: A Recomputable Trust Protocol for Autonomous Agents",
+    href: "https://arxiv.org/pdf/2605.06738",
+    venue: "arXiv 2605.06738",
+  },
+  {
+    id: "agent-practices",
+    title:
+      "An Empirical Study of Agent Developer Practices in AI Agent Frameworks",
+    href: "https://arxiv.org/pdf/2512.01939",
+    venue: "arXiv 2512.01939",
+  },
+  {
+    id: "agents-md",
+    title: "AGENTS.md Specification",
+    href: "https://asdlc.io/practices/agents-md-spec/",
+    venue: "Agentic AI Foundation",
+  },
+];
+
+const REF_INDEX = Object.fromEntries(
+  REFERENCES.map((reference, position) => [reference.id, position + 1])
+);
+
 const SECTIONS = [
   ["abstract", "Abstract", null],
   ["question", "The question", "1"],
@@ -103,6 +170,25 @@ function useReadingProgress(ref) {
       window.removeEventListener("resize", onScroll);
     };
   }, [ref]);
+}
+
+/**
+ * A numbered citation marker that links to its entry.
+ *
+ * Replaces the `cited` pill an earlier version repeated mid-sentence. Four
+ * of those in one paragraph stopped marking anything: a label that appears
+ * on every other line is texture, not signal. A superscript number is the
+ * convention a reader of papers already knows, it costs a character rather
+ * than a word, and it goes somewhere.
+ */
+function Cite({ id }) {
+  const number = REF_INDEX[id];
+  if (!number) return null;
+  return (
+    <a href={`#ref-${id}`} className="cm-cite" aria-label={`Reference ${number}`}>
+      [{number}]
+    </a>
+  );
 }
 
 function Tag({ kind }) {
@@ -282,7 +368,7 @@ export default function Paper() {
                 a <strong className="font-medium text-ink-900">27.67%</strong>{" "}
                 conflict rate, with cross-agent pairs conflicting at roughly
                 twice the rate of intra-agent pairs.
-                <Tag kind="cited" />
+                <Cite id="agenticflict" />
               </P>
               <P>
                 The obvious response is to give agents more context about each
@@ -447,21 +533,60 @@ export default function Paper() {
                 cannot express.
               </P>
               <P>
-                A 2026 analysis of MCP, A2A and ACP found that none can express
-                accountability and attribution, verifiable audit trails,
-                provenance, resource-ownership enforcement, multi-agent
-                conflict resolution, fine-grained access control, or
-                enforcement mechanisms.
-                <Tag kind="cited" />
+                A 2026 analysis of MCP, A2A and ACP enumerated what the
+                interoperability layer leaves out.
+                <Cite id="governance-gaps" /> Set against what this substrate
+                implements, the overlap is most of the list.
               </P>
+
+              {/* The seven gaps are the section's entire argument, and they
+                  were a sentence. A checklist is the right shape: the reader
+                  is comparing two sets, and the honest answer includes the
+                  rows we do not cover. */}
+              <ul className="mt-7 divide-y divide-rule-soft border-t border-rule">
+                {[
+                  ["Accountability and attribution", true, "Every event carries its agent, run and task identity."],
+                  ["Verifiable audit trails", true, "Ed25519 signatures over a hash-linked chain."],
+                  ["Provenance", true, "Recorded in the run envelope, outside the signed payload."],
+                  ["Resource-ownership enforcement", true, "Declared ownership drives the claim registry."],
+                  ["Multi-agent conflict resolution", true, "Exclusive leases, and a recorded refusal when one is refused."],
+                  ["Fine-grained access control", true, "Allowlists, ceilings and budgets, per role."],
+                  ["Enforcement mechanisms", true, "The gate. This is the factor the experiment isolates."],
+                ].map(([gap, covered, how]) => (
+                  <li key={gap} className="flex gap-4 py-3.5">
+                    <span
+                      aria-hidden="true"
+                      className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${
+                        covered ? "bg-marker-deep" : "bg-ink-300"
+                      }`}
+                    />
+                    <div>
+                      <div className="text-[14.5px] font-medium text-ink-900">
+                        {gap}
+                      </div>
+                      <div className="mt-0.5 text-[13px] leading-relaxed text-ink-500">
+                        {how}
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-4 text-[13px] leading-relaxed text-ink-500">
+                Seven of seven, which is less impressive than it sounds: the
+                paper enumerated the properties a coordination substrate needs,
+                and this was built to be one. The useful reading is that the
+                list exists and that no interoperability protocol satisfies it.
+              </p>
+
               <P>
                 The observability layer stops at the same line.
                 OpenTelemetry&rsquo;s GenAI semantic conventions standardize
                 how agents are <em>traced</em>, and explicitly stop before
                 evaluation, safety scoring and enforcement.
-                <Tag kind="cited" /> That boundary is not an oversight. Tracing
-                describes what happened; enforcement decides what may happen,
-                and the two need different machinery.
+                <Cite id="otel-genai" /> That boundary is not an oversight.
+                Tracing describes what happened; enforcement decides what may
+                happen, and the two need different machinery. We emit spans
+                rather than competing with them.
               </P>
               <P>
                 Meanwhile the requirement is arriving from regulators.
@@ -470,15 +595,28 @@ export default function Paper() {
                 the controls agents lack, observing that agents running under
                 generic service-account credentials &ldquo;cannot be audited
                 back to specific user intent&rdquo;.
-                <Tag kind="cited" /> Singapore&rsquo;s IMDA framework for
+                <Cite id="nist-caisi" /> Singapore&rsquo;s IMDA framework for
                 agentic AI requires each agent to carry a verifiable identity
                 and an audit trail of which agent acted under whose
                 authorisation.
-                <Tag kind="cited" />
+                <Cite id="imda" />
+              </P>
+              <P>
+                An independent proposal arrives at the same construction from
+                first principles: a <em>recomputable</em> trust protocol, where
+                a third party re-verifies signed execution traces offline
+                without trusting the infrastructure that produced them.
+                <Cite id="trust-without-trusting" /> That is what{" "}
+                <code className="rounded bg-paper-sunk px-1.5 py-0.5 font-mono text-[13px] text-ink-800">
+                  causalmesh verify
+                </code>{" "}
+                does with the relay stopped, and it is the property section 3.1
+                describes.
               </P>
               <Pull>
                 AGENTS.md is read by every major coding agent and sits in
-                60,000+ repositories. It expresses guidelines and enforces
+                60,000+ repositories.
+                <Cite id="agents-md" /> It expresses guidelines and enforces
                 nothing. A convention every agent reads and no agent is held to
                 is a convention without a substrate.
               </Pull>
@@ -666,28 +804,29 @@ export default function Paper() {
             {/* -- refs --------------------------------------------------- */}
             <section className="mt-16">
               <H id="references">References</H>
-              <ol className="mt-6 space-y-3.5 text-[13.5px] leading-relaxed text-ink-600">
-                {[
-                  ["Governance Gaps in Agent Interoperability Protocols: What MCP, A2A, and ACP Cannot Express", "https://arxiv.org/pdf/2606.31498"],
-                  ["Trust Without Trusting: A Recomputable Trust Protocol for Autonomous Agents", "https://arxiv.org/pdf/2605.06738"],
-                  ["An Empirical Study of Agent Developer Practices in AI Agent Frameworks", "https://arxiv.org/pdf/2512.01939"],
-                  ["NIST: Announcing the AI Agent Standards Initiative", "https://www.nist.gov/news-events/news/2026/02/announcing-ai-agent-standards-initiative-interoperable-and-secure"],
-                  ["When Agents Collide: What 33,596 Pull Requests Reveal About Merge Conflicts", "https://codex.danielvaughan.com/2026/07/28/agent-pr-merge-conflicts-concurrent-coding-agents-codex-cli-worktree-isolation-coordination-defence/"],
-                  ["Inside the LLM Call: GenAI Observability with OpenTelemetry", "https://opentelemetry.io/blog/2026/genai-observability/"],
-                  ["AGENTS.md Specification", "https://asdlc.io/practices/agents-md-spec/"],
-                ].map(([title, href], index) => (
-                  <li key={href} className="flex gap-3">
-                    <span className="cm-nums shrink-0 font-mono text-[12px] text-ink-400">
-                      [{index + 1}]
+              <ol className="mt-6 divide-y divide-rule-soft border-t border-rule-soft">
+                {REFERENCES.map((reference, index) => (
+                  <li
+                    key={reference.id}
+                    id={`ref-${reference.id}`}
+                    className="flex scroll-mt-28 gap-4 py-3.5 target:bg-marker-wash"
+                  >
+                    <span className="cm-nums w-5 shrink-0 font-mono text-[12px] text-ink-400">
+                      {index + 1}
                     </span>
-                    <a
-                      href={href}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="underline decoration-rule-soft underline-offset-2 transition-colors hover:text-ink-900 hover:decoration-marker-deep"
-                    >
-                      {title}
-                    </a>
+                    <div>
+                      <a
+                        href={reference.href}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[13.5px] leading-relaxed text-ink-700 underline decoration-rule-soft underline-offset-2 transition-colors hover:text-ink-900 hover:decoration-marker-deep"
+                      >
+                        {reference.title}
+                      </a>
+                      <div className="mt-0.5 font-mono text-[11.5px] text-ink-500">
+                        {reference.venue}
+                      </div>
+                    </div>
                   </li>
                 ))}
               </ol>

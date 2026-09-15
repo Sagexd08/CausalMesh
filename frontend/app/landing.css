@@ -316,6 +316,48 @@
     scroll-margin-top: 6rem;
   }
 
+
+  /* Citation markers. A superscript number that links to its entry.
+
+     The visible glyph is about 22x11px, which is not a target anyone can
+     hit reliably. A transparent ::before pseudo-element extends the hit
+     area to a 44px square centred on the mark, without moving the glyph or
+     disturbing the line box the superscript sits in. Bracket characters are
+     real text rather than generated content, so a reader copying a sentence
+     gets "[4]" rather than a bare 4. */
+  .cm-cite {
+    position: relative;
+    display: inline-block;
+    margin-left: 0.1em;
+    font-family: var(--font-mono);
+    font-size: 0.66em;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    vertical-align: super;
+    color: var(--color-marker-deep);
+    text-decoration: none;
+    transition: color 160ms ease-out;
+  }
+  .cm-cite::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 44px;
+    height: 44px;
+    transform: translate(-50%, -50%);
+  }
+  .cm-cite:hover,
+  .cm-cite:focus-visible {
+    color: var(--color-ink-900);
+  }
+
+  /* The entry a marker just jumped to, marked briefly so the reader's eye
+     lands on the right row in a list of eight. */
+  .cm-paper li:target {
+    background-color: var(--color-marker-wash);
+  }
+
   /* ---------------------------------------------------------------------
      Range inputs. The browser's own slider belongs to no design system, and
      it is the control the calculator is entirely made of — so it is drawn
