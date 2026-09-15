@@ -130,6 +130,211 @@
   }
 }
 
+
+/* ---------------------------------------------------------------------------
+   Animated icons.
+
+   Each icon animates once when it enters view and again on hover, then
+   stops. The motion is the icon's own definition — a gate arm drops, chain
+   links seal in order — so it is worth the movement; anything that merely
+   wiggles is not.
+
+   Driven by CSS rather than a motion library: the whole set is five icons
+   on stroke-dasharray and transform, and a runtime dependency for that
+   would cost more than it returns.
+   --------------------------------------------------------------------------- */
+@layer components {
+  .cm-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-ink-800);
+  }
+  .cm-icon svg {
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+  }
+
+  /* Stroke-drawing default. Every path starts hidden and is drawn in when
+     the icon is seen; the length is generous so no path is clipped. */
+  .cm-icon path,
+  .cm-icon rect,
+  .cm-icon circle {
+    stroke-dasharray: 120;
+    stroke-dashoffset: 120;
+    transition: stroke-dashoffset 700ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .cm-icon-seen path,
+  .cm-icon-seen rect,
+  .cm-icon-seen circle {
+    stroke-dashoffset: 0;
+  }
+
+  /* -- the gate ---------------------------------------------------------- */
+  .cm-gate-arm {
+    /* Origin is the hinge at the top of the post, so the arm sweeps from
+       it rather than about its own middle. */
+    transform-origin: 6px 7px;
+    transform: rotate(-38deg);
+    transition: transform 560ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .cm-icon-seen .cm-gate-arm,
+  .cm-icon:hover .cm-gate-arm {
+    /* Dropped: level with the track, barring it. The raised state is the
+       same arm at -38deg, so the movement reads as one barrier lowering
+       rather than as two unrelated marks. */
+    transform: rotate(0deg);
+  }
+  .cm-gate-pivot {
+    fill: currentColor;
+    stroke: none;
+  }
+  .cm-icon:hover .cm-gate-out {
+    opacity: 0.35;
+    transition: opacity 260ms ease-out;
+  }
+
+  /* -- the chain: links seal in order ------------------------------------ */
+  .cm-link-1 { transition-delay: 0ms; }
+  .cm-link-2 { transition-delay: 130ms; }
+  .cm-link-3 { transition-delay: 260ms; }
+  .cm-icon:hover .cm-link-2 { transform: translateX(0.5px); }
+  .cm-icon:hover .cm-link-3 { transform: translateX(1px); }
+  .cm-link { transition: stroke-dashoffset 700ms cubic-bezier(0.16,1,0.3,1), transform 300ms ease-out; }
+
+  /* -- the signature ----------------------------------------------------- */
+  .cm-sign-stroke {
+    stroke-dasharray: 44;
+    stroke-dashoffset: 44;
+    transition: stroke-dashoffset 820ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .cm-icon-seen .cm-sign-stroke { stroke-dashoffset: 0; }
+  .cm-sign-seal {
+    stroke-dasharray: 62;
+    stroke-dashoffset: 62;
+    opacity: 0.45;
+    transition:
+      stroke-dashoffset 760ms cubic-bezier(0.16, 1, 0.3, 1) 300ms,
+      opacity 400ms ease-out 300ms;
+  }
+  .cm-icon-seen .cm-sign-seal { stroke-dashoffset: 0; }
+  .cm-icon:hover .cm-sign-seal { opacity: 0.9; }
+
+  /* -- the ledger: rows fill in ------------------------------------------ */
+  .cm-row-1 { transition-delay: 160ms; }
+  .cm-row-2 { transition-delay: 280ms; }
+  .cm-row-3 { transition-delay: 400ms; }
+  .cm-icon:hover .cm-row-3 { stroke: var(--color-marker-deep); }
+
+  /* -- the fleet: the fourth stops short ---------------------------------- */
+  .cm-agent-2 { transition-delay: 90ms; }
+  .cm-agent-3 { transition-delay: 180ms; }
+  .cm-fleet-target {
+    transition-delay: 300ms;
+  }
+  .cm-icon:hover .cm-fleet-target {
+    stroke: var(--color-marker-deep);
+  }
+
+  /* ---------------------------------------------------------------------
+     Chart details: the delicate parts. Leader lines are dotted and drawn
+     in; ticks are hairlines that never compete with the data.
+     --------------------------------------------------------------------- */
+  .cm-leader {
+    stroke-dasharray: 2 3;
+    animation: cm-leader-in 620ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  @keyframes cm-leader-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  /* A plotted point landing. Scales from nothing with a slight overshoot,
+     which is what makes it read as arriving rather than appearing. */
+  .cm-point {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: cm-point-in 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  @keyframes cm-point-in {
+    /* Arrives by deceleration rather than by overshoot: a point that
+       springs past its own coordinate is lying about where the datum is. */
+    from { transform: scale(0.4); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+  }
+
+  /* The logo band drifts once on entry, staggered, then rests. */
+  .cm-mark-in {
+    animation: cm-mark-in 620ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  @keyframes cm-mark-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+
+  /* ---------------------------------------------------------------------
+     Range inputs. The browser's own slider belongs to no design system, and
+     it is the control the calculator is entirely made of — so it is drawn
+     here in the page's own material: a hairline track on the rule colour,
+     and a solid ink thumb with the marker ring on focus.
+     --------------------------------------------------------------------- */
+  .cm-range {
+    -webkit-appearance: none;
+    appearance: none;
+    background: transparent;
+    cursor: pointer;
+    height: 18px;
+  }
+  .cm-range::-webkit-slider-runnable-track {
+    height: 2px;
+    background: var(--color-rule-soft);
+  }
+  .cm-range::-moz-range-track {
+    height: 2px;
+    background: var(--color-rule-soft);
+  }
+  .cm-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    margin-top: -6px;
+    border-radius: 999px;
+    background: var(--color-ink-900);
+    border: 2px solid var(--color-paper);
+    box-shadow: 0 1px 3px rgb(16 16 16 / 0.28);
+    transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .cm-range::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 999px;
+    background: var(--color-ink-900);
+    border: 2px solid var(--color-paper);
+    box-shadow: 0 1px 3px rgb(16 16 16 / 0.28);
+    transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .cm-range:hover::-webkit-slider-thumb { transform: scale(1.18); }
+  .cm-range:hover::-moz-range-thumb { transform: scale(1.18); }
+  .cm-range:active::-webkit-slider-thumb { background: var(--color-marker-deep); }
+  .cm-range:active::-moz-range-thumb { background: var(--color-marker-deep); }
+  .cm-range:focus-visible::-webkit-slider-thumb {
+    box-shadow: 0 0 0 3px var(--color-marker-wash), 0 0 0 4px var(--color-marker-deep);
+  }
+  .cm-range:focus-visible::-moz-range-thumb {
+    box-shadow: 0 0 0 3px var(--color-marker-wash), 0 0 0 4px var(--color-marker-deep);
+  }
+
+  /* Tabular figures everywhere a number changes, so a recalculating
+     calculator does not reflow its own columns. */
+  .cm-nums {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

@@ -1,4 +1,6 @@
+import AgentBand from '@/components/landing/AgentBand.jsx';
 import Agents from '@/components/landing/Agents.jsx';
+import Calculator from '@/components/landing/Calculator.jsx';
 import Architecture from '@/components/landing/Architecture.jsx';
 import Console from '@/components/landing/Console.jsx';
 import Contrasts from '@/components/landing/Contrasts.jsx';
@@ -33,12 +35,14 @@ export default function Page() {
       <Nav />
       <main id="main">
         <Hero />
+        <AgentBand />
         <ConsoleBand />
         <Problem />
         <Framework />
         <Routing />
         <Cost />
         <Contrasts />
+        <Calculator />
         <Agents />
         <Architecture />
         <Integrity />
