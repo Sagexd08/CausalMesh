@@ -274,6 +274,48 @@
   }
 
 
+
+  /* ---------------------------------------------------------------------
+     Reading progress on the whitepaper.
+
+     A hairline pinned under the sticky nav, scaled by a custom property
+     that a rAF-coalesced scroll handler writes. transform: scaleX is the
+     only thing animating, so the bar costs a composite and never a layout.
+
+     Reported, not decorated: a long technical document gives no sense of
+     its own length, and "how much is left" is a question a reader asks
+     before committing to it.
+     --------------------------------------------------------------------- */
+  .cm-paper {
+    --cm-read: 0;
+  }
+  .cm-progress {
+    position: fixed;
+    top: 4rem; /* directly under the 64px sticky nav */
+    left: 0;
+    right: 0;
+    height: 2px;
+    z-index: 30;
+    transform: scaleX(var(--cm-read));
+    transform-origin: 0 50%;
+    background: var(--color-marker-deep);
+    pointer-events: none;
+  }
+
+  /* The paper's own reading niceties. Browser defaults belong to no design
+     system, and on a page this long the reader meets all of them. */
+  .cm-paper {
+    scroll-behavior: smooth;
+  }
+  .cm-paper a:focus-visible,
+  .cm-paper [href]:focus-visible {
+    border-radius: 2px;
+  }
+  /* Headings keep their own space when jumped to from the contents rail. */
+  .cm-paper :target {
+    scroll-margin-top: 6rem;
+  }
+
   /* ---------------------------------------------------------------------
      Range inputs. The browser's own slider belongs to no design system, and
      it is the control the calculator is entirely made of — so it is drawn
