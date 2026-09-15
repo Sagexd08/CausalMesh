@@ -106,22 +106,30 @@ endpoints and budgets. 38 tests cover it and `causalmesh policy check`
 interrogates it. These are the gaps it has, recorded before anyone has to
 discover them.
 
-### Nothing calls the gate during a run
+### The gate is installable but not yet installed by default
 
-**Status:** the plane is built and interrogable; the run loop does not use it.
+**Status (updated):** `ContractGate` in `hooks/policy_gate.py` satisfies the
+same `Gate` protocol the arms already install, so the lifecycle boundary
+takes it without a new code path. It is covered by 12 tests. What remains is
+that no arm or profile selects it: a default run still installs `ClaimGate`.
 
-**What this means in practice:** `causalmesh policy check` answers what the
-gate *would* do, and that answer is correct. But a real write during a real
-run still goes through the original path-only claim gate, which is unchanged
-and still correct — so measured C3 results are unaffected by any of this.
+**Why the arms do not use it.** The experiment's contrast is C2 against C3,
+and that is only clean if the two arms differ by one factor. `ClaimGate` is
+that factor. A gate that also refuses on ownership would be a second
+difference, and the C2 to C3 contrast would stop isolating enforcement. So
+the narrow gate stays the arms', and the contract gate is what an operator
+installs when running work rather than running an experiment.
 
-**Why it was left:** wiring the gate into the run loop changes what the
-experiment measures, and the substrate should be proven interrogable before
-it is proven load-bearing. Doing both in one step would leave a failure
-ambiguous between "the gate is wrong" and "the wiring is wrong".
+**What it still blocks:** a run driven by `causalmesh.yaml` end to end. The
+gate decides correctly and records its refusals; nothing yet hands it to a
+scheduler and writes its verdicts into the run artifact.
 
-**What it blocks:** every claim that the policy plane enforces anything at
-run time. Today it enforces nothing; it decides, and the decision is tested.
+**A bug this found in itself.** The first version returned a lease refusal
+without recording a denial, because the policy gate consults leases through
+`may_write`, which deliberately records nothing. That is the same defect
+recorded below under "Enforcement was unmeasurable, not merely unmeasured".
+It was caught by its own test rather than by a run, which is the outcome the
+discipline is for.
 
 ### Spend is enforced, but nothing speaks x402
 
