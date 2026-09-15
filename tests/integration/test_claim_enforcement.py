@@ -40,9 +40,7 @@ def guarded_write(
     perform the write only on a grant. The check happens *before* the file is
     opened, so a denial cannot truncate the target as a side effect.
     """
-    if not registry.may_write(
-        path=target.name, agent_id=agent, run_id=RUN, now_us=now_us
-    ).granted:
+    if not registry.may_write(path=target.name, agent_id=agent, run_id=RUN, now_us=now_us).granted:
         return False
     target.write_text(content, encoding="utf-8")
     return True
@@ -103,9 +101,7 @@ class TestDeniedWrites:
             )
         assert digest(target) == before
 
-    def test_the_holder_can_still_write(
-        self, workspace: Path, registry: ClaimRegistry
-    ) -> None:
+    def test_the_holder_can_still_write(self, workspace: Path, registry: ClaimRegistry) -> None:
         # Enforcement must block conflicting writers, not all writers.
         target = workspace / "schema.py"
         registry.acquire(
@@ -119,9 +115,7 @@ class TestDeniedWrites:
         assert guarded_write(registry, target, "# updated by holder\n", "agent_a", SECOND)
         assert target.read_text(encoding="utf-8") == "# updated by holder\n"
 
-    def test_an_unclaimed_file_is_writable(
-        self, workspace: Path, registry: ClaimRegistry
-    ) -> None:
+    def test_an_unclaimed_file_is_writable(self, workspace: Path, registry: ClaimRegistry) -> None:
         target = workspace / "schema.py"
         assert guarded_write(registry, target, "# written freely\n", "agent_b", 0)
 
@@ -129,9 +123,7 @@ class TestDeniedWrites:
 class TestArmContrast:
     """§74: the C2/C3 difference, observed rather than assumed."""
 
-    def test_c2_permits_the_conflicting_write_and_c3_prevents_it(
-        self, tmp_path: Path
-    ) -> None:
+    def test_c2_permits_the_conflicting_write_and_c3_prevents_it(self, tmp_path: Path) -> None:
         """The same collision under both arms, on real files.
 
         C2 has the information channel but no gate, so the write lands and
@@ -219,9 +211,7 @@ class TestLeaseHandover:
         assert guarded_write(registry, target, "# after handover\n", "agent_b", LEASE + 1)
         assert target.read_text(encoding="utf-8") == "# after handover\n"
 
-    def test_release_hands_over_immediately(
-        self, workspace: Path, registry: ClaimRegistry
-    ) -> None:
+    def test_release_hands_over_immediately(self, workspace: Path, registry: ClaimRegistry) -> None:
         target = workspace / "schema.py"
         registry.acquire(
             claim_id="c_a",

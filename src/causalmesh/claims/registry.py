@@ -392,7 +392,15 @@ class ClaimRegistry:
                          reason, timestamp_us)
                     VALUES (?, ?, ?, ?, ?, ?, ?)
                     """,
-                    (run_id, normalized, agent_id, holder.agent_id, holder.claim_id, reason, now_us),
+                    (
+                        run_id,
+                        normalized,
+                        agent_id,
+                        holder.agent_id,
+                        holder.claim_id,
+                        reason,
+                        now_us,
+                    ),
                 )
                 return ClaimOutcome(granted=False, claim=None, reason=reason, holder=holder)
 

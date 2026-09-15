@@ -228,9 +228,7 @@ def verify_chain(
             link = parse_record(record)
         except (ValueError, TypeError) as exc:
             failures.append(
-                VerificationFailure(
-                    kind=FailureKind.MALFORMED_RECORD, index=index, detail=str(exc)
-                )
+                VerificationFailure(kind=FailureKind.MALFORMED_RECORD, index=index, detail=str(exc))
             )
             # The chain cannot continue through an unparseable record: every
             # later link would be reported as broken for the wrong reason.

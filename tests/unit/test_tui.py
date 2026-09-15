@@ -95,9 +95,7 @@ class TestSnapshotFromArtifacts:
         run_dir = directory / "exp__t__C3__r0000"
         run_dir.mkdir(parents=True)
         (run_dir / "run.json").write_text(
-            json.dumps(
-                {"arm": "C3", "reproducible": False, "result": {"task_id": "t"}}
-            ),
+            json.dumps({"arm": "C3", "reproducible": False, "result": {"task_id": "t"}}),
             encoding="utf-8",
         )
 
@@ -180,7 +178,7 @@ class TestRendering:
         assert "2/3" in output
 
     def test_the_live_run_is_named_while_it_executes(self) -> None:
-        """"Which run is this" is the question an operator actually has."""
+        """ "Which run is this" is the question an operator actually has."""
         snapshot = Snapshot(experiment_id="demo")
         snapshot.runs = [
             RunView("demo__widen__C0__r0000", "C0", "widen", "RUNNING"),

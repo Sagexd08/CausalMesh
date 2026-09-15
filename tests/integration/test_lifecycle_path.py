@@ -108,7 +108,9 @@ class TestHappyPath:
     def test_a_read_then_write_produces_a_verifiable_chain(self, c2: Harness) -> None:
         agent_a = c2.executors["agent_a"]
 
-        read = agent_a.call("read_file", now_us=BASE_TIME, paths=("src/schema.py",), path="src/schema.py")
+        read = agent_a.call(
+            "read_file", now_us=BASE_TIME, paths=("src/schema.py",), path="src/schema.py"
+        )
         assert read.executed
         assert read.value == "# original\n"
 
@@ -201,9 +203,7 @@ class TestFailuresAreRecorded:
 class TestEnforcementPath:
     """The C3 case: denial must be simultaneously true in three places."""
 
-    def test_a_denied_write_leaves_file_event_and_chain_all_consistent(
-        self, c3: Harness
-    ) -> None:
+    def test_a_denied_write_leaves_file_event_and_chain_all_consistent(self, c3: Harness) -> None:
         assert c3.claims is not None
         target = c3.workspaces["agent_b"].resolve("src/schema.py")
         before = digest(target)
@@ -242,9 +242,7 @@ class TestEnforcementPath:
         # 3. The chain still verifies.
         assert verify_chain(records, c3.relay.key_ring()).valid
 
-    def test_the_holder_writes_successfully_under_the_same_gate(
-        self, c3: Harness
-    ) -> None:
+    def test_the_holder_writes_successfully_under_the_same_gate(self, c3: Harness) -> None:
         # Enforcement must block conflicting writers, not all writers.
         assert c3.claims is not None
         c3.claims.acquire(
@@ -264,9 +262,7 @@ class TestEnforcementPath:
         )
         assert result.executed
 
-    def test_c2_permits_the_same_write_c3_denies(
-        self, c2: Harness, c3: Harness
-    ) -> None:
+    def test_c2_permits_the_same_write_c3_denies(self, c2: Harness, c3: Harness) -> None:
         """The enforcement factor, isolated: same call, both arms."""
         assert c3.claims is not None
         c3.claims.acquire(
@@ -278,9 +274,7 @@ class TestEnforcementPath:
             duration_us=120 * SECOND,
         )
 
-        arguments = dict(
-            paths=("src/schema.py",), path="src/schema.py", content="# overwritten\n"
-        )
+        arguments = dict(paths=("src/schema.py",), path="src/schema.py", content="# overwritten\n")
         c2_result = c2.executors["agent_b"].call(
             "write_file", now_us=BASE_TIME + SECOND, **arguments
         )
@@ -290,19 +284,12 @@ class TestEnforcementPath:
 
         assert c2_result.executed
         assert c3_result.outcome == ToolOutcome.DENIED
-        assert (
-            c2.workspaces["agent_b"].resolve("src/schema.py").read_text()
-            == "# overwritten\n"
-        )
-        assert (
-            c3.workspaces["agent_b"].resolve("src/schema.py").read_text() == "# original\n"
-        )
+        assert c2.workspaces["agent_b"].resolve("src/schema.py").read_text() == "# overwritten\n"
+        assert c3.workspaces["agent_b"].resolve("src/schema.py").read_text() == "# original\n"
 
 
 class TestCausalParents:
-    def test_an_observed_peer_event_becomes_the_causal_parent(
-        self, c2: Harness
-    ) -> None:
+    def test_an_observed_peer_event_becomes_the_causal_parent(self, c2: Harness) -> None:
         """§57: what an agent knew before it acted must be reconstructible."""
         c2.executors["agent_a"].call(
             "write_file",

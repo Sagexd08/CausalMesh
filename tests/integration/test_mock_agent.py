@@ -176,9 +176,7 @@ class TestScriptedExecution:
         tools = [r.call.tool for r in c2_runtime.agents["agent_a"].tool_results]
         assert tools == ["read_file", "write_file"]
 
-    async def test_the_file_reflects_the_scripted_content(
-        self, c2_runtime: Runtime
-    ) -> None:
+    async def test_the_file_reflects_the_scripted_content(self, c2_runtime: Runtime) -> None:
         written = c2_runtime.workspaces["agent_a"].resolve("src/schema.py").read_text()
         assert written == "FIELDS = ['id', 'email']\n"
 
@@ -205,22 +203,16 @@ class TestDeterminism:
             runtime.close()
         assert chains[0] == chains[1]
 
-    async def test_two_runs_produce_identical_file_contents(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_two_runs_produce_identical_file_contents(self, tmp_path: Path) -> None:
         contents = []
         for index in range(2):
             runtime = Runtime(CONFLICT_SCENARIO, "C2", tmp_path / f"run_{index}")
             await runtime.run()
-            contents.append(
-                runtime.workspaces["agent_b"].resolve("src/schema.py").read_text()
-            )
+            contents.append(runtime.workspaces["agent_b"].resolve("src/schema.py").read_text())
             runtime.close()
         assert contents[0] == contents[1]
 
-    async def test_coordination_accounting_is_reproducible(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_coordination_accounting_is_reproducible(self, tmp_path: Path) -> None:
         totals = []
         for index in range(2):
             runtime = Runtime(CONFLICT_SCENARIO, "C2", tmp_path / f"run_{index}")
@@ -231,30 +223,22 @@ class TestDeterminism:
 
 
 class TestCoordinationResponse:
-    async def test_an_agent_observes_peer_events_under_c2(
-        self, c2_runtime: Runtime
-    ) -> None:
-        observed = [
-            ids for _, ids in c2_runtime.agents["agent_b"].observations if ids
-        ]
+    async def test_an_agent_observes_peer_events_under_c2(self, c2_runtime: Runtime) -> None:
+        observed = [ids for _, ids in c2_runtime.agents["agent_b"].observations if ids]
         assert observed, "agent_b saw no peer events under C2"
 
     async def test_c0_agents_observe_nothing(self, tmp_path: Path) -> None:
         runtime = Runtime(CONFLICT_SCENARIO, "C0", tmp_path)
         try:
             await runtime.run()
-            assert all(
-                not ids for _, ids in runtime.agents["agent_b"].observations
-            )
+            assert all(not ids for _, ids in runtime.agents["agent_b"].observations)
             accounting = runtime.summaries["agent_b"]["coordination"]
             assert accounting["received_no_coordination"] is True
             assert accounting["coordination_bytes"] == 0
         finally:
             runtime.close()
 
-    async def test_c1_accumulates_more_coordination_bytes_than_c2(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_c1_accumulates_more_coordination_bytes_than_c2(self, tmp_path: Path) -> None:
         costs = {}
         for arm in ("C1", "C2"):
             runtime = Runtime(CONFLICT_SCENARIO, arm, tmp_path / arm)
@@ -302,9 +286,7 @@ class TestInducedConflict:
 class TestFailureModes:
     """§9, §22: crashes, stalls and retries as first-class behaviour."""
 
-    async def test_a_scripted_crash_is_recorded_not_propagated(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_a_scripted_crash_is_recorded_not_propagated(self, tmp_path: Path) -> None:
         scenario = Scenario.from_yaml(
             """
             agent_a:
@@ -408,9 +390,7 @@ class TestLifecycle:
         finally:
             runtime.close()
 
-    async def test_the_summary_reports_coordination_and_outcomes(
-        self, c2_runtime: Runtime
-    ) -> None:
+    async def test_the_summary_reports_coordination_and_outcomes(self, c2_runtime: Runtime) -> None:
         summary = c2_runtime.summaries["agent_b"]
         assert {
             "actions_executed",

@@ -159,9 +159,7 @@ class TestQuestionTwoC1ReceivedTranscript:
         assert accounting(arms, "C1").total_bytes > 0
         assert len(arms["C1"].room) == TURNS
 
-    def test_c1_replays_the_whole_history_each_turn(
-        self, arms: dict[str, ArmRun]
-    ) -> None:
+    def test_c1_replays_the_whole_history_each_turn(self, arms: dict[str, ArmRun]) -> None:
         # Injections total 1+2+...+T rather than T.
         c1 = accounting(arms, "C1")
         assert c1.events_injected == TURNS * (TURNS + 1) // 2
@@ -177,17 +175,13 @@ class TestQuestionThreeC2ReceivedBoundedMetadata:
         assert c2.events_injected <= WINDOW * TURNS
         assert c2.events_injected == TURNS  # one event per turn, well under w
 
-    def test_c2_availability_is_tracked_separately(
-        self, arms: dict[str, ArmRun]
-    ) -> None:
+    def test_c2_availability_is_tracked_separately(self, arms: dict[str, ArmRun]) -> None:
         # §18: "never told" must stay distinguishable from "told but cut".
         c2 = accounting(arms, "C2")
         assert c2.events_available == TURNS
         assert c2.events_injected == TURNS
 
-    def test_a_narrow_window_drops_events_and_says_so(
-        self, arms: dict[str, ArmRun]
-    ) -> None:
+    def test_a_narrow_window_drops_events_and_says_so(self, arms: dict[str, ArmRun]) -> None:
         # Offer a whole run's worth of real events to a window of 2: the
         # dropped count must be reported, not silently absorbed.
         events = tuple(parse_record(r).event for r in arms["C2"].relay.records())
@@ -198,9 +192,7 @@ class TestQuestionThreeC2ReceivedBoundedMetadata:
 
 
 class TestQuestionFourC3AddsEnforcementOnly:
-    def test_c3_and_c2_received_identical_information(
-        self, arms: dict[str, ArmRun]
-    ) -> None:
+    def test_c3_and_c2_received_identical_information(self, arms: dict[str, ArmRun]) -> None:
         """The C2→C3 contrast must isolate enforcement.
 
         Identical per-turn digests are the strongest available evidence that
@@ -226,18 +218,20 @@ class TestQuestionFourC3AddsEnforcementOnly:
             now_us=BASE_TIME,
             duration_us=120 * SECOND,
         )
-        assert not arms["C3"].relay.may_write(
-            path="src/schema.py", agent_id="agent_b", now_us=BASE_TIME + SECOND
-        ).granted
-        assert arms["C2"].relay.may_write(
-            path="src/schema.py", agent_id="agent_b", now_us=BASE_TIME + SECOND
-        ).granted
+        assert (
+            not arms["C3"]
+            .relay.may_write(path="src/schema.py", agent_id="agent_b", now_us=BASE_TIME + SECOND)
+            .granted
+        )
+        assert (
+            arms["C2"]
+            .relay.may_write(path="src/schema.py", agent_id="agent_b", now_us=BASE_TIME + SECOND)
+            .granted
+        )
 
 
 class TestCostSeparation:
-    def test_c1_costs_far_more_than_c2_over_the_run(
-        self, arms: dict[str, ArmRun]
-    ) -> None:
+    def test_c1_costs_far_more_than_c2_over_the_run(self, arms: dict[str, ArmRun]) -> None:
         """§46: the coordination-cost ratio the experiment predicts."""
         c1 = accounting(arms, "C1").total_bytes
         c2 = accounting(arms, "C2").total_bytes
@@ -245,9 +239,7 @@ class TestCostSeparation:
         # At T=10 the quadratic term already dominates.
         assert c1 / c2 > 2
 
-    def test_coordination_tokens_are_ordered_c0_lt_c2_lt_c1(
-        self, arms: dict[str, ArmRun]
-    ) -> None:
+    def test_coordination_tokens_are_ordered_c0_lt_c2_lt_c1(self, arms: dict[str, ArmRun]) -> None:
         # §45: coordination cost must be separable and comparable per arm.
         c0 = accounting(arms, "C0").total_tokens
         c1 = accounting(arms, "C1").total_tokens

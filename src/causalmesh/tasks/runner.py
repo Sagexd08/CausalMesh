@@ -157,9 +157,7 @@ def _make_channel(
         agent_id,
         arm=arm,
         window=window,
-        interests=AgentInterests(
-            agent_id=agent_id, owned_paths=owns, dependency_paths=depends_on
-        ),
+        interests=AgentInterests(agent_id=agent_id, owned_paths=owns, dependency_paths=depends_on),
     )
 
 
@@ -189,9 +187,7 @@ async def execute_task(
 
     keypairs = {agent: KeyPair.derive(config.master_seed, agent) for agent in agent_ids}
     claims = (
-        ClaimRegistry(workspace_root / f"{config.run_id}_claims.db")
-        if config.arm == "C3"
-        else None
+        ClaimRegistry(workspace_root / f"{config.run_id}_claims.db") if config.arm == "C3" else None
     )
     store = ChainStore(chain_path) if chain_path is not None else ChainStore()
 
@@ -278,9 +274,7 @@ async def execute_task(
                 await agent.plan(context)
                 await agent.act(context)
 
-        summaries = {
-            agent_id: await agent.finalize() for agent_id, agent in agents.items()
-        }
+        summaries = {agent_id: await agent.finalize() for agent_id, agent in agents.items()}
     except Exception as exc:
         error = f"{type(exc).__name__}: {exc}"
         summaries = {agent_id: agent.summary() for agent_id, agent in agents.items()}
@@ -305,9 +299,7 @@ async def execute_task(
         records=relay.records(),
     )
     exit_code = _run_integration_test(task, integrated)
-    outcome = evaluate_outcome(
-        task.success, workspace=integrated, test_exit_code=exit_code
-    )
+    outcome = evaluate_outcome(task.success, workspace=integrated, test_exit_code=exit_code)
 
     result = RunResult(
         run_id=config.run_id,
@@ -319,12 +311,9 @@ async def execute_task(
         head_hash=relay.head_hash,
         agent_summaries=summaries,
         workspace_digests={
-            agent_id: workspace_digest(workspace)
-            for agent_id, workspace in workspaces.items()
+            agent_id: workspace_digest(workspace) for agent_id, workspace in workspaces.items()
         },
-        claim_history=[c.to_dict() for c in claims.history(run_id=config.run_id)]
-        if claims
-        else [],
+        claim_history=[c.to_dict() for c in claims.history(run_id=config.run_id)] if claims else [],
         denials=claims.denials(run_id=config.run_id) if claims else [],
         relay_summary=relay.summary(),
         boundary_summaries={
@@ -362,9 +351,7 @@ def _integrate_workspaces(
     destination.mkdir(parents=True, exist_ok=True)
     merged = Workspace(agent_id="__integrated__", root=destination.resolve(), run_id=task.task_id)
 
-    owner_of = {
-        path: role.agent_id for role in task.roles for path in role.owns
-    }
+    owner_of = {path: role.agent_id for role in task.roles for path in role.owns}
 
     # A contested path has no single owner, by definition. Resolving it by
     # ownership would decide the contest before the arms could differ:
@@ -437,7 +424,6 @@ def _integrate_workspaces(
     return merged
 
 
-
 def _last_writer(path: str, records: list[dict[str, Any]]) -> str | None:
     """Which agent last successfully wrote this path, per the signed chain.
 
@@ -489,11 +475,7 @@ def _run_integration_test(task: TaskDefinition, workspace: Workspace) -> int | N
                 # including APPDATA, without which `python -m pytest` cannot
                 # find user-site packages on Windows and every task's
                 # integration test fails identically in every arm.
-                **{
-                    name: os.environ[name]
-                    for name in _INHERITED_ENVIRONMENT
-                    if name in os.environ
-                },
+                **{name: os.environ[name] for name in _INHERITED_ENVIRONMENT if name in os.environ},
                 "PYTHONHASHSEED": "0",
                 "PYTHONDONTWRITEBYTECODE": "1",
             },

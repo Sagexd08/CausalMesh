@@ -148,9 +148,7 @@ class Workspace:
 
     def list_files(self) -> list[str]:
         """Every file in the workspace, as sorted relative POSIX paths."""
-        return sorted(
-            self.relative(path) for path in self.root.rglob("*") if path.is_file()
-        )
+        return sorted(self.relative(path) for path in self.root.rglob("*") if path.is_file())
 
 
 def build_run_workspaces(

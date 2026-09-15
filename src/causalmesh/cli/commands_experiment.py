@@ -84,7 +84,9 @@ def _build_plan(repo: Repo, *, experiment_id: str, profile_name: str, seed: str,
 
 @app.command("plan")
 def plan_command(
-    profile_name: Annotated[str, typer.Option("--profile", help="smoke, pilot, small, medium.")] = "smoke",
+    profile_name: Annotated[
+        str, typer.Option("--profile", help="smoke, pilot, small, medium.")
+    ] = "smoke",
     experiment_id: Annotated[str | None, typer.Option("--id", help="Experiment id.")] = None,
     seed: Annotated[str, typer.Option("--seed")] = DEFAULT_SEED,
     allow_gated: Annotated[
@@ -135,7 +137,8 @@ def run_command(
     experiment_id: Annotated[str | None, typer.Option("--id")] = None,
     seed: Annotated[str, typer.Option("--seed")] = DEFAULT_SEED,
     limit: Annotated[
-        int | None, typer.Option("--limit", help="Stop after this many runs; the rest stay planned.")
+        int | None,
+        typer.Option("--limit", help="Stop after this many runs; the rest stay planned."),
     ] = None,
     allow_gated: Annotated[bool, typer.Option("--allow-gated")] = False,
     root_option: Annotated[Path | None, typer.Option("--root")] = None,
@@ -204,7 +207,9 @@ def run_command(
 @app.command("status")
 def status_command(
     experiment_id: Annotated[str | None, typer.Option("--id")] = None,
-    latest: Annotated[bool, typer.Option("--latest", help="Use the most recent experiment.")] = False,
+    latest: Annotated[
+        bool, typer.Option("--latest", help="Use the most recent experiment.")
+    ] = False,
     root_option: Annotated[Path | None, typer.Option("--root")] = None,
     as_json: Annotated[bool, typer.Option("--json")] = False,
 ) -> None:
@@ -258,7 +263,9 @@ def status_command(
 
     payload = {"experiment_id": experiment_id, "per_arm": per_arm, "runs": len(run_dirs)}
     if not emit(payload, as_json=as_json):
-        rendered = table(f"status: {experiment_id}", ["arm", "runs", "passed", "denials", "mean bytes"])
+        rendered = table(
+            f"status: {experiment_id}", ["arm", "runs", "passed", "denials", "mean bytes"]
+        )
         for arm in sorted(per_arm):
             bucket = per_arm[arm]
             mean = bucket["bytes"] / bucket["runs"] if bucket["runs"] else 0

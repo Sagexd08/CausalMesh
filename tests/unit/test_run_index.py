@@ -53,9 +53,7 @@ class TestRegistration:
         assert index.register_plan(plan, now_us=2) == 0
         assert len(index.runs("exp")) == len(plan)
 
-    def test_reregistering_does_not_reset_a_finished_run(
-        self, index: RunIndex, plan
-    ) -> None:
+    def test_reregistering_does_not_reset_a_finished_run(self, index: RunIndex, plan) -> None:
         index.register_plan(plan, now_us=1)
         claimed = index.claim_next("exp", now_us=2)
         index.finish(claimed.run_id, state=RunState.COMPLETED, now_us=3, succeeded=True)
@@ -65,9 +63,7 @@ class TestRegistration:
         assert index.get(claimed.run_id).state == RunState.COMPLETED
         assert index.get(claimed.run_id).succeeded is True
 
-    def test_a_changed_plan_under_the_same_id_is_refused(
-        self, index: RunIndex, plan
-    ) -> None:
+    def test_a_changed_plan_under_the_same_id_is_refused(self, index: RunIndex, plan) -> None:
         """Resuming under a changed design would pool two experiments.
 
         The runs would carry the same experiment_id and be analysed
@@ -108,9 +104,7 @@ class TestClaiming:
         assert record.started_at_us == 5
         assert record.attempts == 1
 
-    def test_claiming_returns_none_when_nothing_is_runnable(
-        self, index: RunIndex, plan
-    ) -> None:
+    def test_claiming_returns_none_when_nothing_is_runnable(self, index: RunIndex, plan) -> None:
         index.register_plan(plan, now_us=1)
         while (record := index.claim_next("exp", now_us=2)) is not None:
             index.finish(record.run_id, state=RunState.COMPLETED, now_us=3, succeeded=True)
@@ -177,9 +171,7 @@ class TestFinishing:
         assert finished.head_hash == "hh"
         assert finished.finished_at_us == 9
 
-    def test_completed_and_succeeded_are_independent(
-        self, index: RunIndex, plan
-    ) -> None:
+    def test_completed_and_succeeded_are_independent(self, index: RunIndex, plan) -> None:
         """§81. A run whose task failed is a result, not a lost run.
 
         Conflating execution status with task outcome would drop failed
@@ -188,15 +180,11 @@ class TestFinishing:
         """
         index.register_plan(plan, now_us=1)
         record = index.claim_next("exp", now_us=2)
-        finished = index.finish(
-            record.run_id, state=RunState.COMPLETED, now_us=3, succeeded=False
-        )
+        finished = index.finish(record.run_id, state=RunState.COMPLETED, now_us=3, succeeded=False)
         assert finished.state == RunState.COMPLETED
         assert finished.succeeded is False
 
-    def test_unknown_success_stays_distinct_from_failure(
-        self, index: RunIndex, plan
-    ) -> None:
+    def test_unknown_success_stays_distinct_from_failure(self, index: RunIndex, plan) -> None:
         # A harness crash leaves no verdict. None must not become False,
         # which would report a task failure that was never observed.
         index.register_plan(plan, now_us=1)
@@ -244,9 +232,7 @@ class TestRecovery:
         assert index.abandon_running("exp", now_us=4) == 0
         assert index.get(record.run_id).state == RunState.FAILED
 
-    def test_the_resume_is_visible_in_the_transition_log(
-        self, index: RunIndex, plan
-    ) -> None:
+    def test_the_resume_is_visible_in_the_transition_log(self, index: RunIndex, plan) -> None:
         """§80: a resumed run must not look like a clean one.
 
         Without the log, a run abandoned and resumed twice is
@@ -275,18 +261,14 @@ class TestReading:
         assert set(counts) == RunState.ALL
         assert counts[RunState.FAILED] == 0
 
-    def test_completion_requires_every_run_terminal(
-        self, index: RunIndex, plan
-    ) -> None:
+    def test_completion_requires_every_run_terminal(self, index: RunIndex, plan) -> None:
         index.register_plan(plan, now_us=1)
         assert not index.is_complete("exp")
         while (record := index.claim_next("exp", now_us=2)) is not None:
             index.finish(record.run_id, state=RunState.COMPLETED, now_us=3, succeeded=True)
         assert index.is_complete("exp")
 
-    def test_an_abandoned_run_leaves_the_collection_incomplete(
-        self, index: RunIndex, plan
-    ) -> None:
+    def test_an_abandoned_run_leaves_the_collection_incomplete(self, index: RunIndex, plan) -> None:
         index.register_plan(plan, now_us=1)
         while (record := index.claim_next("exp", now_us=2)) is not None:
             index.finish(record.run_id, state=RunState.COMPLETED, now_us=3, succeeded=True)

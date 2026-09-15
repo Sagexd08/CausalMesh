@@ -69,9 +69,7 @@ class PathScopedDelivery:
             return tuple(participants)
         touched = set(event.paths)
         return tuple(
-            agent
-            for agent in participants
-            if touched & self.interests.get(agent, frozenset())
+            agent for agent in participants if touched & self.interests.get(agent, frozenset())
         )
 
 

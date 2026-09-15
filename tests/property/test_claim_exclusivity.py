@@ -24,8 +24,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
-from hypothesis import HealthCheck, given, settings
-from hypothesis import strategies as st
+from hypothesis import HealthCheck, given, settings, strategies as st
 
 from causalmesh.claims import ClaimRegistry, ClaimStatus
 
@@ -157,9 +156,7 @@ class TestCrossProcessContention:
         with ClaimRegistry(database) as registry:
             assert len(registry.active_claims(run_id=RUN, now_us=SECOND)) == 1
 
-    def test_a_claim_written_by_another_process_blocks_this_one(
-        self, tmp_path: Path
-    ) -> None:
+    def test_a_claim_written_by_another_process_blocks_this_one(self, tmp_path: Path) -> None:
         database = tmp_path / "claims.db"
         ClaimRegistry(database).close()
 

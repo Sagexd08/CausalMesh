@@ -198,9 +198,7 @@ def parse_action(reply: str) -> ParsedAction:
             kind="bad_arguments",
         )
 
-    paths = tuple(
-        str(arguments[name]) for name in PATH_ARGUMENTS[tool] if name in arguments
-    )
+    paths = tuple(str(arguments[name]) for name in PATH_ARGUMENTS[tool] if name in arguments)
     return ParsedAction(
         tool=tool,
         arguments=arguments,
@@ -210,7 +208,9 @@ def parse_action(reply: str) -> ParsedAction:
     )
 
 
-def system_prompt(*, agent_id: str, role_description: str, owns: list[str], depends_on: list[str]) -> str:
+def system_prompt(
+    *, agent_id: str, role_description: str, owns: list[str], depends_on: list[str]
+) -> str:
     """The instruction every model-backed agent receives.
 
     Identical in structure across arms. What differs between arms is the
@@ -221,8 +221,7 @@ def system_prompt(*, agent_id: str, role_description: str, owns: list[str], depe
     owned = ", ".join(sorted(owns)) or "(nothing specific)"
     depends = ", ".join(sorted(depends_on)) or "(nothing)"
     tools = "\n".join(
-        f"  {name}({', '.join(REQUIRED_ARGUMENTS[name]) or 'no arguments'})"
-        for name in TOOL_NAMES
+        f"  {name}({', '.join(REQUIRED_ARGUMENTS[name]) or 'no arguments'})" for name in TOOL_NAMES
     )
     return f"""You are {agent_id}, a coding agent working in a shared repository.
 

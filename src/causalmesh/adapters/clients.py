@@ -188,9 +188,7 @@ def _parse_openai_response(
     message = choices[0].get("message") or {}
     text = message.get("content")
     if not isinstance(text, str):
-        raise TransportError(
-            f"response choice has no text content: {str(choices[0])[:400]}"
-        )
+        raise TransportError(f"response choice has no text content: {str(choices[0])[:400]}")
     usage = decoded.get("usage") or {}
     return ChatResponse(
         text=text,
@@ -220,9 +218,7 @@ def _parse_anthropic_response(
         if isinstance(block, dict) and block.get("type") == "text"
     )
     if not text:
-        raise TransportError(
-            f"response has no text block: {str(content)[:400]}"
-        )
+        raise TransportError(f"response has no text block: {str(content)[:400]}")
     usage = decoded.get("usage") or {}
     return ChatResponse(
         text=text,
@@ -249,6 +245,4 @@ def client_from_environment(provider: str, **overrides: Any) -> Any:
         return AnthropicClient(**overrides)
     if normalized in {"local", "ollama", "vllm", "lmstudio", "llamacpp"}:
         return LocalClient(**overrides)
-    raise ValueError(
-        f"unknown provider {provider!r}; expected openai, anthropic or local"
-    )
+    raise ValueError(f"unknown provider {provider!r}; expected openai, anthropic or local")

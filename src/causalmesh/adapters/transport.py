@@ -153,9 +153,7 @@ class HttpTransport:
                 retryable=exc.code == 429 or 500 <= exc.code < 600,
             ) from exc
         except urllib.error.URLError as exc:
-            raise TransportError(
-                f"could not reach {url}: {exc.reason}", retryable=True
-            ) from exc
+            raise TransportError(f"could not reach {url}: {exc.reason}", retryable=True) from exc
         except TimeoutError as exc:
             raise TransportError(
                 f"{url} timed out after {self.timeout_s}s", retryable=True
@@ -166,8 +164,7 @@ class HttpTransport:
             decoded = json.loads(body_bytes)
         except json.JSONDecodeError as exc:
             raise TransportError(
-                f"{url} returned {status} with a non-JSON body: "
-                f"{body_bytes[:500]!r}",
+                f"{url} returned {status} with a non-JSON body: {body_bytes[:500]!r}",
                 status=status,
             ) from exc
         if not isinstance(decoded, dict):

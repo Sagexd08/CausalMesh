@@ -149,8 +149,10 @@ class TestProtocolTables:
 class TestSystemPrompt:
     def test_it_names_the_agent_and_its_role(self) -> None:
         prompt = system_prompt(
-            agent_id="agent_a", role_description="Widen the schema",
-            owns=["src/schema.py"], depends_on=[],
+            agent_id="agent_a",
+            role_description="Widen the schema",
+            owns=["src/schema.py"],
+            depends_on=[],
         )
         assert "agent_a" in prompt
         assert "Widen the schema" in prompt

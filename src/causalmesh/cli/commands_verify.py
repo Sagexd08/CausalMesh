@@ -66,7 +66,9 @@ def _verify_one(run_dir: Path) -> dict[str, Any]:
 def verify_command(
     experiment_id: Annotated[str | None, typer.Option("--id", help="Experiment to verify.")] = None,
     verify_all: Annotated[bool, typer.Option("--all", help="Verify every experiment.")] = False,
-    latest: Annotated[bool, typer.Option("--latest", help="Verify the most recent experiment.")] = False,
+    latest: Annotated[
+        bool, typer.Option("--latest", help="Verify the most recent experiment.")
+    ] = False,
     run_path: Annotated[
         Path | None, typer.Option("--run", help="Verify one run directory, anywhere on disk.")
     ] = None,

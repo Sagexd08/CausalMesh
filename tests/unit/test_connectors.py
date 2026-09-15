@@ -13,7 +13,6 @@ invocation is exercised by hand.
 from __future__ import annotations
 
 import asyncio
-import json
 import sys
 from pathlib import Path
 
@@ -149,9 +148,7 @@ class TestInvoke:
     @staticmethod
     def stub(tmp_path: Path, payload: dict) -> ConnectorSpec:
         script = tmp_path / "stub.py"
-        script.write_text(
-            f"import json; print(json.dumps({payload!r}))", encoding="utf-8"
-        )
+        script.write_text(f"import json; print(json.dumps({payload!r}))", encoding="utf-8")
         return ConnectorSpec(
             argv=(str(script), "{prompt}"),
             command=sys.executable,
@@ -170,9 +167,7 @@ class TestInvoke:
 
     def test_denials_are_counted_from_a_list(self, tmp_path: Path) -> None:
         """Claude Code reports permission_denials as a list of objects."""
-        spec = self.stub(
-            tmp_path, {"result": "x", "permission_denials": [{"tool": "Write"}]}
-        )
+        spec = self.stub(tmp_path, {"result": "x", "permission_denials": [{"tool": "Write"}]})
         result = asyncio.run(invoke(spec, "hi", workspace=tmp_path, timeout_s=60))
         assert result.permission_denials == 1
 
@@ -192,9 +187,7 @@ class TestInvoke:
         """A hung agent is a failed turn, not a reason to wait longer."""
         script = tmp_path / "hang.py"
         script.write_text("import time; time.sleep(30)", encoding="utf-8")
-        spec = ConnectorSpec(
-            argv=(str(script), "{prompt}"), command=sys.executable, name="hang"
-        )
+        spec = ConnectorSpec(argv=(str(script), "{prompt}"), command=sys.executable, name="hang")
         with pytest.raises(ConnectorError, match="did not finish"):
             asyncio.run(invoke(spec, "hi", workspace=tmp_path, timeout_s=2))
 

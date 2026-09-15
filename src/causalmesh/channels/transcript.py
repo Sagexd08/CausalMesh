@@ -163,9 +163,7 @@ class TranscriptChannel:
             # The whole history is injected every turn — that is the point.
             events_injected=len(history),
             events_dropped=0,
-            selection_reasons=(
-                {"policy": "unbounded transcript", "messages": len(history)},
-            ),
+            selection_reasons=({"policy": "unbounded transcript", "messages": len(history)},),
             tokens=estimate_tokens(text),
         )
         self._accounting.record(injection)

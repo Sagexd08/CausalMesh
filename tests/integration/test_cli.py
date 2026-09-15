@@ -214,6 +214,7 @@ class TestStatus:
         # C2 carries the same information as C3 for the same cost.
         assert per_arm["C2"]["bytes"] == per_arm["C3"]["bytes"]
 
+
 class TestAnalyze:
     """`analyze` reports what the runs did, and says what it is not."""
 
@@ -239,9 +240,9 @@ class TestAnalyze:
         by_task = payload(result)["contrasts_by_task"]
 
         def enforcement(task: str) -> float:
-            return next(
-                c for c in by_task[task] if c["name"] == "enforcement_benefit"
-            )["success_delta"]
+            return next(c for c in by_task[task] if c["name"] == "enforcement_benefit")[
+                "success_delta"
+            ]
 
         assert enforcement("schema_handler_widen") == 0.0
         assert enforcement("concurrent_edit_collision") == -1.0
@@ -261,14 +262,13 @@ class TestAnalyze:
         assert list(payload(result)["contrasts_by_task"]) == ["schema_handler_widen"]
 
     def test_an_unknown_task_is_a_usage_error(self) -> None:
-        result = invoke(
-            "analyze", "--id", "pilot_landing", "--task", "nope", "--root", str(REPO)
-        )
+        result = invoke("analyze", "--id", "pilot_landing", "--task", "nope", "--root", str(REPO))
         assert result.exit_code == 2
 
     def test_selecting_nothing_is_a_usage_error(self) -> None:
         result = invoke("analyze", "--root", str(REPO))
         assert result.exit_code == 2
+
 
 class TestManifestAndAudit:
     """Provenance through the CLI (§31, §83).

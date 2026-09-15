@@ -213,9 +213,7 @@ def _read_run(path: Path) -> RunMetrics:
         coordination_tokens=sum(int(c.get("coordination_tokens") or 0) for c in coordination),
         denials=len(result.get("denials") or ()),
         events=int(result.get("events") or 0),
-        received_no_coordination=all(
-            bool(c.get("received_no_coordination")) for c in coordination
-        )
+        received_no_coordination=all(bool(c.get("received_no_coordination")) for c in coordination)
         if coordination
         else False,
         run_id=result.get("run_id") or path.name,

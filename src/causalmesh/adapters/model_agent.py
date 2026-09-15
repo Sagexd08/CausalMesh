@@ -173,9 +173,7 @@ class ModelAgent(CodingAgent):
             if _was_injected(event.event_id, injection):
                 self.informed_paths.update(event.paths)
 
-        self.observations.append(
-            (context.turn, tuple(event.event_id for event in delivered))
-        )
+        self.observations.append((context.turn, tuple(event.event_id for event in delivered)))
 
         # The injected text is the *only* peer information the model sees.
         # Appending it as a user message keeps it inside the same token
@@ -246,9 +244,7 @@ class ModelAgent(CodingAgent):
                 self._finished = True
 
         self.turn_records.append(record)
-        context.notes["planned_action"] = (
-            self._pending.tool if self._pending else None
-        )
+        context.notes["planned_action"] = self._pending.tool if self._pending else None
 
     async def act(self, context: AgentContext) -> TurnResult:
         """Execute the parsed action through the tool boundary."""
@@ -292,9 +288,7 @@ class ModelAgent(CodingAgent):
             )
         elif tool_result.outcome == ToolOutcome.FAILED:
             self._history.append(
-                ChatMessage(
-                    role="user", content=f"That call failed: {tool_result.error}"
-                )
+                ChatMessage(role="user", content=f"That call failed: {tool_result.error}")
             )
         elif action.tool == "read_file" and isinstance(tool_result.value, str):
             self._history.append(
@@ -325,25 +319,16 @@ class ModelAgent(CodingAgent):
             "agent_id": self.agent_id,
             "coordination": self.channel.accounting.to_dict(),
             "completion_tokens": sum(r.completion_tokens for r in self.turn_records),
-            "denied": sum(
-                1 for r in self.tool_results if r.outcome == ToolOutcome.DENIED
-            ),
-            "failed": sum(
-                1 for r in self.tool_results if r.outcome == ToolOutcome.FAILED
-            ),
+            "denied": sum(1 for r in self.tool_results if r.outcome == ToolOutcome.DENIED),
+            "failed": sum(1 for r in self.tool_results if r.outcome == ToolOutcome.FAILED),
             "informed_paths": sorted(self.informed_paths),
             "model": self.settings.to_dict(),
             "observations": [
-                {"events": list(events), "turn": turn}
-                for turn, events in self.observations
+                {"events": list(events), "turn": turn} for turn, events in self.observations
             ],
             "prompt_tokens": sum(r.prompt_tokens for r in self.turn_records),
-            "protocol_failures": sum(
-                1 for r in self.turn_records if r.protocol_failure
-            ),
-            "transport_failures": sum(
-                1 for r in self.turn_records if r.transport_failure
-            ),
+            "protocol_failures": sum(1 for r in self.turn_records if r.protocol_failure),
+            "transport_failures": sum(1 for r in self.turn_records if r.transport_failure),
             "turn_records": [r.to_dict() for r in self.turn_records],
             "turns": len(self.turns),
         }

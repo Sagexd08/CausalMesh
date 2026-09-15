@@ -108,9 +108,7 @@ class TestPlanDeterminism:
 class TestExecutedCollectionDeterminism:
     """The expensive check: two real collections must agree."""
 
-    async def test_two_collections_produce_identical_chains(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_two_collections_produce_identical_chains(self, tmp_path: Path) -> None:
         """§84 at collection scale.
 
         Compared per run id rather than as a set: a collection that

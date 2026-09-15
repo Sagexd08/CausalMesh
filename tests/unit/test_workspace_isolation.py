@@ -55,16 +55,12 @@ def peer_secret(workspaces: dict[str, Workspace]) -> Path:
 
 
 class TestLayout:
-    def test_each_agent_gets_its_own_directory(
-        self, workspaces: dict[str, Workspace]
-    ) -> None:
+    def test_each_agent_gets_its_own_directory(self, workspaces: dict[str, Workspace]) -> None:
         assert workspaces["agent_a"].root != workspaces["agent_b"].root
         assert workspaces["agent_a"].root.is_dir()
         assert workspaces["agent_b"].root.is_dir()
 
-    def test_workspaces_are_siblings_never_nested(
-        self, workspaces: dict[str, Workspace]
-    ) -> None:
+    def test_workspaces_are_siblings_never_nested(self, workspaces: dict[str, Workspace]) -> None:
         # Nesting would make one agent's containment check automatically
         # admit the other's files.
         a, b = workspaces["agent_a"].root, workspaces["agent_b"].root
@@ -78,9 +74,7 @@ class TestLayout:
 
     def test_duplicate_agent_ids_are_rejected(self, tmp_path: Path) -> None:
         with pytest.raises(WorkspaceError, match="unique"):
-            build_run_workspaces(
-                base=tmp_path, run_id=RUN, agent_ids=["agent_a", "agent_a"]
-            )
+            build_run_workspaces(base=tmp_path, run_id=RUN, agent_ids=["agent_a", "agent_a"])
 
     def test_the_root_is_fully_resolved(self, tmp_path: Path) -> None:
         # Every later containment check compares two real paths, never a real
@@ -100,9 +94,7 @@ class TestNormalPaths:
         # create_file and write_file target paths that do not exist.
         assert not agent_a.resolve("brand/new/file.py").exists()
 
-    def test_interior_dot_dot_that_stays_inside_is_allowed(
-        self, agent_a: Workspace
-    ) -> None:
+    def test_interior_dot_dot_that_stays_inside_is_allowed(self, agent_a: Workspace) -> None:
         # `src/../src/x.py` never leaves the workspace, so refusing it would
         # be a false positive rather than protection.
         resolved = agent_a.resolve("src/../src/x.py")
@@ -140,9 +132,7 @@ class TestLeakageAttempts:
         with pytest.raises(PathEscapeError):
             agent_a.resolve(str(peer_secret))
 
-    def test_an_absolute_path_is_refused_not_rebased(
-        self, agent_a: Workspace
-    ) -> None:
+    def test_an_absolute_path_is_refused_not_rebased(self, agent_a: Workspace) -> None:
         # Silently reinterpreting an absolute path as relative would hide the
         # agent's actual intent from the record.
         with pytest.raises(PathEscapeError):
@@ -239,9 +229,7 @@ class TestNonRaisingCheck:
 
 
 class TestFixtureSeeding:
-    def test_each_agent_gets_its_own_copy_of_the_fixture(
-        self, tmp_path: Path
-    ) -> None:
+    def test_each_agent_gets_its_own_copy_of_the_fixture(self, tmp_path: Path) -> None:
         """§11: no shared filesystem between agents.
 
         Any interference must travel through the coordination channel, where

@@ -101,9 +101,7 @@ def evaluate_outcome(
                 if criteria.divergence_marker in content:
                     divergence_absent = False
                     found_in = criteria.divergence_file
-                    evidence.append(
-                        f"divergence_marker_present_in={criteria.divergence_file}"
-                    )
+                    evidence.append(f"divergence_marker_present_in={criteria.divergence_file}")
                 else:
                     evidence.append(f"divergence_marker_absent={criteria.divergence_file}")
     else:
@@ -149,9 +147,5 @@ def workspace_digest(workspace: Workspace) -> dict[str, str]:
 def diverged_files(left: dict[str, str], right: dict[str, str]) -> tuple[str, ...]:
     """Files whose contents differ between two workspaces."""
     return tuple(
-        sorted(
-            path
-            for path in set(left) | set(right)
-            if left.get(path) != right.get(path)
-        )
+        sorted(path for path in set(left) | set(right) if left.get(path) != right.get(path))
     )

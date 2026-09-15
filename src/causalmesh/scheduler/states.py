@@ -57,17 +57,13 @@ class RunState:
     TIMED_OUT = "timed_out"
     ABANDONED = "abandoned"
 
-    ALL = frozenset(
-        {PLANNED, RUNNING, COMPLETED, FAILED, TIMED_OUT, ABANDONED}
-    )
+    ALL = frozenset({PLANNED, RUNNING, COMPLETED, FAILED, TIMED_OUT, ABANDONED})
 
 
 # A run that reached one of these is finished and will not be re-executed
 # by a resume. ABANDONED is deliberately *not* terminal: it is the state an
 # interrupted run is left in, and resuming it is the whole point.
-TERMINAL_STATES = frozenset(
-    {RunState.COMPLETED, RunState.FAILED, RunState.TIMED_OUT}
-)
+TERMINAL_STATES = frozenset({RunState.COMPLETED, RunState.FAILED, RunState.TIMED_OUT})
 
 
 TRANSITIONS: dict[str, frozenset[str]] = {

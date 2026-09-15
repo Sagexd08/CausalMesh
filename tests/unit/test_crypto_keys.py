@@ -62,7 +62,9 @@ class TestDerivation:
     def test_generate_produces_distinct_keys(self) -> None:
         # The random path exists for non-reproducible deployments; confirm it
         # really is random rather than silently falling back to derivation.
-        assert KeyPair.generate("agent_a").public_key_hex != KeyPair.generate("agent_a").public_key_hex
+        assert (
+            KeyPair.generate("agent_a").public_key_hex != KeyPair.generate("agent_a").public_key_hex
+        )
 
 
 class TestSigning:
@@ -100,7 +102,9 @@ class TestSigning:
         assert verify_signature(kp.public_key_hex, bad_signature, b"message") is False
 
     @pytest.mark.parametrize(
-        "bad_key", ["", "zz", "ab" * 31, "ab" * 33], ids=["empty", "not-hex", "31-bytes", "33-bytes"]
+        "bad_key",
+        ["", "zz", "ab" * 31, "ab" * 33],
+        ids=["empty", "not-hex", "31-bytes", "33-bytes"],
     )
     def test_malformed_public_key_is_a_failure_not_a_crash(self, bad_key: str) -> None:
         kp = KeyPair.derive(SEED, "agent_a")

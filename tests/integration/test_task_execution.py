@@ -80,20 +80,14 @@ class TestInformationContrast:
         result = all_arms[arm]
         assert result.succeeded, result.outcome.detail
 
-    async def test_the_difference_comes_from_being_informed(
-        self, all_arms: dict
-    ) -> None:
+    async def test_the_difference_comes_from_being_informed(self, all_arms: dict) -> None:
         # The mechanism, not just the outcome: agent_b knew about the schema
         # change in the informed arms and did not in C0.
         assert all_arms["C0"].agent_summaries["agent_b"]["informed_paths"] == []
         for arm in ("C1", "C2", "C3"):
-            assert "src/schema.py" in all_arms[arm].agent_summaries["agent_b"][
-                "informed_paths"
-            ]
+            assert "src/schema.py" in all_arms[arm].agent_summaries["agent_b"]["informed_paths"]
 
-    async def test_the_uninformed_agent_records_why_it_did_not_act(
-        self, all_arms: dict
-    ) -> None:
+    async def test_the_uninformed_agent_records_why_it_did_not_act(self, all_arms: dict) -> None:
         # §52: the agent's inaction is evidence, not a silent absence.
         skipped = all_arms["C0"].agent_summaries["agent_b"]["skipped_actions"]
         assert skipped
@@ -153,9 +147,7 @@ class TestCoordinationCost:
     async def test_c2_and_c3_spend_the_same(self, all_arms: dict) -> None:
         # They differ by enforcement alone, so their information cost must
         # be identical or the contrast is confounded.
-        assert (
-            all_arms["C2"].coordination_bytes() == all_arms["C3"].coordination_bytes()
-        )
+        assert all_arms["C2"].coordination_bytes() == all_arms["C3"].coordination_bytes()
 
 
 class TestQualityGate:
@@ -206,6 +198,4 @@ def _key_ring(result):
     from causalmesh.crypto.keys import KeyPair, PublicKeyRing
 
     agents = {record["event"]["identity"]["agent_id"] for record in result.records}
-    return PublicKeyRing.from_keypairs(
-        {agent: KeyPair.derive(SEED, agent) for agent in agents}
-    )
+    return PublicKeyRing.from_keypairs({agent: KeyPair.derive(SEED, agent) for agent in agents})

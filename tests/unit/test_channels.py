@@ -110,9 +110,7 @@ class TestNullChannel:
         digests = channel.accounting.digests
         assert len(digests) == 3
         # SHA-256 of the empty string.
-        assert set(digests) == {
-            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-        }
+        assert set(digests) == {"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}
 
     def test_the_arm_is_reported(self) -> None:
         assert NullChannel("agent_b").arm == "C0"
@@ -237,9 +235,7 @@ class TestMetadataChannel:
         channel = MetadataChannel(
             "agent_b",
             window=2,
-            interests=AgentInterests(
-                agent_id="agent_b", owned_paths=frozenset({"src/api.py"})
-            ),
+            interests=AgentInterests(agent_id="agent_b", owned_paths=frozenset({"src/api.py"})),
         )
         injection = channel.offer(
             (make_event(0, paths=("src/api.py",)), make_event(1, paths=("other.py",))),
@@ -314,9 +310,7 @@ class TestMetadataChannel:
         channel = MetadataChannel(
             "agent_b",
             window=1,
-            interests=AgentInterests(
-                agent_id="agent_b", owned_paths=frozenset({"src/api.py"})
-            ),
+            interests=AgentInterests(agent_id="agent_b", owned_paths=frozenset({"src/api.py"})),
         )
         injection = channel.offer(
             (

@@ -9,7 +9,7 @@ against.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -130,7 +130,7 @@ class TestManifestBuild:
         manifest = build(
             directory,
             repository_root=REPO,
-            now=datetime(2026, 9, 15, tzinfo=timezone.utc),
+            now=datetime(2026, 9, 15, tzinfo=UTC),
         )
         path = manifest.write(tmp_path / "m.json")
         reloaded = Manifest.read(path)

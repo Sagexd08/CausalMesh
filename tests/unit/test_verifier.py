@@ -169,9 +169,7 @@ class TestVerification:
         assert result.head_hash is None
         assert result.valid
 
-    def test_a_wrong_genesis_is_a_chain_break(
-        self, keypair: KeyPair, ring: PublicKeyRing
-    ) -> None:
+    def test_a_wrong_genesis_is_a_chain_break(self, keypair: KeyPair, ring: PublicKeyRing) -> None:
         # Guards the domain separation: a chain built for another protocol
         # must not validate here.
         result = verify_chain(make_records(keypair), ring, genesis="ab" * 32)
@@ -183,9 +181,7 @@ class TestVerification:
         assert not result.valid
         assert result.count(FailureKind.UNKNOWN_ACTOR) == 3
 
-    def test_one_corrupt_link_does_not_cascade(
-        self, keypair: KeyPair, ring: PublicKeyRing
-    ) -> None:
+    def test_one_corrupt_link_does_not_cascade(self, keypair: KeyPair, ring: PublicKeyRing) -> None:
         """A single mutation must be reported once, not at every later index.
 
         The verifier advances on the *recorded* digest precisely so that a
@@ -293,9 +289,7 @@ class TestCertificate:
 
 
 class TestAnchorAccounting:
-    def test_no_anchor_reports_full_exposure(
-        self, keypair: KeyPair, ring: PublicKeyRing
-    ) -> None:
+    def test_no_anchor_reports_full_exposure(self, keypair: KeyPair, ring: PublicKeyRing) -> None:
         result = verify_chain(make_records(keypair, count=4), ring)
         assert result.anchor_status == AnchorStatus.NOT_ANCHORED
         assert result.unanchored_suffix == 4

@@ -129,8 +129,7 @@ class TestAgainstThePilot:
         """
         metrics = collect(PILOT)
         assert (
-            metrics.arms["C2"].mean_coordination_bytes
-            == metrics.arms["C3"].mean_coordination_bytes
+            metrics.arms["C2"].mean_coordination_bytes == metrics.arms["C3"].mean_coordination_bytes
         )
 
 
@@ -139,7 +138,9 @@ class TestContrasts:
     def test_information_helps_on_both_tasks(self) -> None:
         metrics = collect(PILOT)
         for task in metrics.task_ids:
-            result = next(r for r in measure(metrics, task_id=task) if r.name == "information_benefit")
+            result = next(
+                r for r in measure(metrics, task_id=task) if r.name == "information_benefit"
+            )
             assert result.success_delta == 1.0
 
     def test_bounded_metadata_matches_transcripts_for_less(self) -> None:

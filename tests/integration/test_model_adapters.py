@@ -143,9 +143,7 @@ class Harness:
             self.claims.close()
 
     def key_ring(self) -> PublicKeyRing:
-        return PublicKeyRing.from_keypairs(
-            {a: KeyPair.derive(SEED, a) for a in self.agent_ids}
-        )
+        return PublicKeyRing.from_keypairs({a: KeyPair.derive(SEED, a) for a in self.agent_ids})
 
 
 class TestEveryProviderSpeaksItsProtocol:
@@ -156,16 +154,12 @@ class TestEveryProviderSpeaksItsProtocol:
         self, tmp_path: Path, kind: str
     ) -> None:
         with FakeModelServer() as server:
-            server.queue_action(
-                "agent_a", tool="read_file", arguments={"path": "src/schema.py"}
-            )
+            server.queue_action("agent_a", tool="read_file", arguments={"path": "src/schema.py"})
             harness = Harness(tmp_path, server, "C2", kind)
             try:
                 await harness.run(turns=1)
                 records = harness.relay.records()
-                reads = [
-                    r for r in records if r["event"]["event_type"].lower() == "read"
-                ]
+                reads = [r for r in records if r["event"]["event_type"].lower() == "read"]
                 assert reads, f"{kind}: no read event was recorded"
                 assert reads[0]["event"]["identity"]["agent_id"] == "agent_a"
             finally:
@@ -192,9 +186,7 @@ class TestEveryProviderSpeaksItsProtocol:
             finally:
                 harness.close()
 
-    async def test_openai_keeps_the_system_prompt_in_messages(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_openai_keeps_the_system_prompt_in_messages(self, tmp_path: Path) -> None:
         with FakeModelServer() as server:
             server.queue_action("agent_a", tool="git_status", arguments={})
             harness = Harness(tmp_path, server, "C2", "openai")
@@ -216,9 +208,7 @@ class TestEveryProviderSpeaksItsProtocol:
                 await harness.run(turns=1)
                 # Header names are case-insensitive (RFC 9110) and urllib
                 # title-cases them on the wire, so the lookup must be too.
-                headers = {
-                    k.lower(): v for k, v in server.requests[0]["headers"].items()
-                }
+                headers = {k.lower(): v for k, v in server.requests[0]["headers"].items()}
                 assert headers.get("x-api-key") == "test-key"
                 assert headers.get("anthropic-version") == "2023-06-01"
                 # And the OpenAI-style header must NOT be sent: Anthropic
@@ -235,7 +225,8 @@ class TestGuaranteesHoldWithAModelDriving:
         with FakeModelServer() as server:
             server.queue_action("agent_a", tool="read_file", arguments={"path": "src/schema.py"})
             server.queue_action(
-                "agent_a", tool="write_file",
+                "agent_a",
+                tool="write_file",
                 arguments={"path": "src/schema.py", "content": "FIELDS = ['id']\n"},
             )
             server.queue_action("agent_b", tool="read_file", arguments={"path": "src/handler.py"})
@@ -256,17 +247,13 @@ class TestGuaranteesHoldWithAModelDriving:
             harness = Harness(tmp_path, server, "C2", "local")
             try:
                 await harness.run(turns=1)
-                actors = {
-                    r["event"]["identity"]["agent_id"] for r in harness.relay.records()
-                }
+                actors = {r["event"]["identity"]["agent_id"] for r in harness.relay.records()}
                 assert actors == {"agent_a", "agent_b"}
                 assert verify_chain(harness.relay.records(), harness.key_ring()).valid
             finally:
                 harness.close()
 
-    async def test_containment_holds_against_a_hostile_model(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_containment_holds_against_a_hostile_model(self, tmp_path: Path) -> None:
         """A model asking to escape its workspace must be refused.
 
         This is the containment guarantee under adversarial model output,
@@ -275,7 +262,8 @@ class TestGuaranteesHoldWithAModelDriving:
         """
         with FakeModelServer() as server:
             server.queue_action(
-                "agent_a", tool="read_file",
+                "agent_a",
+                tool="read_file",
                 arguments={"path": "../agent_b/src/handler.py"},
             )
             harness = Harness(tmp_path, server, "C2", "local")
@@ -288,7 +276,8 @@ class TestGuaranteesHoldWithAModelDriving:
                 )
                 # And the attempt is recorded, not silently dropped.
                 failures = [
-                    r for r in harness.relay.records()
+                    r
+                    for r in harness.relay.records()
                     if r["event"]["event_type"].lower() == "failure"
                 ]
                 assert failures
@@ -311,9 +300,7 @@ class TestGuaranteesHoldWithAModelDriving:
             finally:
                 harness.close()
 
-    async def test_the_channel_is_the_only_route_information_takes(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_the_channel_is_the_only_route_information_takes(self, tmp_path: Path) -> None:
         """Nothing may reach the model's context except through the channel.
 
         This is the guarantee the whole experiment rests on: if peer
@@ -332,7 +319,8 @@ class TestGuaranteesHoldWithAModelDriving:
         """
         with FakeModelServer() as server:
             server.queue_action(
-                "agent_a", tool="write_file",
+                "agent_a",
+                tool="write_file",
                 arguments={"path": "src/schema.py", "content": "FIELDS = ['id']\n"},
             )
             server.queue_action("agent_b", tool="git_status", arguments={})
@@ -353,12 +341,12 @@ class TestGuaranteesHoldWithAModelDriving:
                     and not m.content.startswith("Begin.")
                 ]
                 injected = sum(
-                    len(c.encode("utf-8"))
-                    for c in peer_content
-                    if "Coordination update" in c
+                    len(c.encode("utf-8")) for c in peer_content if "Coordination update" in c
                 )
                 unaccounted = [
-                    c for c in peer_content if "Coordination update" not in c
+                    c
+                    for c in peer_content
+                    if "Coordination update" not in c
                     and not c.startswith("Contents of")
                     and not c.startswith("That write was refused")
                     and not c.startswith("That call failed")
@@ -383,14 +371,19 @@ class TestGuaranteesHoldWithAModelDriving:
         """
         with FakeModelServer() as server:
             server.queue_action(
-                "agent_b", tool="write_file",
+                "agent_b",
+                tool="write_file",
                 arguments={"path": "src/schema.py", "content": "clobbered\n"},
             )
             harness = Harness(tmp_path, server, "C3", "local")
             try:
                 harness.claims.acquire(
-                    claim_id="c1", path="src/schema.py", agent_id="agent_a",
-                    run_id="run_model", now_us=1_700_000_000_000_000, duration_us=10**9,
+                    claim_id="c1",
+                    path="src/schema.py",
+                    agent_id="agent_a",
+                    run_id="run_model",
+                    now_us=1_700_000_000_000_000,
+                    duration_us=10**9,
                 )
                 await harness.run(turns=1)
                 denials = harness.claims.denials(run_id="run_model")
@@ -401,9 +394,7 @@ class TestGuaranteesHoldWithAModelDriving:
 
 
 class TestFailureHandling:
-    async def test_a_provider_error_does_not_take_down_the_run(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_a_provider_error_does_not_take_down_the_run(self, tmp_path: Path) -> None:
         """§81: the endpoint failing is a run event, not a crash.
 
         A real HTTP 500, not a raised exception, so the transport's error
@@ -442,9 +433,7 @@ class TestFailureHandling:
                 transport.post_json("chat/completions", {})
             assert not info.value.retryable
 
-    async def test_protocol_violations_are_counted_not_fatal(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_protocol_violations_are_counted_not_fatal(self, tmp_path: Path) -> None:
         # A model that cannot follow the protocol is a measurement, not a
         # crash — and not something to silently work around either.
         with FakeModelServer() as server:
@@ -458,9 +447,7 @@ class TestFailureHandling:
             finally:
                 harness.close()
 
-    async def test_a_persistently_noncompliant_model_stops(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_a_persistently_noncompliant_model_stops(self, tmp_path: Path) -> None:
         # Bounded: otherwise a model stuck on prose burns the whole turn
         # budget and every token in it.
         with FakeModelServer() as server:
@@ -503,9 +490,7 @@ class TestAccounting:
             finally:
                 harness.close()
 
-    async def test_the_summary_shape_matches_the_scripted_agent(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_the_summary_shape_matches_the_scripted_agent(self, tmp_path: Path) -> None:
         """Downstream analysis must not branch on agent kind.
 
         The fields that mean the same thing must be named the same, or
@@ -517,8 +502,15 @@ class TestAccounting:
             try:
                 await harness.run(turns=1)
                 summary = harness.agents["agent_a"].summary()
-                shared = {"agent_id", "coordination", "denied", "failed",
-                          "informed_paths", "observations", "turns"}
+                shared = {
+                    "agent_id",
+                    "coordination",
+                    "denied",
+                    "failed",
+                    "informed_paths",
+                    "observations",
+                    "turns",
+                }
                 assert shared <= set(summary)
             finally:
                 harness.close()
@@ -545,9 +537,7 @@ class TestNoDirectToolAccess:
             try:
                 agent = harness.agents["agent_a"]
                 exposed = [
-                    name
-                    for name, value in vars(agent).items()
-                    if isinstance(value, Toolbox)
+                    name for name, value in vars(agent).items() if isinstance(value, Toolbox)
                 ]
                 assert not exposed, f"agent exposes a Toolbox via {exposed}"
             finally:

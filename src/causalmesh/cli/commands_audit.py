@@ -45,7 +45,9 @@ def _resolve(repo: Repo, experiment_id: str | None, latest: bool) -> str:
         raise typer.Exit(Exit.FAILED)
     if experiment_id is None:
         if not latest:
-            fail("nothing selected", hint=f"Pass --latest or --id. Available: {', '.join(available)}")
+            fail(
+                "nothing selected", hint=f"Pass --latest or --id. Available: {', '.join(available)}"
+            )
             raise typer.Exit(Exit.USAGE)
         return available[0]
     if experiment_id not in available:
@@ -58,9 +60,7 @@ def _resolve(repo: Repo, experiment_id: str | None, latest: bool) -> str:
 def write_command(
     experiment_id: Annotated[str | None, typer.Option("--id")] = None,
     latest: Annotated[bool, typer.Option("--latest")] = False,
-    force: Annotated[
-        bool, typer.Option("--force", help="Overwrite an existing manifest.")
-    ] = False,
+    force: Annotated[bool, typer.Option("--force", help="Overwrite an existing manifest.")] = False,
     root_option: Annotated[Path | None, typer.Option("--root")] = None,
     as_json: Annotated[bool, typer.Option("--json")] = False,
 ) -> None:
@@ -181,9 +181,7 @@ def audit_command(
             manifest = entry["manifest"]
             artifacts = "not recorded" if manifest is None else f"{manifest['checked']} recorded"
             chains = f"{entry['chains']['verified']}/{entry['chains']['runs']}"
-            verdict = (
-                "[green]CLEAN[/green]" if not entry["findings"] else "[red]FINDINGS[/red]"
-            )
+            verdict = "[green]CLEAN[/green]" if not entry["findings"] else "[red]FINDINGS[/red]"
             rendered.add_row(name, artifacts, chains, verdict)
         out_console.print(rendered)
         for name, entry in findings.items():

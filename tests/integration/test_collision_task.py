@@ -179,9 +179,7 @@ class TestMergedContent:
     boolean check above. These read the merged file.
     """
 
-    async def test_the_isolated_arm_loses_the_first_registration(
-        self, all_arms: dict
-    ) -> None:
+    async def test_the_isolated_arm_loses_the_first_registration(self, all_arms: dict) -> None:
         found = registrations(all_arms["_root"], "C0")
         assert found == ['register("beta", beta.handle)  # sole registration']
 
@@ -193,9 +191,7 @@ class TestMergedContent:
             'register("beta", beta.handle)',
         ]
 
-    async def test_enforcement_preserves_the_holders_write(
-        self, all_arms: dict
-    ) -> None:
+    async def test_enforcement_preserves_the_holders_write(self, all_arms: dict) -> None:
         """C3 keeps agent_a's registration and loses agent_b's.
 
         The exact inverse of C0. Enforcement protected the first writer at
@@ -214,9 +210,7 @@ class TestEvidence:
             if arm == "_root":
                 continue
             agents = {r["event"]["identity"]["agent_id"] for r in result.records}
-            ring = PublicKeyRing.from_keypairs(
-                {a: KeyPair.derive(SEED, a) for a in agents}
-            )
+            ring = PublicKeyRing.from_keypairs({a: KeyPair.derive(SEED, a) for a in agents})
             report = verify_chain(result.records, ring)
             assert report.valid, f"{arm}: {report.summary()}"
 
@@ -224,9 +218,7 @@ class TestEvidence:
         held = {c["path"] for c in all_arms["C3"].claim_history}
         assert held == {"src/config.py", "src/alpha.py", "src/beta.py"}
 
-    async def test_the_denial_is_absent_from_the_chain_as_a_write(
-        self, all_arms: dict
-    ) -> None:
+    async def test_the_denial_is_absent_from_the_chain_as_a_write(self, all_arms: dict) -> None:
         """A refused write must not appear as an accepted write event.
 
         The contested-path merge resolves from the chain, so a denied write

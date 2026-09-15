@@ -23,8 +23,8 @@ from causalmesh.cli import (
 )
 from causalmesh.cli.commands_analyze import analyze_command
 from causalmesh.cli.commands_audit import audit_command
-from causalmesh.cli.commands_watch import watch_command, welcome_command
 from causalmesh.cli.commands_doctor import doctor_command
+from causalmesh.cli.commands_watch import watch_command, welcome_command
 
 app = typer.Typer(
     name="causalmesh",

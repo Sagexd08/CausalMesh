@@ -125,9 +125,7 @@ class TestInformationFactor:
         assert c0.relay.stats.deliveries == 0
 
     @pytest.mark.parametrize("arm", ["C1", "C2", "C3"])
-    def test_informed_arms_receive_peer_events(
-        self, arm_runs: dict[str, ArmRun], arm: str
-    ) -> None:
+    def test_informed_arms_receive_peer_events(self, arm_runs: dict[str, ArmRun], arm: str) -> None:
         run = arm_runs[arm]
         assert run.relay.stats.deliveries > 0
         # Each agent sees exactly the peer's events, never its own.
@@ -200,17 +198,13 @@ class TestHeldConstant:
         }
         assert len({tuple(events) for events in per_arm.values()}) == 1
 
-    def test_every_arm_produces_a_verifiable_chain(
-        self, arm_runs: dict[str, ArmRun]
-    ) -> None:
+    def test_every_arm_produces_a_verifiable_chain(self, arm_runs: dict[str, ArmRun]) -> None:
         for arm, run in arm_runs.items():
             result = verify_chain(run.relay.records(), run.relay.key_ring())
             assert result.valid, f"{arm}: {result.summary()}"
             assert result.events == len(SCRIPT)
 
-    def test_each_chain_is_labelled_with_its_own_arm(
-        self, arm_runs: dict[str, ArmRun]
-    ) -> None:
+    def test_each_chain_is_labelled_with_its_own_arm(self, arm_runs: dict[str, ArmRun]) -> None:
         # Every event carries its arm, so evidence from two arms can never be
         # pooled by accident (§43).
         for arm, run in arm_runs.items():
@@ -219,9 +213,7 @@ class TestHeldConstant:
         heads = {run.relay.head_hash for run in arm_runs.values()}
         assert len(heads) == len(ARMS)
 
-    def test_the_work_performed_is_identical_across_arms(
-        self, arm_runs: dict[str, ArmRun]
-    ) -> None:
+    def test_the_work_performed_is_identical_across_arms(self, arm_runs: dict[str, ArmRun]) -> None:
         """§3: the task, the actors and the file operations are held constant.
 
         Only two things may vary between arms: the recorded arm label, and
@@ -297,9 +289,7 @@ class TestOfflineEvidence:
                 f"{arm} recorded no causal parents, so C0 having none proves nothing"
             )
 
-    def test_only_informed_agents_observed_peer_events(
-        self, arm_runs: dict[str, ArmRun]
-    ) -> None:
+    def test_only_informed_agents_observed_peer_events(self, arm_runs: dict[str, ArmRun]) -> None:
         # The consumption side of the same claim: C0 agents drained empty
         # inboxes every turn.
         assert all(seen == [] for seen in arm_runs["C0"].observed.values())
