@@ -17,6 +17,7 @@ from causalmesh.cli import (
     commands_audit,
     commands_experiment,
     commands_policy,
+    commands_serve,
     commands_task,
     commands_verify,
     commands_watch,
@@ -43,6 +44,7 @@ app.add_typer(commands_experiment.app, name="experiment")
 app.command("verify")(commands_verify.verify_command)
 app.command("analyze")(analyze_command)
 app.add_typer(commands_policy.app, name="policy")
+app.add_typer(commands_serve.app, name="serve")
 app.add_typer(commands_audit.app, name="manifest")
 app.command("audit")(audit_command)
 app.command("watch")(watch_command)

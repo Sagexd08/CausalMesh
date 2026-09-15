@@ -87,13 +87,10 @@ export default function Footer() {
               agent did.
             </p>
 
-            <a
-              href="https://github.com/Sagexd08/CausalMesh"
-              className="mt-5 inline-flex items-center gap-2 rounded-md border border-rule-soft px-3 py-2 text-[13px] text-ink-700 transition-colors hover:border-ink-900 hover:text-ink-900"
-            >
+            <span className="mt-5 inline-flex items-center gap-2 rounded-md border border-rule-soft px-3 py-2 text-[13px] text-ink-700">
               <GitHubMark />
-              Source on GitHub
-            </a>
+              Releasing soon
+            </span>
 
             <div className="mt-6 flex flex-wrap gap-2">
               {CHIPS.map(([label, value]) => (

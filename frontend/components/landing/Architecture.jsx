@@ -1,5 +1,6 @@
 import { Mark, Reveal, Section } from "./Primitives.jsx";
 import { ChevronRight } from "./Icons.jsx";
+import FlowDiagram from "./FlowDiagram.jsx";
 
 /**
  * The four layers, as a specification list rather than a card grid.
@@ -45,11 +46,7 @@ const LAYERS = [
 function LayerDiagram() {
   return (
     <div className="mt-14 border-y border-rule-soft bg-paper-sunk/40 px-5 py-8 sm:px-8 sm:py-10">
-      <div className="flex items-center justify-between gap-4 font-mono text-[10px] uppercase tracking-[0.16em] text-ink-500">
-        <span>fleet</span>
-        <span className="text-marker-deep">every call is accounted for</span>
-        <span>repo</span>
-      </div>
+      <FlowDiagram />
 
       <div className="relative mt-7">
         <div
