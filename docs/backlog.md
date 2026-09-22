@@ -319,3 +319,86 @@ worth testing are the ones no test naturally covers, because they are
 properties of what the code does not do.** Every test written so far
 checked that something happened correctly. Nothing checked that nothing
 else happened.
+
+## Jev decision engine
+
+### Adapter built, not wired
+
+**Status:** `JevClient` and the Choice/Score/Noul request and response types exist in
+`src/causalmesh/jev/`, tested at the unit level with no network and, when
+`TYPESAFE_API_KEY` is set, against the real `api.typesafe.ai` endpoint. Nothing in the
+runtime calls it — no run, no decision, no chain event depends on Jev today.
+
+**Why:** every decision point that exists in the runtime — `TaskFamily`,
+`check_sensitivity`'s C0-vs-C2 verdict, every rule in `policy/gate.py` — is
+deliberately deterministic, and for good reason: §35/§36 require task properties to be
+declared rather than inferred so a run stays reproducible and hash-pinned, and the
+gate's rules (ownership, allowlist, ceiling, budget, claim) each have exactly one
+correct answer given the contract and current state. There was no decision point in
+the current runtime where trading a deterministic answer for a calibrated probability
+was the right move — that would add latency, a network dependency, and a new failure
+mode to a call that already had one correct answer.
+
+**What it would take:** a decision that is genuinely uncertain given the available
+state, not merely unautomated. The leading candidate is `recover` (retry the same
+agent, switch to a different one, or escalate to a human) once multi-agent
+orchestration exists — see "Agent handoff package on recovery" below. Wiring Jev into
+`classify` or `accept` before then would be adding a probabilistic call to a decision
+that already has a correct deterministic answer, which is the trap this entry exists
+to name and avoid.
+
+### Explicit acceptance decision object
+
+**Status:** not built. Run success today is read directly off `SuccessCriteria` and
+the verifier's result — a pass/fail, not a named decision.
+
+**Why:** an explicit `ACCEPT` / `REJECT` / `HUMAN_REVIEW` record, entered into the
+chain as its own event distinct from the verification result it was based on, makes
+"why was this run accepted" a recorded decision rather than something reconstructed by
+re-reading the verifier's output. This also needs a task whose acceptance is genuinely
+contestable — a contested-path task, which §74 (the acceptance blocker recorded
+elsewhere) notes does not exist yet — before the decision is meaningful to test rather
+than trivially always-ACCEPT.
+
+**What it would take:** a contested-path task (blocking), then a new chain event type
+(`acceptance.decided`, say) carrying the verdict, the evidence it was based on, and —
+once the Jev adapter has a wiring target — optionally a Jev `Choice` call among
+`ACCEPT`/`REJECT`/`HUMAN_REVIEW` rather than a hand-written threshold rule.
+
+### Agent handoff package on recovery
+
+**Status:** not built, and currently has no design target: the scheduler
+(`scheduler/states.py`, `scheduler/loop.py`) runs exactly one agent per run, with no
+transition for "hand off to a different agent mid-run." `recover` as a decision type —
+retry the same agent, switch agents, or escalate — presupposes that transition exists.
+
+**Why deferred:** multi-agent recovery is a bigger change than an adapter or a doc
+addition — it means a new run state, a new chain event class, and a decision about
+what a second agent inherits (task, repository state, diff so far, test results, prior
+decisions) so it starts from where the first agent left off rather than cold. Building
+the handoff format before the state machine that would use it exists would be
+designing against a system that does not yet have the shape the design assumes.
+
+**What it would take:** first, a scheduler state for "run continues under a different
+agent" (an addition to `RunState`/`TRANSITIONS` in `scheduler/states.py`); then a
+handoff record shape; then, once that exists, `recover` becomes the concrete decision
+point the Jev adapter above was built for.
+
+### Causal edges over the chain
+
+**Status:** not built. The chain (`relay/`) gives total order and hash linkage today —
+event N's hash depends on event N-1's — which proves *sequence* but does not record
+*relationships*. "Which decision caused this write" requires reading the chain in
+order and matching timestamps by eye.
+
+**Why:** a typed relationship layer (`caused`, `required`, `recovered`, `superseded`,
+...) over the existing chain would make that a query instead of a manual scan, and
+would let a future audit view answer "which decision caused this write" or "which
+verification evidence caused acceptance" directly. It is additive to the existing
+chain — it does not change what is signed or how verification works — which is why it
+is scoped as a separate layer rather than a change to `relay/`'s core hashing.
+
+**What it would take:** a store for `(from_event_id, to_event_id, relationship)`
+triples, populated as decisions and events reference each other, plus a query surface.
+Not blocked on anything else in this list — it could be built against the chain as it
+exists today — but was out of scope for this session, which was adapter-and-docs only.
