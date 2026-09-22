@@ -78,6 +78,7 @@ Repository root is the project root, with the package at `src/causalmesh/`. Ever
 | `tools/` | The 11 controlled tools (§12) with L2 path validation | agents |
 | `isolation/` | Workspace construction, process spawn, path jail | scheduler |
 | `agents/`, `adapters/` | `CodingAgent` interface and scripted MockAgent | scheduler |
+| `jev/` | Typed decision engine client (Choice/Score/Noul) for TypeSafe AI's Jev | its own test suite only — no runtime caller yet; see `docs/backlog.md` |
 | `experiments/`, `scheduler/`, `tasks/` | Arms, randomization, run loop, task validation | CLI |
 | `storage/` | SQLite operational index | scheduler, CLI |
 | `metrics/`, `analysis/`, `reporting/` | Accounting, contrasts, figures, tables, report | CLI |
