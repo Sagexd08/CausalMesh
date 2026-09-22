@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import pytest
 
+from causalmesh.jev.questions import Choice, Noul, Score
 from causalmesh.jev.response import (
     ChoiceAnswer,
     JevResponse,
@@ -107,3 +108,44 @@ class TestParseResponse:
         response = parse_response(decoded)
         assert isinstance(response, JevResponse)
         assert response.model == "jev-2026-09"
+
+
+class TestQuestionBuilders:
+    def test_choice_to_dict(self) -> None:
+        q = Choice(
+            id="pick_agent",
+            prompt="Which agent should act next?",
+            options=["claude_code", "codex"],
+        )
+        assert q.to_dict() == {
+            "type": "choice",
+            "prompt": "Which agent should act next?",
+            "options": ["claude_code", "codex"],
+        }
+
+    def test_score_to_dict(self) -> None:
+        q = Score(
+            id="severity",
+            prompt="How severe is this failure?",
+            criteria=["low", "medium", "high"],
+        )
+        assert q.to_dict() == {
+            "type": "score",
+            "prompt": "How severe is this failure?",
+            "criteria": ["low", "medium", "high"],
+        }
+
+    def test_noul_to_dict(self) -> None:
+        q = Noul(id="should_continue", prompt="Should execution continue?")
+        assert q.to_dict() == {
+            "type": "noul",
+            "prompt": "Should execution continue?",
+        }
+
+    def test_choice_requires_at_least_two_options(self) -> None:
+        with pytest.raises(ValueError, match="at least two options"):
+            Choice(id="x", prompt="pick one", options=["only_one"])
+
+    def test_score_requires_at_least_two_criteria(self) -> None:
+        with pytest.raises(ValueError, match="at least two"):
+            Score(id="x", prompt="rate it", criteria=["only_one"])
