@@ -214,3 +214,26 @@ class TestJevClientAsk:
             )
         ]
         assert response.answers["pick"].selected == "b"
+
+
+class TestPackageExports:
+    def test_everything_importable_from_the_package_root(self) -> None:
+        from causalmesh.jev import (
+            Choice,
+            ChoiceAnswer,
+            JevClient,
+            JevResponse,
+            Noul,
+            NoulAnswer,
+            Score,
+            ScoreAnswer,
+        )
+
+        assert JevClient is not None
+        assert Choice is not None
+        assert Score is not None
+        assert Noul is not None
+        assert ChoiceAnswer is not None
+        assert ScoreAnswer is not None
+        assert NoulAnswer is not None
+        assert JevResponse is not None
