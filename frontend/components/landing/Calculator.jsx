@@ -115,7 +115,7 @@ export default function Calculator() {
     <Section id="calculator" className="py-24 md:py-32">
       <div className="grid grid-cols-1 gap-x-16 gap-y-12 lg:grid-cols-[1fr_1.15fr]">
         <div>
-          <h2 className="max-w-[17ch] font-display text-[2.3rem] font-bold leading-[1.08] tracking-tightest text-ink-900 sm:text-[3rem]">
+          <h2 className="max-w-[17ch] font-display text-[clamp(2.3rem,1.982rem+1.273vw,3rem)] font-bold leading-[1.08] tracking-tightest text-ink-900">
             What conflicts <Mark>already cost</Mark> you
           </h2>
 

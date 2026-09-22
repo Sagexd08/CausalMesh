@@ -80,7 +80,7 @@ export default function DecisionLoop() {
     <Section id="decision-loop" className="py-24 md:py-32">
       <div className="grid grid-cols-1 items-center gap-x-16 gap-y-14 lg:grid-cols-[1fr_1.15fr]">
         <div>
-          <h2 className="font-display text-[2.1rem] font-bold leading-[1.1] tracking-tightest text-ink-900 sm:text-[2.6rem]">
+          <h2 className="font-display text-[clamp(2.1rem,1.873rem+0.909vw,2.6rem)] font-bold leading-[1.1] tracking-tightest text-ink-900">
             One gate check,
             <br />
             or a <Mark>decision loop</Mark>

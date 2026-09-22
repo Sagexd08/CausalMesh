@@ -6,7 +6,7 @@ export default function Contrasts() {
     <Section id="question" className="py-24 md:py-32">
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-x-12 gap-y-14">
         <div className="lg:col-span-6">
-          <h2 className="font-display text-3xl md:text-[2.6rem] leading-[1.08] font-bold tracking-tightest text-ink-900">
+          <h2 className="font-display text-[clamp(1.875rem,1.545rem+1.318vw,2.6rem)] leading-[1.08] font-bold tracking-tightest text-ink-900">
             Information, or
             <br />
             <Mark>enforcement</Mark>?
