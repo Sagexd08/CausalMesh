@@ -160,7 +160,7 @@ export default function Routing() {
 
         {/* Copy */}
         <div>
-          <h2 className="font-display text-[2.1rem] font-bold leading-[1.1] tracking-tightest text-ink-900 sm:text-[2.6rem]">
+          <h2 className="font-display text-[clamp(2.1rem,1.873rem+0.909vw,2.6rem)] font-bold leading-[1.1] tracking-tightest text-ink-900">
             One path,
             <br />
             one <Mark>writer</Mark>

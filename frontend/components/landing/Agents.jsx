@@ -73,7 +73,7 @@ export default function Agents() {
     <Section id="agents" className="py-24 md:py-32">
       <div className="grid grid-cols-1 gap-x-16 gap-y-12 lg:grid-cols-[1fr_1.1fr]">
         <div>
-          <h2 className="max-w-[16ch] font-display text-[2.3rem] font-bold leading-[1.08] tracking-tightest text-ink-900 sm:text-[3rem]">
+          <h2 className="max-w-[16ch] font-display text-[clamp(2.3rem,1.982rem+1.273vw,3rem)] font-bold leading-[1.08] tracking-tightest text-ink-900">
             Keep your agent. Change the <Mark>substrate</Mark>
           </h2>
           <p className="mt-6 max-w-prose text-[15.5px] leading-relaxed text-ink-600">

@@ -61,7 +61,7 @@ export default function Hero() {
             </span>
           </div>
 
-          <h1 className="mt-7 font-display text-[2.7rem] font-extrabold leading-[1.05] tracking-tightest text-ink-900 sm:text-[3.4rem] lg:text-[3.9rem]">
+          <h1 className="mt-7 font-display text-[clamp(2.7rem,2.155rem+2.182vw,3.9rem)] font-extrabold leading-[1.05] tracking-tightest text-ink-900">
             Coordination
             <br />
             you can <Mark>prove</Mark>

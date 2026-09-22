@@ -211,7 +211,7 @@ function H({ id, number, children, tag }) {
   return (
     <h2
       id={id}
-      className="scroll-mt-24 font-display text-[1.7rem] font-bold leading-tight tracking-tightest text-ink-900 sm:text-[2rem]"
+      className="scroll-mt-24 font-display text-[clamp(1.7rem,1.564rem+0.545vw,2rem)] font-bold leading-tight tracking-tightest text-ink-900"
     >
       {number && (
         <span className="cm-nums mr-3 font-mono text-[1.1rem] font-normal text-ink-400">
@@ -265,7 +265,7 @@ export default function Paper() {
           <div className="font-mono text-[11px] uppercase tracking-wider text-ink-500">
             Whitepaper · v0.1 · September 2026
           </div>
-          <h1 className="mt-5 max-w-[20ch] font-display text-[2.6rem] font-extrabold leading-[1.02] tracking-tightest text-ink-900 sm:text-[3.4rem] lg:text-[4rem]">
+          <h1 className="mt-5 max-w-[20ch] font-display text-[clamp(2.6rem,1.964rem+2.545vw,4rem)] font-extrabold leading-[1.02] tracking-tightest text-ink-900">
             Separating information from enforcement
           </h1>
           <p className="mt-6 max-w-[58ch] text-[17px] leading-relaxed text-ink-600">

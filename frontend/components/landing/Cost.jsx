@@ -26,7 +26,7 @@ export default function Cost() {
 
   return (
     <Section id="results" className="py-24 md:py-32">
-      <h2 className="max-w-[18ch] font-display text-[2.3rem] font-bold leading-[1.08] tracking-tightest text-ink-900 sm:text-[3rem]">
+      <h2 className="max-w-[18ch] font-display text-[clamp(2.3rem,1.982rem+1.273vw,3rem)] font-bold leading-[1.08] tracking-tightest text-ink-900">
         What coordination <Mark>actually</Mark> costs
       </h2>
       <p className="mt-5 max-w-prose text-[15.5px] text-ink-600">

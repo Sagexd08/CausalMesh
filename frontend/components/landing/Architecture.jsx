@@ -99,8 +99,8 @@ function LayerDiagram() {
 export default function Architecture() {
   return (
     <Section id="architecture" className="py-24 md:py-32">
-      <div className="max-w-[24ch]">
-        <h2 className="font-display text-[2.3rem] font-bold leading-[1.08] tracking-tightest text-ink-900 sm:text-[3rem]">
+      <div className="max-w-[22ch]">
+        <h2 className="font-display text-[clamp(2.3rem,1.982rem+1.273vw,3rem)] font-bold leading-[1.08] tracking-tightest text-ink-900">
           Four <Mark>layers</Mark> between the fleet and the repo
         </h2>
       </div>
