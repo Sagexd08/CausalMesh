@@ -25,6 +25,7 @@ from ..channels import MetadataChannel, NullChannel, Room, TranscriptChannel
 from ..channels.base import CoordinationChannel
 from ..claims import ClaimRegistry
 from ..crypto.keys import KeyPair
+from ..events.schema import EventIdentity, EventType, utc_now_micros
 from ..hooks import LifecycleBoundary, gate_for_arm
 from ..isolation import Workspace, build_run_workspaces
 from ..relay import ChainStore, Relay, policy_for_arm
@@ -228,6 +229,13 @@ async def execute_task(
     )
 
     keypairs = {agent: KeyPair.derive(config.master_seed, agent) for agent in agent_ids}
+    # The policy plane is not an agent, but its verdicts still need a real
+    # signing identity so they can enter the chain — see docs/backlog.md's
+    # "Verdicts do not enter the signed chain" entry. Only derived when a
+    # contract is in play; an experiment run with no contract has no
+    # ContractGate and therefore no verdicts to sign.
+    if config.contract_path is not None:
+        keypairs["policy_gate"] = KeyPair.derive(config.master_seed, "policy_gate")
     claims = (
         ClaimRegistry(workspace_root / f"{config.run_id}_claims.db") if config.arm == "C3" else None
     )
@@ -342,6 +350,39 @@ async def execute_task(
     )
     exit_code = _run_integration_test(task, integrated)
     outcome = evaluate_outcome(task.success, workspace=integrated, test_exit_code=exit_code)
+
+    # Every verdict the policy gate reached becomes a real chain event —
+    # not only refusals, so an unenforced arm's shadow-refusals (the
+    # counterfactual §-referenced throughout policy_gate.py) are provable
+    # too. `hasattr` rather than isinstance: the arms' own gates
+    # (AllowAllGate, ClaimGate) have no `.verdicts` list to read, and that
+    # absence is the honest signal that no contract was in play.
+    if hasattr(gate, "verdicts"):
+        policy_identity = EventIdentity(
+            experiment_id=config.experiment_id,
+            task_id=task.task_id,
+            run_id=config.run_id,
+            agent_id="policy_gate",
+            arm=config.arm,
+        )
+        for index, verdict in enumerate(gate.verdicts):
+            ingested = relay.ingest(
+                event_id=f"{config.run_id}_verdict_{index}",
+                agent_id="policy_gate",
+                event_type=EventType.POLICY_VERDICT,
+                identity=policy_identity,
+                timestamp_us=utc_now_micros(),
+                payload=verdict.to_dict(),
+            )
+            if not ingested.accepted:
+                # A verdict that cannot be recorded is exactly the silent
+                # gap this change exists to close — fail loudly rather
+                # than returning a result that looks complete but is
+                # missing evidence.
+                raise RuntimeError(
+                    f"policy verdict {index} could not be recorded on the "
+                    f"chain: {ingested.reason}"
+                )
 
     result = RunResult(
         run_id=config.run_id,
