@@ -5,6 +5,7 @@ import Architecture from '@/components/landing/Architecture.jsx';
 import Console from '@/components/landing/Console.jsx';
 import Contrasts from '@/components/landing/Contrasts.jsx';
 import Cost from '@/components/landing/Cost.jsx';
+import FocalChart from '@/components/landing/FocalChart.jsx';
 import Hero from '@/components/landing/Hero.jsx';
 import Integrity from '@/components/landing/Integrity.jsx';
 import Nav from '@/components/landing/Nav.jsx';
@@ -36,6 +37,7 @@ export default function Page() {
       <Nav />
       <main id="main">
         <Hero />
+        <FocalChart />
         <AgentBand />
         <ConsoleBand />
         <Problem />
