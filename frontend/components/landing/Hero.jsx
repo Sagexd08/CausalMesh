@@ -1,5 +1,5 @@
 import { RESULTS, armResult } from "@/lib/landing/data.js";
-import Chart from "./Chart.jsx";
+import VerifyTerminal from "./VerifyTerminal.jsx";
 import { Check, GitHubMark } from "./Icons.jsx";
 import { ButtonGhost, ButtonPrimary, Mark, Section } from "./Primitives.jsx";
 
@@ -79,7 +79,7 @@ export default function Hero() {
           </div>
         </div>
 
-        <Chart />
+        <VerifyTerminal />
       </div>
 
       <div className="mt-16 grid grid-cols-2 gap-x-10 gap-y-8 border-t border-rule-soft pt-8 md:grid-cols-4">
