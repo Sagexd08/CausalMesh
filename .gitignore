@@ -150,3 +150,6 @@ skills-lock.json
 # Fumadocs site build output
 frontend/.next/
 frontend/.source/
+
+# Git worktrees for isolated agent workspaces
+.worktrees/
