@@ -10,8 +10,12 @@ network involved — the live-API proof is in tests/integration/test_jev_live.py
 
 from __future__ import annotations
 
+import os
+from unittest.mock import patch
+
 import pytest
 
+from causalmesh.jev.client import JevClient
 from causalmesh.jev.questions import Choice, Noul, Score
 from causalmesh.jev.response import (
     ChoiceAnswer,
@@ -149,3 +153,64 @@ class TestQuestionBuilders:
     def test_score_requires_at_least_two_criteria(self) -> None:
         with pytest.raises(ValueError, match="at least two"):
             Score(id="x", prompt="rate it", criteria=["only_one"])
+
+
+class TestJevClientConstruction:
+    def test_requires_an_api_key(self) -> None:
+        with patch.dict(os.environ, {}, clear=True), pytest.raises(ValueError, match="TYPESAFE_API_KEY"):
+            JevClient()
+
+    def test_accepts_an_explicit_key(self) -> None:
+        client = JevClient(api_key="test-key-123")
+        assert client._transport.api_key == "test-key-123"
+
+    def test_reads_the_key_from_the_environment(self) -> None:
+        with patch.dict(os.environ, {"TYPESAFE_API_KEY": "env-key"}, clear=True):
+            client = JevClient()
+            assert client._transport.api_key == "env-key"
+
+    def test_default_base_url(self) -> None:
+        client = JevClient(api_key="k")
+        assert client.base_url == "https://api.typesafe.ai/v1"
+
+
+class TestJevClientAsk:
+    def test_ask_posts_state_and_questions_and_parses_the_reply(self) -> None:
+        client = JevClient(api_key="k")
+        calls = []
+
+        def fake_post_json(path, body):
+            calls.append((path, body))
+            return (
+                {
+                    "model": "jev-latest",
+                    "answers": {
+                        "pick": {
+                            "type": "choice",
+                            "selected": "b",
+                            "confidence": 0.9,
+                            "probabilities": {"a": 0.1, "b": 0.9},
+                        }
+                    },
+                    "usage": {"input_tokens": 5},
+                },
+                12,
+            )
+
+        client._transport.post_json = fake_post_json  # type: ignore[method-assign]
+
+        response = client.ask(
+            state={"task": "fix bug"},
+            questions=[Choice(id="pick", prompt="a or b?", options=["a", "b"])],
+        )
+
+        assert calls == [
+            (
+                "systemone",
+                {
+                    "state": {"task": "fix bug"},
+                    "questions": {"pick": {"type": "choice", "prompt": "a or b?", "options": ["a", "b"]}},
+                },
+            )
+        ]
+        assert response.answers["pick"].selected == "b"
