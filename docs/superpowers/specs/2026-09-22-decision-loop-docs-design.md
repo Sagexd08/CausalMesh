@@ -1,7 +1,7 @@
-# Design: fold the decision-loop framing into docs and the landing page
+# Design: real Jev adapter, plus decision-loop framing in docs and the landing page
 
 **Date:** 2026-09-22
-**Status:** approved for implementation
+**Status:** approved for implementation (revised after confirming Jev is a real product)
 
 ## Context
 
@@ -21,14 +21,38 @@ Next.js documentation/landing site (`frontend/`). It already has:
   `Integrity.jsx`, etc.) that already cover most of the pasted spec's core thesis (the
   four-plane model: contract / enforcement / evidence / measurement)
 
-No "Jev," no Codex, no TypeScript core exist in this repo, and building them would mean
+No Codex, no TypeScript core exist in this repo, and building them would mean
 discarding real, tested Python infrastructure to match a spec that was never validated
-against this codebase.
+against this codebase. That part of the reconciliation stands as originally decided.
 
-Resolved with the user: treat the pasted spec as a positioning/vision document. Extract
-the genuinely new ideas it contributes beyond what `FRAMEWORK-PLAN.md` already argues,
-and fold those into docs and frontend copy — without renaming anything to "Jev," without
-a TypeScript rewrite, and without touching `src/causalmesh/` Python code.
+**Revision: Jev is real, not spec flavor text.** Web search confirms TypeSafe AI
+shipped Jev on 2026-09-15 as a "System One" model: it takes program state and a set of
+typed `Choice` / `Score` / `Noul` questions and returns calibrated, probabilistic
+answers in one parallel pass — no text generation, so it cannot hallucinate an answer
+outside the given options. Confirmed API surface (converging across multiple
+independent sources): `POST https://api.typesafe.ai/v1/systemone`, `Authorization:
+Bearer <TYPESAFE_API_KEY>`, JSON body carrying state plus a `questions` map; response
+carries typed answers with probabilities and confidence. Given that, the user asked to
+actually integrate it, not just cite it.
+
+Resolved with the user across three follow-up questions:
+
+1. Treat the TypeScript/Codex/product-spec framing as positioning inspiration only —
+   no rewrite, no Codex adapter. (Unchanged from the original decision.)
+2. Build a **real** Jev adapter in `src/causalmesh/` — an HTTP client plus typed
+   request/response wrappers, not just documentation.
+3. **Scope the wiring honestly.** `select_agent` and `recover` (retry/switch/escalate)
+   presuppose multi-agent orchestration that does not exist yet — `scheduler/states.py`
+   runs exactly one agent per run today, with no agent-switch transition in its state
+   machine. Wiring those in now would be scope creep disguised as integration. Further,
+   `tasks/definition.py`'s `TaskFamily` is fixed, YAML-declared data — the codebase's
+   own stated principle (§35/§36, mirrored in why `AgentRole.owns`/`depends_on` are
+   declared rather than inferred) is that task properties are declared, not inferred,
+   so runs stay reproducible and hash-pinned. Wiring a probabilistic classifier into
+   that path would cut against the codebase's own architecture. So: **build and prove
+   the adapter against the real API; wire it into nothing yet.** Document the natural
+   future consumers (`classify` as advisory metadata, `select_agent`/`recover` once
+   multi-agent orchestration exists) as backlog items, not code.
 
 ## What the pasted spec adds beyond `FRAMEWORK-PLAN.md`
 
@@ -63,6 +87,55 @@ new landing-page section.
 
 ## Changes
 
+### 0. `src/causalmesh/jev/` — real Jev adapter (new)
+
+Follows the existing `adapters/` conventions exactly (`transport.py`'s `HttpTransport`,
+`clients.py`'s dataclass-with-`__post_init__`-and-`_require` pattern) rather than
+inventing a new HTTP layer:
+
+- **`transport.py`** (or reuse `adapters.transport.HttpTransport` directly — it is
+  already provider-agnostic: base URL, bearer key, JSON POST, typed `TransportError`).
+  Jev's endpoint is a single fixed path (`v1/systemone`) rather than a family of
+  endpoints, so this may need nothing new here at all; confirmed during implementation.
+- **`client.py`** — `JevClient` dataclass: `api_key: str | None = None`,
+  `base_url: str = "https://api.typesafe.ai/v1"`, `timeout_s: float = 30.0` (Jev is
+  40–200x faster than a frontier LLM call per TypeSafe's own claims, so a chat-completion
+  timeout would be far too generous here). `__post_init__` requires
+  `TYPESAFE_API_KEY` via the existing `_require`-style helper — no silent unauthenticated
+  fallback, matching `OpenAIClient`.
+- **`questions.py`** — typed request builders for the three primitives:
+  - `Choice(id, prompt, options: list[str])`
+  - `Score(id, prompt, criteria: list[str])`
+  - `Noul(id, prompt)`
+  Each has a `to_dict()` matching the wire shape TypeSafe documents (state + a
+  `questions` map keyed by question id, each entry carrying its type and prompt/options
+  or prompt/criteria).
+- **`response.py`** — parses the typed answer back: `ChoiceAnswer` (selected option,
+  probability distribution, confidence), `ScoreAnswer` (level, per-level probabilities,
+  confidence), `NoulAnswer` (probability). A `JevAnswer` union/dataclass keeps the
+  parsing in one place rather than scattering `decoded["answers"][...]` reads across
+  call sites.
+- **`__init__.py`** exports `JevClient`, `Choice`, `Score`, `Noul`, `JevAnswer`, and the
+  answer dataclasses — mirroring `adapters/__init__.py`'s export style.
+
+**Testing**, matching `tests/integration/test_model_adapters.py`'s existing pattern of
+real HTTP against a fake local server for the always-on suite:
+
+- `tests/unit/test_jev.py` — request-building and response-parsing tests with no
+  network: given a canned Jev-shaped JSON response, assert `ChoiceAnswer`/`ScoreAnswer`/
+  `NoulAnswer` parse correctly; given a `Choice`/`Score`/`Noul` question, assert
+  `to_dict()` matches the documented wire shape.
+- `tests/integration/test_jev_live.py` — a **real** network call to
+  `https://api.typesafe.ai/v1/systemone`, gated behind `TYPESAFE_API_KEY` being set
+  (skipped otherwise, same convention as any test that needs a real provider key in
+  this repo). Sends one small Choice question with an unambiguous answer (e.g. "pick
+  the smaller number" between two options) and asserts the response parses into a
+  `ChoiceAnswer` with the expected option selected. This is the "prove it against the
+  real API" step, not a mock.
+
+No wiring into `tasks/`, `scheduler/`, or `policy/gate.py` this session — see the
+Context section above for why. The adapter is complete and tested standing alone.
+
 ### 1. `docs/FRAMEWORK-PLAN.md`
 
 Add a new subsection **"The decision loop"** immediately after "The four planes" in
@@ -70,11 +143,21 @@ Add a new subsection **"The decision loop"** immediately after "The four planes"
 
 - States the four typed decisions (`classify`, `select_agent`, `recover`, `accept`) as
   the shape the Enforcement plane takes across a run's lifetime, not a fifth plane.
+- Names Jev (TypeSafe AI) by name as the reference implementation for what a typed
+  decision engine in this role looks like: state in, a typed `Choice`/`Score`/`Noul`
+  question out, a calibrated probability back — cites it as evidence the shape is
+  implementable cheaply today, not as a dependency the project has adopted.
+- States plainly what exists today: a tested `JevClient` adapter
+  (`src/causalmesh/jev/`) that can ask any Choice/Score/Noul question against the real
+  API, and nothing in the runtime calls it yet. The gate (`policy/gate.py`) remains
+  fully deterministic rule evaluation; `select_agent`/`recover` have no home until
+  multi-agent orchestration exists in the scheduler.
 - Explicit `ACCEPT` / `REJECT` / `HUMAN_REVIEW` framing for acceptance, tied to evidence
   rather than agent self-report.
-- One paragraph on agent handoff as what `recover` produces when it switches agents.
-- Marked "not built" consistent with the rest of the document's honesty discipline —
-  this is a plan addition, not a status change.
+- One paragraph on agent handoff as what `recover` would produce when it switches
+  agents, once that exists.
+- Marked "not built" (beyond the adapter itself) consistent with the rest of the
+  document's honesty discipline — this is a plan addition, not a status change.
 
 Add a short subsection **"Three audit properties"** in §5 (Complementary features),
 next to the existing compliance-export bullet, naming Integrity / Provenance /
@@ -88,9 +171,20 @@ claims.
 
 ### 2. `docs/backlog.md`
 
-Add three entries, following the file's existing format (Status / Why / What it would
+Add four entries, following the file's existing format (Status / Why / What it would
 take):
 
+- **Jev decision engine — adapter built, not wired.** Status: `JevClient` and the
+  Choice/Score/Noul request/response types exist in `src/causalmesh/jev/`, tested unit
+  and (when `TYPESAFE_API_KEY` is set) against the real `api.typesafe.ai` endpoint.
+  Nothing in the runtime calls it. Why: every decision point that exists today —
+  `TaskFamily`, `check_sensitivity`'s verdict, the gate's rules — is deliberately
+  deterministic, for the reproducibility reasons §35/§36 already state; there was no
+  decision point this session where swapping determinism for a calibrated probability
+  was the right trade. What it would take: a concrete future decision that is
+  genuinely uncertain given available state (the leading candidate is `recover`:
+  retry-same-agent vs. switch-agent vs. escalate, once multi-agent runs exist) rather
+  than retrofitting Jev onto a decision that already has a correct deterministic answer.
 - **Explicit acceptance decision object** — today, run success is read off verifier
   results directly; there's no standalone `ACCEPT`/`REJECT`/`HUMAN_REVIEW` record in the
   chain. Status: not built. Ties to the existing memory note that §74 needs a
@@ -117,24 +211,32 @@ New file `frontend/components/landing/DecisionLoop.jsx`, inserted into
   "planned" status pill — matching how `Framework.jsx` labels the payment and autonomous
   lanes as planned rather than claiming they're built.
 - Copy stays consistent with the rest of the page: no invented run numbers, no claim
-  this is measured or shipped. Explicitly says this is the planned shape of the
-  Enforcement plane, linking conceptually back to the `Framework` section's four planes
-  rather than introducing a fifth plane.
+  this is measured or shipped. Names Jev as the reference decision engine (matching the
+  updated `FRAMEWORK-PLAN.md` language) and states plainly that the adapter exists and
+  is tested, but nothing in the runtime calls it yet — the same "measured" vs "planned"
+  status-pill pattern `Framework.jsx` already uses, applied honestly here: this lane is
+  "adapter built" not "measured."
 - No new dependencies, no new visual system — plain Tailwind classes matching
   `Routing.jsx`'s existing patterns.
 
 ## Out of scope
 
-- No changes to `src/causalmesh/` Python package.
-- No renaming to "Jev," no TypeScript core, no Codex adapter.
-- No claim that any of this is built, measured, or shipped — everything added is
-  explicitly framed as planned, matching the existing documents' honesty discipline.
+- No changes to `tasks/`, `scheduler/`, or `policy/gate.py` — the Jev adapter is built
+  and tested standing alone, not wired into any runtime decision this session.
+- No TypeScript core, no Codex adapter, no rewrite of `src/causalmesh/`'s existing
+  Python agent adapters (OpenAI/Anthropic/Local/Mock).
+- No claim that Jev-driven decisions are built, measured, or shipped in the runtime —
+  only the adapter itself is real and tested; everything else added is explicitly
+  framed as planned, matching the existing documents' honesty discipline.
 
 ## Testing / verification
 
+- `src/causalmesh/jev/`: `pytest tests/unit/test_jev.py` for request/response parsing
+  with no network; `pytest tests/integration/test_jev_live.py` (requires
+  `TYPESAFE_API_KEY`, skipped otherwise) as the real-API proof.
 - Docs: read-through for internal consistency with `PLAN.md` and existing
-  `FRAMEWORK-PLAN.md` claims; no other docs reference the four-decision taxonomy so
-  there's nothing to reconcile beyond that.
+  `FRAMEWORK-PLAN.md` claims; no other docs reference the four-decision taxonomy or Jev
+  by name so there's nothing else to reconcile.
 - Frontend: `npm run build` (or `next build`) in `frontend/` to confirm the new section
   compiles and the page renders without errors; visually inspect the section is legible
   at desktop and mobile widths, consistent with the rest of the page's responsive
