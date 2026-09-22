@@ -122,9 +122,10 @@ difference, and the C2 to C3 contrast would stop isolating enforcement. So
 the narrow gate stays the arms', and the contract gate is what an operator
 installs when running work rather than running an experiment.
 
-**What it still blocks:** a run driven by `causalmesh.yaml` end to end. The
-gate decides correctly and records its refusals; nothing yet hands it to a
-scheduler and writes its verdicts into the run artifact.
+**What it still blocks:** a run driven by `causalmesh.yaml` end to end. The gate
+decides correctly and its verdicts now enter the signed chain (see below); nothing
+yet hands the contract to a scheduler or profile by default, so reaching this path at
+all still requires an operator to pass `contract_path` explicitly.
 
 **A bug this found in itself.** The first version returned a lease refusal
 without recording a denial, because the policy gate consults leases through
