@@ -273,6 +273,17 @@
     to { opacity: 1; transform: translateY(0); }
   }
 
+  /* A steadier, more deliberate blink than `animate-pulse`'s ease-in-out fade —
+     a terminal cursor cuts on and off, it does not fade. */
+  @keyframes cm-terminal-blink {
+    0%, 45% { opacity: 1; }
+    46%, 100% { opacity: 0; }
+  }
+
+  .cm-terminal-cursor {
+    animation: cm-terminal-blink 1.05s steps(1) infinite;
+  }
+
   /* ---------------------------------------------------------------------
      FlowDiagram: fleet -> gate -> repo, in Architecture.jsx.
 

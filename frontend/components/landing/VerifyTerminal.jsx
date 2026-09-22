@@ -159,9 +159,23 @@ export default function VerifyTerminal() {
       className="overflow-hidden rounded-xl border border-ink-900 bg-ink-900 shadow-[0_24px_48px_-24px_rgba(16,16,16,0.45)]"
     >
       <div className="flex items-center gap-2 border-b border-paper/10 px-4 py-3">
-        <span className="h-2.5 w-2.5 rounded-full bg-paper/20" />
-        <span className="h-2.5 w-2.5 rounded-full bg-paper/20" />
-        <span className="h-2.5 w-2.5 rounded-full bg-marker" />
+        <div className="group flex items-center gap-1.5" aria-hidden="true">
+          <span className="flex h-2.5 w-2.5 items-center justify-center rounded-full bg-paper/20 transition-colors duration-150 group-hover:bg-arm-c0/80">
+            <svg viewBox="0 0 6 6" className="h-1.5 w-1.5 opacity-0 transition-opacity duration-150 group-hover:opacity-70">
+              <path d="M1 1L5 5M5 1L1 5" stroke="#101010" strokeWidth="1" strokeLinecap="round" />
+            </svg>
+          </span>
+          <span className="flex h-2.5 w-2.5 items-center justify-center rounded-full bg-paper/20 transition-colors duration-150 group-hover:bg-arm-c3/80">
+            <svg viewBox="0 0 6 2" className="h-1.5 w-1.5 opacity-0 transition-opacity duration-150 group-hover:opacity-70">
+              <path d="M0.5 1H5.5" stroke="#101010" strokeWidth="1" strokeLinecap="round" />
+            </svg>
+          </span>
+          <span className="flex h-2.5 w-2.5 items-center justify-center rounded-full bg-marker transition-colors duration-150 group-hover:bg-marker-deep">
+            <svg viewBox="0 0 6 6" className="h-1.5 w-1.5 opacity-0 transition-opacity duration-150 group-hover:opacity-70">
+              <path d="M1 4L3 1L5 4" stroke="#101010" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+            </svg>
+          </span>
+        </div>
         <span className="ml-2 font-mono text-[10.5px] uppercase tracking-[0.12em] text-paper/45">
           causalmesh · verify
         </span>
@@ -183,7 +197,7 @@ export default function VerifyTerminal() {
           {(phase === "typing" || phase === "idle") && (
             <span
               aria-hidden="true"
-              className="ml-0.5 inline-block h-[13px] w-[7px] translate-y-[2px] animate-pulse bg-marker align-middle"
+              className="cm-terminal-cursor ml-0.5 inline-block h-[13px] w-[7px] translate-y-[2px] bg-marker align-middle"
             />
           )}
         </div>
