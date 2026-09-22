@@ -199,11 +199,11 @@ conforms, divergence absent), with `REJECT` and `HUMAN_REVIEW` as named alternat
 `ACCEPT`, not just the absence of success.
 
 **What a typed decision engine in this role looks like, concretely.** TypeSafe AI's Jev
-(shipped 2026-09-15) takes arbitrary state and a set of typed questions — Choice (pick
-one of several named options), Score (rate against an ordered scale), Noul (the
-probability a yes/no proposition is true) — and returns a calibrated answer to each by
-selection rather than text generation, so it cannot answer outside the options it was
-given. `classify`, `select_agent`, `recover`, and `accept` all fit that shape exactly:
+(per the vendor's public announcement, shipped 2026-09-15) takes arbitrary state and a
+set of typed questions — Choice (pick one of several named options), Score (rate
+against an ordered scale), Noul (the probability a yes/no proposition is true) — and
+returns a calibrated answer to each by selection rather than text generation, so it
+cannot answer outside the options it was given. `classify`, `select_agent`, `recover`, and `accept` all fit that shape exactly:
 each is a fixed, enumerable set of outcomes evaluated against the current run state.
 We built and tested a `JevClient` adapter (`src/causalmesh/jev/`) against Jev's real API
 to confirm the shape is implementable cheaply today — this is evidence the decision
