@@ -11,6 +11,7 @@ import Nav from '@/components/landing/Nav.jsx';
 import Problem from '@/components/landing/Problem.jsx';
 import Routing from '@/components/landing/Routing.jsx';
 import Framework from '@/components/landing/Framework.jsx';
+import DecisionLoop from '@/components/landing/DecisionLoop.jsx';
 import Footer from '@/components/landing/Footer.jsx';
 
 export const metadata = {
@@ -39,6 +40,7 @@ export default function Page() {
         <ConsoleBand />
         <Problem />
         <Framework />
+        <DecisionLoop />
         <Routing />
         <Cost />
         <Contrasts />
