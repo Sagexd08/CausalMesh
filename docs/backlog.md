@@ -111,7 +111,7 @@ discover them.
 **Status (updated again):** `ContractGate` in `hooks/policy_gate.py` satisfies the
 same `Gate` protocol the arms already install, so the lifecycle boundary takes it
 without a new code path. It is covered by 12 tests, and — as of the change recorded
-under "Verdicts do not enter the signed chain" above — every verdict it reaches now
+under "Verdicts do not enter the signed chain" below — every verdict it reaches now
 becomes a signed chain event when it is installed. What remains is that no arm or
 profile selects it: a default run still installs `ClaimGate`.
 
@@ -159,7 +159,7 @@ than asserting it.
 **What this does not change:** the arms' own default gates (`AllowAllGate`/
 `ClaimGate`) are unaffected — verdict events are only emitted when a contract is in
 play (`config.contract_path is not None`), which is exactly when `ContractGate` itself
-is installed. See "The gate is installable but not yet installed by default" below for
+is installed. See "The gate is installable but not yet installed by default" above for
 the part of this story that is still open.
 
 ### Checkpoints and identity are parsed and ignored
