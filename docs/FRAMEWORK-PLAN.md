@@ -180,6 +180,46 @@ OpenTelemetry; we fill the layer it declines to cover and hand it spans.
 be run C2 vs C3 and measured. "Exclusive claims on config.py cost 196 bytes per run and
 prevented three clobbers" is a sentence no other framework can produce.
 
+### The decision loop
+
+The four planes describe what the gate checks once. Some of what a run needs to
+decide does not fit a single allow/refuse check — it is a small set of typed
+questions asked repeatedly as the run progresses:
+
+```
+classify       what kind of task is this?
+select_agent   which agent should act next?
+recover        after a failure: retry, switch agent, or escalate?
+accept         does the evidence support ACCEPT, REJECT, or HUMAN_REVIEW?
+```
+
+`accept` matters most: run completion should never be read directly off an agent's own
+"I'm done" — it should be a decision made against evidence (tests passed, diff
+conforms, divergence absent), with `REJECT` and `HUMAN_REVIEW` as named alternatives to
+`ACCEPT`, not just the absence of success.
+
+**What a typed decision engine in this role looks like, concretely.** TypeSafe AI's Jev
+(shipped 2026-09-15) takes arbitrary state and a set of typed questions — Choice (pick
+one of several named options), Score (rate against an ordered scale), Noul (the
+probability a yes/no proposition is true) — and returns a calibrated answer to each by
+selection rather than text generation, so it cannot answer outside the options it was
+given. `classify`, `select_agent`, `recover`, and `accept` all fit that shape exactly:
+each is a fixed, enumerable set of outcomes evaluated against the current run state.
+We built and tested a `JevClient` adapter (`src/causalmesh/jev/`) against Jev's real API
+to confirm the shape is implementable cheaply today — this is evidence the decision
+loop is buildable, not an adopted dependency.
+
+**What exists today.** The adapter, tested unit and against the live API. Nothing in
+the runtime calls it. The gate (`policy/gate.py`) remains entirely deterministic rule
+evaluation, which is correct for what it decides today — ownership, allowlists,
+budgets, and leases all have a single correct answer given the contract, and a
+probabilistic call would add latency and a new failure mode without resolving any real
+uncertainty. `select_agent` and `recover` have no home yet: the scheduler runs exactly
+one agent per run, with no state for "switch to a different agent mid-run." Recovery
+producing a signed handoff package — the task, repo state, diff, test results, and
+prior decisions, so a second agent inherits execution state rather than starting cold
+— is designed here but not built; see `docs/backlog.md`.
+
 ---
 
 ## 3. The three agent kinds
@@ -294,6 +334,19 @@ Not before A–E: an SDK over an unstable substrate is a migration you owe every
 - **Compliance export.** One command producing the artifact NIST/IMDA/EU AI Act
   auditors ask for: which agent, under whose authorisation, did what, and the signature
   proving it. We already hold every field; this is a report, not a feature.
+- **Naming the three audit properties separately.** "Is the record trustworthy" is
+  actually three different questions, and conflating them overstates what one
+  guarantee proves:
+
+  | Property | Question | Status today |
+  |---|---|---|
+  | Integrity | Did the record change after it was written? | Answered — the adversarial battery (`Integrity.jsx` on the landing page) detects 7/7 tamper modes, with suffix truncation named as the one gap an external anchor would close |
+  | Provenance | Which signing identity emitted this event? | Answered — Ed25519 per-actor keys, checked on every verify |
+  | Completeness | Did instrumentation capture every event a policy requires? | Open — nothing today measures whether the event *policy* itself is exhaustive, only whether the events that were written are intact and attributed |
+
+  A valid signature on every recorded event does not prove nothing was left
+  unrecorded. Compliance export should eventually report against all three
+  separately rather than implying one covers the others.
 - **Conflict prediction.** With a 27.67% empirical conflict rate and declared ownership,
   warn *before* a run that two agents' paths overlap on a hotspot. Static analysis over
   the contract — no model needed.
