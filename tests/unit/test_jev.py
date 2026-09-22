@@ -105,4 +105,5 @@ class TestParseResponse:
             "usage": {"input_tokens": 1},
         }
         response = parse_response(decoded)
+        assert isinstance(response, JevResponse)
         assert response.model == "jev-2026-09"
