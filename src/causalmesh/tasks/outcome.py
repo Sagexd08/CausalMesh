@@ -19,12 +19,21 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Any
 
 from ..isolation import Workspace, WorkspaceError
 from .definition import SuccessCriteria
 
-__all__ = ["TaskOutcome", "diverged_files", "evaluate_outcome", "workspace_digest"]
+__all__ = [
+    "AcceptanceDecision",
+    "AcceptanceVerdict",
+    "TaskOutcome",
+    "decide_acceptance",
+    "diverged_files",
+    "evaluate_outcome",
+    "workspace_digest",
+]
 
 
 @dataclass(frozen=True)
@@ -127,6 +136,55 @@ def evaluate_outcome(
         detail=detail,
         evidence=tuple(evidence),
     )
+
+
+class AcceptanceVerdict(StrEnum):
+    """The decided fate of a run, distinct from the outcome it was read from.
+
+    `HUMAN_REVIEW` is part of the vocabulary but not yet reachable: the rule
+    below is a total function of `TaskOutcome.succeeded`, so every run lands
+    on `ACCEPT` or `REJECT`. It is declared now, the same way
+    `RunState.TIMED_OUT` is declared before anything assigns it, so that a
+    future rule with a genuine third case is a change to `decide_acceptance`
+    rather than a schema version bump.
+    """
+
+    ACCEPT = "ACCEPT"
+    REJECT = "REJECT"
+    HUMAN_REVIEW = "HUMAN_REVIEW"
+
+
+@dataclass(frozen=True)
+class AcceptanceDecision:
+    """A run's acceptance, recorded as a decision rather than reconstructed.
+
+    `evidence` is the outcome's own evidence tuple, not a copy or a summary
+    of it — the decision points at what it was based on instead of
+    restating it, so the two can never drift apart.
+    """
+
+    verdict: AcceptanceVerdict
+    evidence: tuple[str, ...]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "evidence": list(self.evidence),
+            "verdict": str(self.verdict),
+        }
+
+
+def decide_acceptance(outcome: TaskOutcome) -> AcceptanceDecision:
+    """Decide a run's acceptance from its outcome.
+
+    §38 already made this a total, automatic function of `succeeded` — this
+    only gives that function's result a name and a place to be signed and
+    recorded. No probabilistic call belongs here: given the current state
+    there is exactly one correct verdict, which is precisely the condition
+    the Jev backlog entry names as disqualifying a decision point from
+    trading a deterministic answer for a calibrated one.
+    """
+    verdict = AcceptanceVerdict.ACCEPT if outcome.succeeded else AcceptanceVerdict.REJECT
+    return AcceptanceDecision(verdict=verdict, evidence=outcome.evidence)
 
 
 def workspace_digest(workspace: Workspace) -> dict[str, str]:

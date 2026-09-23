@@ -25,7 +25,7 @@ from ..channels import MetadataChannel, NullChannel, Room, TranscriptChannel
 from ..channels.base import CoordinationChannel
 from ..claims import ClaimRegistry
 from ..crypto.keys import KeyPair
-from ..events.schema import EventIdentity, EventType, utc_now_micros
+from ..events.schema import EventIdentity, EventType
 from ..hooks import LifecycleBoundary, gate_for_arm
 from ..isolation import Workspace, build_run_workspaces
 from ..relay import ChainStore, Relay, policy_for_arm
@@ -33,7 +33,13 @@ from ..relevance import AgentInterests
 from ..tools import Toolbox, ToolExecutor
 from ..tools.api import _INHERITED_ENVIRONMENT
 from .definition import TaskDefinition
-from .outcome import TaskOutcome, evaluate_outcome, workspace_digest
+from .outcome import (
+    AcceptanceDecision,
+    TaskOutcome,
+    decide_acceptance,
+    evaluate_outcome,
+    workspace_digest,
+)
 
 __all__ = ["RunConfig", "RunResult", "execute_task"]
 
@@ -106,6 +112,7 @@ class RunResult:
     task_id: str
     task_hash: str
     outcome: TaskOutcome
+    decision: AcceptanceDecision
     records: list[dict[str, Any]]
     head_hash: str | None
     agent_summaries: dict[str, dict[str, Any]] = field(default_factory=dict)
@@ -137,6 +144,7 @@ class RunResult:
             "boundary_summaries": self.boundary_summaries,
             "claim_history": self.claim_history,
             "coordination_bytes": self.coordination_bytes(),
+            "decision": self.decision.to_dict(),
             "denials": self.denials,
             "error": self.error,
             "events": len(self.records),
@@ -236,6 +244,10 @@ async def execute_task(
     # ContractGate and therefore no verdicts to sign.
     if config.contract_path is not None:
         keypairs["policy_gate"] = KeyPair.derive(config.master_seed, "policy_gate")
+    # Every run reaches an acceptance decision, contract or not, so this
+    # identity is derived unconditionally — unlike policy_gate's, which only
+    # exists when there is a contract to reach verdicts against.
+    keypairs["acceptance"] = KeyPair.derive(config.master_seed, "acceptance")
     claims = (
         ClaimRegistry(workspace_root / f"{config.run_id}_claims.db") if config.arm == "C3" else None
     )
@@ -351,6 +363,14 @@ async def execute_task(
     exit_code = _run_integration_test(task, integrated)
     outcome = evaluate_outcome(task.success, workspace=integrated, test_exit_code=exit_code)
 
+    # The deterministic instant for every event recorded after the scripted
+    # turn loop ends. `utc_now_micros()` is wall-clock time — fine for an
+    # envelope field, but a chain payload timestamp must be reproducible
+    # (§84), and this run's clock model is `base_time_us + turn * tick_us`
+    # throughout. `max_turns` is the deterministic "after the last possible
+    # turn" instant, independent of how many turns actually ran.
+    post_run_time_us = config.base_time_us + config.max_turns * config.tick_us
+
     try:
         # Every verdict the policy gate reached becomes a real chain event —
         # not only refusals, so an unenforced arm's shadow-refusals (the
@@ -374,7 +394,7 @@ async def execute_task(
                     agent_id="policy_gate",
                     event_type=EventType.POLICY_VERDICT,
                     identity=policy_identity,
-                    timestamp_us=utc_now_micros(),
+                    timestamp_us=post_run_time_us,
                     payload=verdict.to_dict(),
                 )
                 if not ingested.accepted:
@@ -387,18 +407,46 @@ async def execute_task(
                         f"be recorded on the chain: {ingested.reason}"
                     )
 
+        # Every run reaches an acceptance decision, unconditionally — unlike
+        # policy verdicts, which only exist when a contract is in play. The
+        # decision is a total function of `outcome` (§38), so this makes an
+        # already-determined fact a signed, chained record instead of
+        # something read back off `outcome.succeeded` by every caller.
+        decision = decide_acceptance(outcome)
+        acceptance_identity = EventIdentity(
+            experiment_id=config.experiment_id,
+            task_id=task.task_id,
+            run_id=config.run_id,
+            agent_id="acceptance",
+            arm=config.arm,
+        )
+        ingested = relay.ingest(
+            event_id=f"{config.run_id}_acceptance",
+            agent_id="acceptance",
+            event_type=EventType.ACCEPTANCE_DECIDED,
+            identity=acceptance_identity,
+            timestamp_us=post_run_time_us,
+            payload=decision.to_dict(),
+        )
+        if not ingested.accepted:
+            # Same discipline as the policy verdict above: a decision that
+            # cannot be recorded is a silent gap, not a result to return.
+            raise RuntimeError(
+                f"acceptance decision could not be recorded on the chain: {ingested.reason}"
+            )
+
         result = RunResult(
             run_id=config.run_id,
             arm=config.arm,
             task_id=task.task_id,
             task_hash=task.content_hash(),
             outcome=outcome,
+            decision=decision,
             records=relay.records(),
             head_hash=relay.head_hash,
             agent_summaries=summaries,
             workspace_digests={
-                agent_id: workspace_digest(workspace)
-                for agent_id, workspace in workspaces.items()
+                agent_id: workspace_digest(workspace) for agent_id, workspace in workspaces.items()
             },
             claim_history=(
                 [c.to_dict() for c in claims.history(run_id=config.run_id)] if claims else []

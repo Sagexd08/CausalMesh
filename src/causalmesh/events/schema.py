@@ -68,6 +68,12 @@ class EventType(StrEnum):
     # "policy_gate" identity (see tasks/runner.py) rather than an agent's
     # key, because a verdict is not an agent's action.
     POLICY_VERDICT = "POLICY_VERDICT"
+    # Emitted once per run, unconditionally, after the outcome is evaluated.
+    # Signed under a dedicated "acceptance" identity (see tasks/runner.py)
+    # rather than an agent's or the policy gate's key, because accepting or
+    # rejecting a run's result is a decision distinct from both what an
+    # agent did and what the policy plane allowed.
+    ACCEPTANCE_DECIDED = "ACCEPTANCE_DECIDED"
 
 
 # Identifiers appear in file paths, database keys and canonical bytes, so they

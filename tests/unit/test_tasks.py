@@ -18,10 +18,12 @@ import pytest
 
 from causalmesh.isolation import Workspace
 from causalmesh.tasks import (
+    AcceptanceVerdict,
     SuccessCriteria,
     TaskDefinition,
     TaskError,
     TaskFamily,
+    decide_acceptance,
     diverged_files,
     evaluate_outcome,
     validate_structure,
@@ -312,6 +314,56 @@ class TestOutcome:
         )
         assert outcome.evidence
         assert any("exit_code" in item for item in outcome.evidence)
+
+
+class TestAcceptanceDecision:
+    """decide_acceptance names §38's own rule; it doesn't add a new one."""
+
+    @pytest.fixture
+    def workspace(self, tmp_path: Path) -> Workspace:
+        workspace = Workspace.create(base=tmp_path, run_id="r", agent_id="a")
+        (workspace.root / "src").mkdir()
+        (workspace.root / "src" / "handler.py").write_text("clean\n", encoding="utf-8")
+        return workspace
+
+    def test_a_successful_outcome_is_accepted(self, workspace: Workspace) -> None:
+        outcome = evaluate_outcome(
+            SuccessCriteria(divergence_file="src/handler.py", divergence_marker="STALE"),
+            workspace=workspace,
+            test_exit_code=0,
+        )
+        decision = decide_acceptance(outcome)
+        assert decision.verdict == AcceptanceVerdict.ACCEPT
+
+    def test_a_failed_outcome_is_rejected(self, workspace: Workspace) -> None:
+        outcome = evaluate_outcome(
+            SuccessCriteria(divergence_file="src/handler.py", divergence_marker="STALE"),
+            workspace=workspace,
+            test_exit_code=1,
+        )
+        decision = decide_acceptance(outcome)
+        assert decision.verdict == AcceptanceVerdict.REJECT
+
+    def test_the_decision_carries_the_outcomes_own_evidence(self, workspace: Workspace) -> None:
+        # Points at the outcome's evidence rather than restating it, so the
+        # two can never drift apart.
+        outcome = evaluate_outcome(
+            SuccessCriteria(divergence_file="src/handler.py", divergence_marker="STALE"),
+            workspace=workspace,
+            test_exit_code=0,
+        )
+        decision = decide_acceptance(outcome)
+        assert decision.evidence == outcome.evidence
+
+    def test_to_dict_carries_the_verdict_as_a_plain_string(self, workspace: Workspace) -> None:
+        outcome = evaluate_outcome(
+            SuccessCriteria(divergence_file="src/handler.py", divergence_marker="STALE"),
+            workspace=workspace,
+            test_exit_code=0,
+        )
+        payload = decide_acceptance(outcome).to_dict()
+        assert payload["verdict"] == "ACCEPT"
+        assert isinstance(payload["evidence"], list)
 
 
 class TestWorkspaceDivergence:
