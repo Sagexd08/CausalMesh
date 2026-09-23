@@ -363,6 +363,98 @@ class TestAnalyze:
         result = invoke("analyze", "--root", str(REPO))
         assert result.exit_code == 2
 
+    def test_edges_on_an_artifact_older_than_the_feature_reports_none(self) -> None:
+        """The pilot predates edge population; that is a fact, not an error.
+
+        `edges_for_run` treats a missing `edges` key as "none recorded"
+        rather than raising, so an artifact from before this feature shipped
+        still analyzes cleanly instead of failing.
+        """
+        result = invoke(
+            "analyze", "--edges", "--id", "pilot_landing", "--root", str(REPO), "--json"
+        )
+        assert result.exit_code == 0, result.stdout
+        report = payload(result)
+        assert report["total_edges"] == 0
+        assert report["total_runs"] == 24
+
+
+@pytest.mark.slow
+class TestAnalyzeEdgesEndToEnd:
+    """A real contract-enforced run's denial produces a queryable edge.
+
+    `experiment run`'s own contract discovery (`TestContractDiscovery` above)
+    picks up the repository's `causalmesh.yaml`, whose roles don't overlap
+    this task's `agent_a`/`agent_b` scenario, so it never refuses anything.
+    Getting a real denial into a real run artifact needs a contract that
+    actually names an owner — the same `execute_task` call
+    `TestPolicyVerdictsOnTheChain` (in test_task_execution.py) uses — with
+    the resulting artifact placed where `causalmesh analyze` looks for one,
+    so the CLI's read path is what is actually being exercised.
+    """
+
+    def _cleanup(self, experiment_id: str) -> None:
+        shutil.rmtree(REPO / "data" / "raw" / experiment_id, ignore_errors=True)
+        shutil.rmtree(REPO / "data" / "work" / experiment_id, ignore_errors=True)
+
+    def test_a_denied_write_appears_as_an_edge_through_analyze(self, tmp_path: Path) -> None:
+        import asyncio
+
+        from causalmesh.tasks import RunConfig, TaskDefinition, execute_task
+
+        experiment_id = "exp_test_analyze_edges"
+        self._cleanup(experiment_id)
+        try:
+            contract_path = tmp_path / "causalmesh.yaml"
+            contract_path.write_text(
+                "version: 1\n"
+                "roles:\n"
+                "  - agent_id: agent_a\n"
+                "    owns: [src/handler.py]\n"
+                "policy:\n"
+                "  arm: C3\n",
+                encoding="utf-8",
+            )
+            task = TaskDefinition.from_yaml(REPO / "tasks" / "schema_handler_widen.yaml")
+            run_id = f"{experiment_id}_run0"
+            result = asyncio.run(
+                execute_task(
+                    task,
+                    RunConfig(
+                        experiment_id=experiment_id,
+                        run_id=run_id,
+                        arm="C3",
+                        master_seed=b"causalmesh-analyze-edges-cli-test",
+                        contract_path=str(contract_path),
+                    ),
+                    workspace_root=tmp_path / "ws",
+                    fixtures_root=REPO / "fixtures",
+                )
+            )
+
+            run_dir = REPO / "data" / "raw" / experiment_id / run_id
+            run_dir.mkdir(parents=True)
+            artifact = {
+                "arm": result.arm,
+                "chain": result.records,
+                "experiment_id": experiment_id,
+                "result": result.to_dict(),
+                "run_id": result.run_id,
+                "task_id": result.task_id,
+            }
+            (run_dir / "run.json").write_text(json.dumps(artifact), encoding="utf-8")
+
+            analyze_result = invoke(
+                "analyze", "--edges", "--id", experiment_id, "--root", str(REPO), "--json"
+            )
+            assert analyze_result.exit_code == 0, analyze_result.stdout
+            report = payload(analyze_result)
+            assert report["total_edges"] >= 1
+            edge = report["runs"][0]["edges"][0]
+            assert edge["relationship"] == "REQUIRED"
+        finally:
+            self._cleanup(experiment_id)
+
 
 @needs_pilot
 class TestManifestAndAudit:
