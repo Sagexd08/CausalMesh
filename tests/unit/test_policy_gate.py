@@ -23,6 +23,7 @@ from pathlib import Path
 import pytest
 
 from causalmesh.claims.registry import ClaimRegistry
+from causalmesh.crypto.keys import KeyPair
 from causalmesh.hooks.lifecycle import ToolCall
 from causalmesh.hooks.policy_gate import ContractGate
 from causalmesh.policy import Contract
@@ -207,3 +208,24 @@ class TestTheRecord:
 
         assert isinstance(decision, GateDecision)
         assert inspect.signature(ContractGate.check) == inspect.signature(ClaimGate.check)
+
+
+class TestPolicyGateIdentity:
+    """The signing identity a verdict event is attributed to.
+
+    A verdict is reached by the policy plane, not by any agent in the run,
+    so it needs its own signing identity rather than borrowing an agent's
+    key — attributing it to an agent would misattribute provenance.
+    """
+
+    def test_policy_gate_key_is_deterministic(self) -> None:
+        seed = b"causalmesh-test-seed-0000000001"
+        a = KeyPair.derive(seed, "policy_gate")
+        b = KeyPair.derive(seed, "policy_gate")
+        assert a.public_key_hex == b.public_key_hex
+
+    def test_policy_gate_key_differs_from_an_agent_key(self) -> None:
+        seed = b"causalmesh-test-seed-0000000001"
+        policy_key = KeyPair.derive(seed, "policy_gate")
+        agent_key = KeyPair.derive(seed, "agent_a")
+        assert policy_key.public_key_hex != agent_key.public_key_hex

@@ -58,8 +58,8 @@ function stepsFor(name) {
     ],
     [
       "Run under an arm",
-      "causalmesh run --arm C3 --task schema_handler_widen",
-      "The arm installs a channel and a gate. Nothing reads the arm name at runtime.",
+      "causalmesh experiment run --profile smoke",
+      "The profile selects the arm and task. Nothing reads the arm name at runtime.",
     ],
   ];
 }

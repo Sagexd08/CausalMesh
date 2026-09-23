@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { armResult } from "@/lib/landing/data.js";
 import { ChevronLeft, ChevronRight, Pause, Play } from "./Icons.jsx";
 import { useInView } from "./Primitives.jsx";
@@ -55,6 +55,27 @@ export default function Chart() {
   const [active, setActive] = useState(0);
   const [paused, setPaused] = useState(false);
   const [drawn, setDrawn] = useState(0);
+  // Hover/focus pause for as long as the pointer/keyboard stays there —
+  // that pause is released by the matching leave/blur event, handled
+  // below. A click (a dot, or prev/next) is a different kind of pause:
+  // the visitor asked to look at one arm, not to stop the cycle, so it
+  // should let go on its own after a few seconds rather than requiring
+  // the visitor to notice and resume it manually. The explicit play/pause
+  // button is a third kind — a direct request to stop — and is the only
+  // one of the three that has no auto-resume.
+  const resumeTimer = useRef(null);
+
+  const pauseThenAutoResume = useCallback(() => {
+    setPaused(true);
+    if (resumeTimer.current) clearTimeout(resumeTimer.current);
+    resumeTimer.current = setTimeout(() => setPaused(false), 4500);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (resumeTimer.current) clearTimeout(resumeTimer.current);
+    };
+  }, []);
 
   const raw = ORDER.map((id) => {
     const r = armResult(id);
@@ -112,15 +133,18 @@ export default function Chart() {
     return () => clearInterval(timer);
   }, [seen, paused, reduced, drawn]);
 
-  const onKeyDown = useCallback((event) => {
-    const next = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[
-      event.key
-    ];
-    if (!next) return;
-    event.preventDefault();
-    setActive((i) => (i + next + ORDER.length) % ORDER.length);
-    setPaused(true);
-  }, []);
+  const onKeyDown = useCallback(
+    (event) => {
+      const next = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[
+        event.key
+      ];
+      if (!next) return;
+      event.preventDefault();
+      setActive((i) => (i + next + ORDER.length) % ORDER.length);
+      pauseThenAutoResume();
+    },
+    [pauseThenAutoResume]
+  );
 
   const current = points[active];
   const complete = drawn >= ORDER.length;
@@ -133,7 +157,10 @@ export default function Chart() {
   return (
     <figure
       ref={ref}
-      onMouseEnter={() => setPaused(true)}
+      onMouseEnter={() => {
+        if (resumeTimer.current) clearTimeout(resumeTimer.current);
+        setPaused(true);
+      }}
       onMouseLeave={() => setPaused(false)}
       className="relative m-0"
     >
@@ -145,7 +172,10 @@ export default function Chart() {
         role="group"
         tabIndex={0}
         onKeyDown={onKeyDown}
-        onFocus={() => setPaused(true)}
+        onFocus={() => {
+          if (resumeTimer.current) clearTimeout(resumeTimer.current);
+          setPaused(true);
+        }}
         onBlur={() => setPaused(false)}
         aria-label="Coordination cost against success rate for four arms. Use arrow keys to move between them."
         className="relative aspect-[4/3] w-full outline-none focus-visible:ring-2 focus-visible:ring-marker-deep focus-visible:ring-offset-4 focus-visible:ring-offset-paper sm:aspect-[16/11]"
@@ -262,7 +292,7 @@ export default function Chart() {
               tabIndex={-1}
               onClick={() => {
                 setActive(i);
-                setPaused(true);
+                pauseThenAutoResume();
               }}
               aria-label={`${p.id}, ${p.label}: ${p.successes} of ${p.runs} runs passed at ${p.bytes} bytes`}
               aria-pressed={isActive}
@@ -320,7 +350,13 @@ export default function Chart() {
         <div className="flex items-center gap-0.5 text-ink-500">
           <button
             type="button"
-            onClick={() => setPaused((p) => !p)}
+            onClick={() => {
+              // A direct pause/resume request, unlike the dot and
+              // prev/next buttons below: cancel any pending auto-resume
+              // so this explicit choice sticks until pressed again.
+              if (resumeTimer.current) clearTimeout(resumeTimer.current);
+              setPaused((p) => !p);
+            }}
             aria-label={paused ? "Resume cycling arms" : "Pause cycling arms"}
             className="p-1.5 transition-colors hover:text-ink-900"
           >
@@ -330,7 +366,7 @@ export default function Chart() {
             type="button"
             onClick={() => {
               setActive((i) => (i - 1 + ORDER.length) % ORDER.length);
-              setPaused(true);
+              pauseThenAutoResume();
             }}
             aria-label="Previous arm"
             className="p-1.5 transition-colors hover:text-ink-900"
@@ -341,7 +377,7 @@ export default function Chart() {
             type="button"
             onClick={() => {
               setActive((i) => (i + 1) % ORDER.length);
-              setPaused(true);
+              pauseThenAutoResume();
             }}
             aria-label="Next arm"
             className="p-1.5 transition-colors hover:text-ink-900"
