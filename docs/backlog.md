@@ -108,10 +108,12 @@ discover them.
 
 ### The gate is installable but not yet installed by default
 
-**Status (updated):** `ContractGate` in `hooks/policy_gate.py` satisfies the
-same `Gate` protocol the arms already install, so the lifecycle boundary
-takes it without a new code path. It is covered by 12 tests. What remains is
-that no arm or profile selects it: a default run still installs `ClaimGate`.
+**Status (updated again):** `ContractGate` in `hooks/policy_gate.py` satisfies the
+same `Gate` protocol the arms already install, so the lifecycle boundary takes it
+without a new code path. It is covered by 12 tests, and — as of the change recorded
+under "Verdicts do not enter the signed chain" below — every verdict it reaches now
+becomes a signed chain event when it is installed. What remains is that no arm or
+profile selects it: a default run still installs `ClaimGate`.
 
 **Why the arms do not use it.** The experiment's contrast is C2 against C3,
 and that is only clean if the two arms differ by one factor. `ClaimGate` is
@@ -120,9 +122,10 @@ difference, and the C2 to C3 contrast would stop isolating enforcement. So
 the narrow gate stays the arms', and the contract gate is what an operator
 installs when running work rather than running an experiment.
 
-**What it still blocks:** a run driven by `causalmesh.yaml` end to end. The
-gate decides correctly and records its refusals; nothing yet hands it to a
-scheduler and writes its verdicts into the run artifact.
+**What it still blocks:** a run driven by `causalmesh.yaml` end to end. The gate
+decides correctly and its verdicts now enter the signed chain (see below); nothing
+yet hands the contract to a scheduler or profile by default, so reaching this path at
+all still requires an operator to pass `contract_path` explicitly.
 
 **A bug this found in itself.** The first version returned a lease refusal
 without recording a denial, because the policy gate consults leases through
@@ -143,15 +146,22 @@ the protocol half is not started.
 
 ### Verdicts do not enter the signed chain
 
-**Status:** `Verdict.to_dict()` is chain-shaped and tested, but no event type
-is defined for it, so a refusal by the new gate is not yet evidence in the
-§82 sense.
+**Status: resolved.** `EventType.POLICY_VERDICT` exists
+(`src/causalmesh/events/schema.py`), and `execute_task` now emits one chain event per
+verdict `ContractGate` reaches — allowed and refused alike, so an unenforced arm's
+shadow-refusals are provable too, not only the refusals that actually blocked a call.
+Events are signed under a dedicated `policy_gate` identity, derived the same way every
+agent's key is (`KeyPair.derive(seed, "policy_gate")`), because a verdict is reached by
+the policy plane, not by any agent — attributing it to an agent's key would misattribute
+provenance. `tests/integration/test_task_execution.py::TestPolicyVerdictsOnTheChain`
+proves offline verification accepts the new event type with no special-casing, rather
+than asserting it.
 
-**Why this matters more than it looks:** the project's central claim is that
-a refusal is recorded evidence rather than a log line. Until the verdict has
-an event type, the policy plane's refusals are the one kind of refusal that
-is not provable — which is precisely the property that distinguishes this
-from a linter.
+**What this does not change:** the arms' own default gates (`AllowAllGate`/
+`ClaimGate`) are unaffected — verdict events are only emitted when a contract is in
+play (`config.contract_path is not None`), which is exactly when `ContractGate` itself
+is installed. See "The gate is installable but not yet installed by default" above for
+the part of this story that is still open.
 
 ### Checkpoints and identity are parsed and ignored
 

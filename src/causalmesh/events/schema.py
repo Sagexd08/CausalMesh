@@ -63,6 +63,11 @@ class EventType(StrEnum):
     RELEASE = "RELEASE"
     COMMIT = "COMMIT"
     FAILURE = "FAILURE"
+    # Emitted by the policy plane (ContractGate), not by an agent, whenever
+    # it reaches a verdict — allowed or refused. Signed under a dedicated
+    # "policy_gate" identity (see tasks/runner.py) rather than an agent's
+    # key, because a verdict is not an agent's action.
+    POLICY_VERDICT = "POLICY_VERDICT"
 
 
 # Identifiers appear in file paths, database keys and canonical bytes, so they

@@ -25,6 +25,7 @@ from ..channels import MetadataChannel, NullChannel, Room, TranscriptChannel
 from ..channels.base import CoordinationChannel
 from ..claims import ClaimRegistry
 from ..crypto.keys import KeyPair
+from ..events.schema import EventIdentity, EventType, utc_now_micros
 from ..hooks import LifecycleBoundary, gate_for_arm
 from ..isolation import Workspace, build_run_workspaces
 from ..relay import ChainStore, Relay, policy_for_arm
@@ -228,6 +229,13 @@ async def execute_task(
     )
 
     keypairs = {agent: KeyPair.derive(config.master_seed, agent) for agent in agent_ids}
+    # The policy plane is not an agent, but its verdicts still need a real
+    # signing identity so they can enter the chain — see docs/backlog.md's
+    # "Verdicts do not enter the signed chain" entry. Only derived when a
+    # contract is in play; an experiment run with no contract has no
+    # ContractGate and therefore no verdicts to sign.
+    if config.contract_path is not None:
+        keypairs["policy_gate"] = KeyPair.derive(config.master_seed, "policy_gate")
     claims = (
         ClaimRegistry(workspace_root / f"{config.run_id}_claims.db") if config.arm == "C3" else None
     )
@@ -343,34 +351,79 @@ async def execute_task(
     exit_code = _run_integration_test(task, integrated)
     outcome = evaluate_outcome(task.success, workspace=integrated, test_exit_code=exit_code)
 
-    result = RunResult(
-        run_id=config.run_id,
-        arm=config.arm,
-        task_id=task.task_id,
-        task_hash=task.content_hash(),
-        outcome=outcome,
-        records=relay.records(),
-        head_hash=relay.head_hash,
-        agent_summaries=summaries,
-        workspace_digests={
-            agent_id: workspace_digest(workspace) for agent_id, workspace in workspaces.items()
-        },
-        claim_history=[c.to_dict() for c in claims.history(run_id=config.run_id)] if claims else [],
-        denials=claims.denials(run_id=config.run_id) if claims else [],
-        # `to_dict` only exists on the contract gate. The arms' gates have
-        # no contract to report against, so an absent summary is the honest
-        # answer rather than an empty one that implies a gate was consulted.
-        gate_summary=gate.to_dict() if hasattr(gate, "to_dict") else {},
-        relay_summary=relay.summary(),
-        boundary_summaries={
-            agent_id: boundary.summary() for agent_id, boundary in boundaries.items()
-        },
-        error=error,
-    )
+    try:
+        # Every verdict the policy gate reached becomes a real chain event —
+        # not only refusals, so an unenforced arm's shadow-refusals (the
+        # counterfactual §-referenced throughout policy_gate.py) are
+        # provable too. The same `contract_path is not None` condition that
+        # decided whether to derive the `policy_gate` keypair above decides
+        # whether there is anything to emit here, rather than duck-typing
+        # on `.verdicts` — the two must always agree, and naming the same
+        # condition twice keeps that obvious rather than assumed.
+        if config.contract_path is not None:
+            policy_identity = EventIdentity(
+                experiment_id=config.experiment_id,
+                task_id=task.task_id,
+                run_id=config.run_id,
+                agent_id="policy_gate",
+                arm=config.arm,
+            )
+            for index, verdict in enumerate(gate.verdicts):
+                ingested = relay.ingest(
+                    event_id=f"{config.run_id}_verdict_{index}",
+                    agent_id="policy_gate",
+                    event_type=EventType.POLICY_VERDICT,
+                    identity=policy_identity,
+                    timestamp_us=utc_now_micros(),
+                    payload=verdict.to_dict(),
+                )
+                if not ingested.accepted:
+                    # A verdict that cannot be recorded is exactly the silent
+                    # gap this change exists to close — fail loudly rather
+                    # than returning a result that looks complete but is
+                    # missing evidence.
+                    raise RuntimeError(
+                        f"policy verdict {index} of {len(gate.verdicts)} could not "
+                        f"be recorded on the chain: {ingested.reason}"
+                    )
 
-    store.close()
-    if claims is not None:
-        claims.close()
+        result = RunResult(
+            run_id=config.run_id,
+            arm=config.arm,
+            task_id=task.task_id,
+            task_hash=task.content_hash(),
+            outcome=outcome,
+            records=relay.records(),
+            head_hash=relay.head_hash,
+            agent_summaries=summaries,
+            workspace_digests={
+                agent_id: workspace_digest(workspace)
+                for agent_id, workspace in workspaces.items()
+            },
+            claim_history=(
+                [c.to_dict() for c in claims.history(run_id=config.run_id)] if claims else []
+            ),
+            denials=claims.denials(run_id=config.run_id) if claims else [],
+            # `to_dict` only exists on the contract gate. The arms' gates have
+            # no contract to report against, so an absent summary is the honest
+            # answer rather than an empty one that implies a gate was consulted.
+            gate_summary=gate.to_dict() if hasattr(gate, "to_dict") else {},
+            relay_summary=relay.summary(),
+            boundary_summaries={
+                agent_id: boundary.summary() for agent_id, boundary in boundaries.items()
+            },
+            error=error,
+        )
+    finally:
+        # Every exit from this point on — including the RuntimeError above,
+        # which is deliberately allowed to propagate rather than being
+        # folded into `RunResult.error` — must still release the chain
+        # store and the claims database. A run that fails to record its
+        # evidence should not also leak the handles that evidence lives in.
+        store.close()
+        if claims is not None:
+            claims.close()
+
     return result
 
 

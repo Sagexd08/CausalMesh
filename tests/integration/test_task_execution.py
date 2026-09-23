@@ -14,6 +14,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+import yaml
 
 from causalmesh.tasks import (
     RunConfig,
@@ -199,3 +200,72 @@ def _key_ring(result):
 
     agents = {record["event"]["identity"]["agent_id"] for record in result.records}
     return PublicKeyRing.from_keypairs({agent: KeyPair.derive(SEED, agent) for agent in agents})
+
+
+def _write_contract(tmp_path: Path, *, owner_of_config: str) -> Path:
+    """A minimal contract that will produce both a refusal and an allow.
+
+    `owner_of_config` owns src/handler.py; anyone else writing it is refused.
+    Every other path is undeclared, so writes to it are allowed — giving the
+    run at least one ALLOW verdict and, when the scenario has an agent that
+    is not `owner_of_config` write to src/handler.py, at least one REFUSE.
+    """
+    contract_path = tmp_path / "causalmesh.yaml"
+    contract_path.write_text(
+        yaml.safe_dump(
+            {
+                "version": 1,
+                "roles": [{"agent_id": owner_of_config, "owns": ["src/handler.py"]}],
+                "policy": {"arm": "C3"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    return contract_path
+
+
+class TestPolicyVerdictsOnTheChain:
+    """A contract-driven run's verdicts become real, verifiable chain events.
+
+    This is the property the backlog entry "Verdicts do not enter the
+    signed chain" names directly: a refusal recorded only in the run
+    artifact is not provable the way a chain event is. Running with a real
+    contract and reading the resulting chain back is the only way to prove
+    this rather than asserting it.
+    """
+
+    async def test_verdicts_appear_as_verified_policy_verdict_events(
+        self, task: TaskDefinition, tmp_path: Path
+    ) -> None:
+        contract_path = _write_contract(tmp_path, owner_of_config="agent_a")
+
+        result = await execute_task(
+            task,
+            RunConfig(
+                experiment_id="exp_policy_verdicts",
+                run_id="run_policy_verdicts",
+                arm="C3",
+                master_seed=SEED,
+                contract_path=str(contract_path),
+            ),
+            workspace_root=tmp_path / "ws",
+            fixtures_root=FIXTURES,
+        )
+
+        verdict_records = [
+            r for r in result.records if r["event"]["event_type"] == "POLICY_VERDICT"
+        ]
+        assert verdict_records, "expected at least one POLICY_VERDICT event on the chain"
+
+        # Every verdict-event is attributed to the policy_gate identity,
+        # never to a participating agent.
+        for record in verdict_records:
+            assert record["event"]["identity"]["agent_id"] == "policy_gate"
+
+        # Offline verification must accept the new event type with no
+        # special-casing — proving this rather than asserting it is the
+        # whole point of this test. `_key_ring` (already defined in this
+        # file) picks up the policy_gate identity automatically because it
+        # derives a key for every agent_id actually present in the records.
+        report = verify_chain(result.records, _key_ring(result))
+        assert report.valid, report.failures

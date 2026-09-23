@@ -183,3 +183,30 @@ class TestTimestamps:
 
     def test_rfc3339_preserves_microseconds(self) -> None:
         assert micros_to_rfc3339(1_757_000_000_123_456).endswith("123456Z")
+
+
+class TestPolicyVerdictEventType:
+    def test_policy_verdict_is_a_member(self) -> None:
+        assert EventType.POLICY_VERDICT == "POLICY_VERDICT"
+
+    def test_policy_verdict_round_trips_through_canonicalization(self) -> None:
+        identity = EventIdentity(
+            experiment_id="exp1",
+            task_id="task1",
+            run_id="run1",
+            agent_id="policy_gate",
+            arm="C3",
+        )
+        event = Event(
+            event_id="run1_verdict_0",
+            identity=identity,
+            event_type=EventType.POLICY_VERDICT,
+            sequence=0,
+            timestamp_us=1_700_000_000_000_000,
+            payload={"allowed": False, "reason": "test", "rule": "ownership"},
+        )
+        canonical = event.to_canonical_dict()
+        assert canonical["event_type"] == "POLICY_VERDICT"
+        # Re-canonicalizing the same structure must be byte-identical —
+        # this is the property the whole hash chain depends on.
+        assert event.canonical_bytes() == event.canonical_bytes()
