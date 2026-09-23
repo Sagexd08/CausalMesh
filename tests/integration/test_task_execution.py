@@ -269,3 +269,59 @@ class TestPolicyVerdictsOnTheChain:
         # derives a key for every agent_id actually present in the records.
         report = verify_chain(result.records, _key_ring(result))
         assert report.valid, report.failures
+
+
+class TestCausalEdgesForDenials:
+    """A denied write's FAILURE event is linked back to the verdict that
+    caused it (`docs/backlog.md`, "Causal edges over the chain": population).
+
+    The pairing is positional, not content-matched (`Verdict.to_dict()`
+    carries no agent id), which is what makes it exact rather than a
+    best-effort guess — this is the property worth proving by running a
+    real refusal rather than asserting the pairing logic in isolation.
+    """
+
+    async def test_a_denied_write_gets_a_required_edge_to_its_verdict(
+        self, task: TaskDefinition, tmp_path: Path
+    ) -> None:
+        from causalmesh.edges import RelationshipType
+
+        contract_path = _write_contract(tmp_path, owner_of_config="agent_a")
+
+        result = await execute_task(
+            task,
+            RunConfig(
+                experiment_id="exp_causal_edges",
+                run_id="run_causal_edges",
+                arm="C3",
+                master_seed=SEED,
+                contract_path=str(contract_path),
+            ),
+            workspace_root=tmp_path / "ws",
+            fixtures_root=FIXTURES,
+        )
+
+        denied_events = [
+            r
+            for r in result.records
+            if r["event"]["event_type"] == "FAILURE"
+            and r["event"]["payload"].get("outcome") == "denied"
+        ]
+        assert denied_events, "expected at least one denied write in this scenario"
+
+        verdict_ids = {
+            r["event"]["event_id"]
+            for r in result.records
+            if r["event"]["event_type"] == "POLICY_VERDICT"
+        }
+
+        assert result.edges, "expected at least one causal edge"
+        for edge in result.edges:
+            assert edge["relationship"] == str(RelationshipType.REQUIRED)
+            assert edge["from_event_id"] in {e["event"]["event_id"] for e in denied_events}
+            assert edge["to_event_id"] in verdict_ids
+
+        # Every denial has exactly one edge, and every edge's target verdict
+        # is itself a refusal — proving the pairing lines up with the
+        # events it claims to connect, not just that some edges exist.
+        assert len(result.edges) == len(denied_events)
