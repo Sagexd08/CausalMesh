@@ -386,19 +386,36 @@ point the Jev adapter above was built for.
 
 ### Causal edges over the chain
 
-**Status:** not built. The chain (`relay/`) gives total order and hash linkage today —
-event N's hash depends on event N-1's — which proves *sequence* but does not record
-*relationships*. "Which decision caused this write" requires reading the chain in
-order and matching timestamps by eye.
+**Status:** store and query surface built and tested (`src/causalmesh/edges/`,
+`tests/unit/test_edges.py`, 25 tests). Nothing in the runtime populates it yet — no
+call site appends a `CausalEdge`, and no chain event is auto-derived into one.
 
-**Why:** a typed relationship layer (`caused`, `required`, `recovered`, `superseded`,
-...) over the existing chain would make that a query instead of a manual scan, and
-would let a future audit view answer "which decision caused this write" or "which
-verification evidence caused acceptance" directly. It is additive to the existing
-chain — it does not change what is signed or how verification works — which is why it
-is scoped as a separate layer rather than a change to `relay/`'s core hashing.
+**Why:** a typed relationship layer (`CAUSED`, `REQUIRED`, `RECOVERED`, `SUPERSEDED`)
+over the existing chain makes "which decision caused this write" a query instead of a
+manual scan. It is additive to the existing chain — a `CausalEdge` is never fed to
+`crypto.chain.compute_chain_hash` and carries no signature of its own, so it does not
+change what is signed or how verification works. `EdgeStore` mirrors
+`relay.store.ChainStore`'s shape deliberately (append-only, no mutation API, JSONL
+sibling file convention) rather than living inside `chain.jsonl`, which enforces its
+own no-mutation guarantee via `test_the_store_exposes_no_mutation_api` and would
+otherwise be violated by co-locating edges with the signed log.
 
-**What it would take:** a store for `(from_event_id, to_event_id, relationship)`
-triples, populated as decisions and events reference each other, plus a query surface.
-Not blocked on anything else in this list — it could be built against the chain as it
-exists today — but was out of scope for this session, which was adapter-and-docs only.
+**What it would take (remaining):** two things, kept separate from this pass
+deliberately.
+
+- *Population.* Something has to call `EdgeStore.append`. The natural first source is
+  `Event.parent_id`, which already records a single unlabeled causal predecessor
+  (`docs/protocol.md:132-138`) but is never turned into a typed edge today — deciding
+  whether every `parent_id` becomes a `CAUSED` edge automatically, or whether that
+  conflates "the last event an agent observed" with "the event that caused this one,"
+  is a design decision left open rather than assumed. `Event.references` is unused by
+  any production call site today and is the other candidate source. Wiring either into
+  `Relay.ingest` touches the relay's core ingestion path, which is why it was left out
+  of this pass rather than bundled with the store.
+- *A query-facing surface.* `EdgeIndex` (in-process) exists; a `causalmesh`-CLI-facing
+  view (e.g. `causalmesh analyze --edges`, following the existing command's `--json`
+  and PILOT/DERIVED labeling conventions) does not.
+
+Not blocked on anything else in this list — the store and query surface were built
+against the chain as it exists today, with no dependency on the acceptance-decision
+object or the agent-handoff package above.
