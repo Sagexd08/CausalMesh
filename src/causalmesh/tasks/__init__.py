@@ -14,7 +14,15 @@ from .definition import (
     TaskError,
     TaskFamily,
 )
-from .outcome import TaskOutcome, diverged_files, evaluate_outcome, workspace_digest
+from .outcome import (
+    AcceptanceDecision,
+    AcceptanceVerdict,
+    TaskOutcome,
+    decide_acceptance,
+    diverged_files,
+    evaluate_outcome,
+    workspace_digest,
+)
 from .runner import RunConfig, RunResult, execute_task
 from .validation import (
     SensitivityReport,
@@ -26,6 +34,8 @@ from .validation import (
 )
 
 __all__ = [
+    "AcceptanceDecision",
+    "AcceptanceVerdict",
     "AgentRole",
     "RunConfig",
     "RunResult",
@@ -38,6 +48,7 @@ __all__ = [
     "ValidationIssue",
     "ValidationReport",
     "check_sensitivity",
+    "decide_acceptance",
     "diverged_files",
     "evaluate_outcome",
     "execute_task",

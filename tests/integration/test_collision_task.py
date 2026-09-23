@@ -235,6 +235,64 @@ class TestEvidence:
         assert {w["identity"]["agent_id"] for w in writes} == {"agent_a"}
 
 
+class TestAcceptanceDecisionsOnTheChain:
+    """Every run reaches a signed, chained acceptance decision (§74's task).
+
+    This is the "Explicit acceptance decision object" backlog entry: an
+    ACCEPT/REJECT verdict entered into the chain as its own event, distinct
+    from the outcome it was read from. It needed a genuinely contestable
+    task to be meaningful rather than trivially always-ACCEPT — this task,
+    where C0 and C3 both fail for different reasons, is exactly that.
+    """
+
+    async def test_every_arm_reaches_exactly_one_decision(self, all_arms: dict) -> None:
+        for arm, result in all_arms.items():
+            if arm == "_root":
+                continue
+            decided = [
+                r for r in result.records if r["event"]["event_type"] == "ACCEPTANCE_DECIDED"
+            ]
+            assert len(decided) == 1, f"{arm}: expected exactly one ACCEPTANCE_DECIDED event"
+
+    async def test_the_decision_is_attributed_to_its_own_identity(self, all_arms: dict) -> None:
+        # Never an agent's key and never policy_gate's: the decision is a
+        # distinct act from both.
+        for arm, result in all_arms.items():
+            if arm == "_root":
+                continue
+            decided = next(
+                r for r in result.records if r["event"]["event_type"] == "ACCEPTANCE_DECIDED"
+            )
+            assert decided["event"]["identity"]["agent_id"] == "acceptance"
+
+    async def test_the_verdict_matches_the_outcome(self, all_arms: dict) -> None:
+        # C0 and C3 both fail this task (for different reasons — see
+        # TestTheArmsSeparate), C1 and C2 succeed. The decision must track
+        # `outcome.succeeded` exactly, since it is a total function of it.
+        for arm, result in all_arms.items():
+            if arm == "_root":
+                continue
+            decided = next(
+                r for r in result.records if r["event"]["event_type"] == "ACCEPTANCE_DECIDED"
+            )
+            expected = "ACCEPT" if result.outcome.succeeded else "REJECT"
+            assert decided["event"]["payload"]["verdict"] == expected
+            assert result.decision.verdict == expected
+
+    async def test_offline_verification_accepts_it_with_no_special_casing(
+        self, all_arms: dict
+    ) -> None:
+        from causalmesh.crypto.keys import KeyPair, PublicKeyRing
+
+        for arm, result in all_arms.items():
+            if arm == "_root":
+                continue
+            agents = {r["event"]["identity"]["agent_id"] for r in result.records}
+            ring = PublicKeyRing.from_keypairs({a: KeyPair.derive(SEED, a) for a in agents})
+            report = verify_chain(result.records, ring)
+            assert report.valid, f"{arm}: {report.summary()}"
+
+
 class TestQualityGate:
     async def test_the_task_is_demonstrably_coordination_sensitive(
         self, task: TaskDefinition, tmp_path: Path

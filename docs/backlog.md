@@ -163,6 +163,20 @@ play (`config.contract_path is not None`), which is exactly when `ContractGate` 
 is installed. See "The gate is installable but not yet installed by default" above for
 the part of this story that is still open.
 
+**A determinism bug this found, once a second consumer existed.** The verdict event's
+timestamp was `utc_now_micros()` — real wall-clock time — in a chain whose every other
+timestamp is `base_time_us + turn * tick_us`, deterministic by construction (§84). No
+existing determinism test caught it, because
+`TestDeterminism::test_two_runs_of_the_same_arm_agree` runs at C2 with no contract, so
+no `POLICY_VERDICT` was ever on the chain it compared. Adding the unconditional
+`ACCEPTANCE_DECIDED` event (see "Explicit acceptance decision object" below) put a
+wall-clock timestamp on every run's chain for the first time, and that determinism test
+immediately failed with two different `head_hash` values from two runs of the same
+arm. Both events now use `post_run_time_us = base_time_us + max_turns * tick_us` — the
+deterministic instant after the scripted turn loop ends. Recorded here rather than
+silently folded into the acceptance-decision commit, because it is a correctness fix to
+already-shipped code, not new behaviour.
+
 ### Checkpoints and identity are parsed and ignored
 
 `policy.checkpoints` (human-in-the-loop) and `identity` (per-agent keys) are
@@ -359,21 +373,29 @@ to name and avoid.
 
 ### Explicit acceptance decision object
 
-**Status:** not built. Run success today is read directly off `SuccessCriteria` and
-the verifier's result — a pass/fail, not a named decision.
+**Status: built.** `AcceptanceVerdict` and `AcceptanceDecision` live in
+`src/causalmesh/tasks/outcome.py`; `decide_acceptance(outcome)` is a total function of
+`TaskOutcome.succeeded` (§38's own rule, named rather than re-derived). `execute_task`
+emits one `EventType.ACCEPTANCE_DECIDED` chain event per run, unconditionally, signed
+under a dedicated `acceptance` identity — never an agent's key and never
+`policy_gate`'s, because accepting a result is a decision distinct from both what an
+agent did and what the policy plane allowed. `RunResult.decision` carries it
+alongside `outcome` so callers don't have to re-scan the chain for it.
 
-**Why:** an explicit `ACCEPT` / `REJECT` / `HUMAN_REVIEW` record, entered into the
-chain as its own event distinct from the verification result it was based on, makes
-"why was this run accepted" a recorded decision rather than something reconstructed by
-re-reading the verifier's output. This also needs a task whose acceptance is genuinely
-contestable — a contested-path task, which §74 (the acceptance blocker recorded
-elsewhere) notes does not exist yet — before the decision is meaningful to test rather
-than trivially always-ACCEPT.
+**A stale claim corrected.** This entry previously said the work was blocked on a
+contested-path task that "does not exist yet." It already did:
+`concurrent_edit_collision` (§74's task) was built and tested before this entry was
+last edited. `tests/integration/test_collision_task.py::TestAcceptanceDecisionsOnTheChain`
+is the test that needed a genuinely contestable task to be meaningful — it runs all
+four arms, where C0 and C3 both fail for different reasons, and proves the decision
+tracks `outcome.succeeded` exactly and verifies offline with no special-casing.
 
-**What it would take:** a contested-path task (blocking), then a new chain event type
-(`acceptance.decided`, say) carrying the verdict, the evidence it was based on, and —
-once the Jev adapter has a wiring target — optionally a Jev `Choice` call among
-`ACCEPT`/`REJECT`/`HUMAN_REVIEW` rather than a hand-written threshold rule.
+**What this does not change:** `HUMAN_REVIEW` is declared in `AcceptanceVerdict` but
+unreachable — the rule here is total over `ACCEPT`/`REJECT`, the same way
+`RunState.TIMED_OUT` is declared before anything assigns it. **What it would still
+take:** wiring the Jev adapter in as a `Choice` call among the three verdicts, which
+needs a decision that is genuinely uncertain given current state — this rule isn't
+one, by design (see "Adapter built, not wired" below).
 
 ### Agent handoff package on recovery
 
