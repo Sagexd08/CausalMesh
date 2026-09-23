@@ -28,6 +28,15 @@ from .protocol import (
     system_prompt,
 )
 from .transport import ChatMessage, ChatResponse, HttpTransport, TransportError
+from .x402 import (
+    PaymentDecision,
+    PaymentRequired,
+    PaymentRequirement,
+    X402Error,
+    decide_payment,
+    parse_payment_required,
+    resource_for,
+)
 
 __all__ = [
     "PARSE_FAILURE_KINDS",
@@ -40,9 +49,16 @@ __all__ = [
     "ModelSettings",
     "OpenAIClient",
     "ParsedAction",
+    "PaymentDecision",
+    "PaymentRequired",
+    "PaymentRequirement",
     "ProtocolError",
     "TransportError",
+    "X402Error",
     "client_from_environment",
+    "decide_payment",
     "parse_action",
+    "parse_payment_required",
+    "resource_for",
     "system_prompt",
 ]
