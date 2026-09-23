@@ -141,10 +141,21 @@ def run_command(
         typer.Option("--limit", help="Stop after this many runs; the rest stay planned."),
     ] = None,
     allow_gated: Annotated[bool, typer.Option("--allow-gated")] = False,
+    use_contract: Annotated[
+        bool,
+        typer.Option(
+            "--contract/--no-contract",
+            help=(
+                "Discover causalmesh.yaml and install ContractGate if found. "
+                "Off skips discovery entirely, so the arms' own gate is always what runs."
+            ),
+        ),
+    ] = True,
     root_option: Annotated[Path | None, typer.Option("--root")] = None,
     as_json: Annotated[bool, typer.Option("--json")] = False,
 ) -> None:
     """Execute a collection. Resumable: re-running continues where it stopped."""
+    from causalmesh.policy.contract import Contract, ContractError
     from causalmesh.provenance import Environment
     from causalmesh.scheduler import ExperimentRunner, RunEnvironment
 
@@ -165,6 +176,30 @@ def run_command(
     # fields existed and defaulted to "unknown" because nothing populated
     # them, so every run produced before this was unattributable.
     captured = Environment.capture(repo.root)
+    run_config = captured.to_run_config()
+
+    # `causalmesh.yaml` discovery follows the exact pattern `causalmesh
+    # serve` already uses (`Contract.find`), so a contract found here means
+    # the same thing it means there. Off by default would leave the gap
+    # this exists to close; on by default is safe because `_gate_for`
+    # (tasks/runner.py) keeps every arm's own enforcement semantics even
+    # with a contract installed — C3 still enforces, C0/C1/C2 still reach a
+    # verdict and allow anyway, so the C2-to-C3 contrast is unaffected.
+    # `--no-contract` skips discovery outright for an operator who wants
+    # the arms' bare gate with certainty, not just an empty causalmesh.yaml.
+    if use_contract:
+        try:
+            contract = Contract.find(repo.root)
+        except ContractError as exc:
+            fail(str(exc), hint="Fix causalmesh.yaml, then run this again.")
+            raise typer.Exit(Exit.USAGE) from None
+        if contract is not None:
+            run_config["contract_path"] = str(contract.source)
+            note(f"causalmesh.yaml found; ContractGate installed (arm={contract.arm})")
+        else:
+            note("no causalmesh.yaml found; arms install their own gate")
+    else:
+        note("--no-contract: skipping causalmesh.yaml discovery")
 
     note(f"{name}: {len(plan)} runs planned ({plan.profile} profile)")
     if captured.git.dirty:
@@ -174,7 +209,7 @@ def run_command(
         tasks=tasks,
         environment=environment,
         master_seed=_seed_bytes(seed),
-        run_config=captured.to_run_config(),
+        run_config=run_config,
     ) as runner:
         registered = runner.prepare()
         if registered:

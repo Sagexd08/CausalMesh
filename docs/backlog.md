@@ -108,24 +108,37 @@ discover them.
 
 ### The gate is installable but not yet installed by default
 
-**Status (updated again):** `ContractGate` in `hooks/policy_gate.py` satisfies the
-same `Gate` protocol the arms already install, so the lifecycle boundary takes it
-without a new code path. It is covered by 12 tests, and — as of the change recorded
-under "Verdicts do not enter the signed chain" below — every verdict it reaches now
-becomes a signed chain event when it is installed. What remains is that no arm or
-profile selects it: a default run still installs `ClaimGate`.
+**Status: resolved for `causalmesh experiment run`.** `ContractGate` in
+`hooks/policy_gate.py` satisfies the same `Gate` protocol the arms already install, so
+the lifecycle boundary takes it without a new code path, and it is covered by 12 tests.
+`causalmesh experiment run` now discovers `causalmesh.yaml` the same way `causalmesh
+serve` already does (`Contract.find(repo.root)`) and, when found, threads
+`contract_path` into every run's `RunConfig` — reaching this path no longer requires an
+operator to construct `RunConfig` by hand. A `--contract/--no-contract` flag (default
+on) lets an operator skip discovery outright when they want the arms' bare gate with
+certainty.
 
-**Why the arms do not use it.** The experiment's contrast is C2 against C3,
-and that is only clean if the two arms differ by one factor. `ClaimGate` is
-that factor. A gate that also refuses on ownership would be a second
-difference, and the C2 to C3 contrast would stop isolating enforcement. So
-the narrow gate stays the arms', and the contract gate is what an operator
-installs when running work rather than running an experiment.
+**Why this is safe for the experiment's own contrast.** The experiment's contrast is C2
+against C3, and that is only clean if the two arms differ by one factor. Installing
+`ContractGate` does not add a second factor: `_gate_for` (`tasks/runner.py`) keeps every
+arm's own enforcement semantics even with a contract in play — C3 still enforces, C0/C1/
+C2 still reach a verdict and allow anyway (§-referenced throughout `policy_gate.py` as
+the counterfactual) — so the contrast is unaffected whether or not a `causalmesh.yaml`
+happens to be present. This is why on-by-default is the right default rather than a
+narrower opt-in: it closes the gap named here without touching what a confirmatory
+collection would measure.
 
-**What it still blocks:** a run driven by `causalmesh.yaml` end to end. The gate
-decides correctly and its verdicts now enter the signed chain (see below); nothing
-yet hands the contract to a scheduler or profile by default, so reaching this path at
-all still requires an operator to pass `contract_path` explicitly.
+**What this does not change:** no profile gained a `contract_path` field.
+`experiments/profiles.py`'s `Profile` is deliberately scale-only ("how many tasks, how
+many repetitions... and nothing else"); wiring belongs at the CLI/runner boundary, where
+`RunConfig.contract_path` already lived, not in the profile.
+
+**Tested against the repository's own `causalmesh.yaml`**, not a fixture contract —
+`tests/integration/test_cli.py::TestContractDiscovery` runs the real smoke profile
+through the real CLI twice, asserting the run artifact's `provenance.contract_path` and
+the presence (or, under `--no-contract`, absence) of `POLICY_VERDICT` events on the
+resulting chain — proof the gate actually ran, not just that a path string was threaded
+through.
 
 **A bug this found in itself.** The first version returned a lease refusal
 without recording a denial, because the policy gate consults leases through
