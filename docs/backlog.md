@@ -431,36 +431,60 @@ point the Jev adapter above was built for.
 
 ### Causal edges over the chain
 
-**Status:** store and query surface built and tested (`src/causalmesh/edges/`,
-`tests/unit/test_edges.py`, 25 tests). Nothing in the runtime populates it yet — no
-call site appends a `CausalEdge`, and no chain event is auto-derived into one.
+**Status: population started.** Store and query surface built and tested
+(`src/causalmesh/edges/`, `tests/unit/test_edges.py`, 25 tests). `execute_task`
+(`tasks/runner.py`) now populates one real relationship: a `REQUIRED` `CausalEdge`
+from a denied write's `FAILURE` event back to the `POLICY_VERDICT` event that refused
+it, recorded on `RunResult.edges` (and therefore in the run artifact, alongside
+`chain`) whenever a contract is installed and refuses at least one call.
+`tests/integration/test_task_execution.py::TestCausalEdgesForDenials` proves it end to
+end: every denied write in the scenario gets exactly one edge, pointing at a real
+verdict event that is itself a refusal.
 
-**Why:** a typed relationship layer (`CAUSED`, `REQUIRED`, `RECOVERED`, `SUPERSEDED`)
-over the existing chain makes "which decision caused this write" a query instead of a
-manual scan. It is additive to the existing chain — a `CausalEdge` is never fed to
-`crypto.chain.compute_chain_hash` and carries no signature of its own, so it does not
-change what is signed or how verification works. `EdgeStore` mirrors
-`relay.store.ChainStore`'s shape deliberately (append-only, no mutation API, JSONL
-sibling file convention) rather than living inside `chain.jsonl`, which enforces its
-own no-mutation guarantee via `test_the_store_exposes_no_mutation_api` and would
-otherwise be violated by co-locating edges with the signed log.
+**`Event.parent_id` was considered and rejected as the population source.**
+`ToolExecutor` sets `parent_id` to `last_observed_event_id` — the last peer event an
+agent drained before acting, not necessarily the event that caused the specific call
+that followed. An agent can observe one event and then take several unrelated actions
+in sequence, all carrying the same `parent_id`. Auto-deriving a `CAUSED` edge from it
+would be exactly the kind of plausible-but-possibly-wrong inference §68 exists to
+forbid — the same reasoning that keeps the §23/§45 staleness estimators out of this
+repository rather than reconstructed from their inputs (see "Staleness estimation"
+below). `Event.references` remains unused by any production call site; it is still a
+candidate for whatever population source comes next, on the same "only from a call
+site that already knows the relationship is real" standard as the one shipped here.
 
-**What it would take (remaining):** two things, kept separate from this pass
-deliberately.
+**Why the denial-to-verdict edge is exact rather than a best-effort match.**
+`Verdict.to_dict()` records the resource, rule, holder and reason but not which agent
+was denied, so pairing a `POLICY_VERDICT` to a `FAILURE` event by content (path, rule,
+reason) would misattribute the moment two agents are denied identically in one run —
+a real shape under `concurrent_edit_collision`, where both agents contend for
+`src/config.py`. The fix pairs by position instead: `gate.verdicts` and the chain's
+denied `FAILURE` events are both produced by the same sequence of calls through
+`LifecycleBoundary.invoke`, one verdict and (on refusal) exactly one `FAILURE` event
+per mutating call, in the same order — so the Nth refused verdict is provably the Nth
+denial, with no content matching involved. `execute_task` raises rather than pairing
+if the two counts ever disagree, so a violated assumption becomes a loud failure
+instead of a silently wrong edge.
 
-- *Population.* Something has to call `EdgeStore.append`. The natural first source is
-  `Event.parent_id`, which already records a single unlabeled causal predecessor
-  (`docs/protocol.md:132-138`) but is never turned into a typed edge today — deciding
-  whether every `parent_id` becomes a `CAUSED` edge automatically, or whether that
-  conflates "the last event an agent observed" with "the event that caused this one,"
-  is a design decision left open rather than assumed. `Event.references` is unused by
-  any production call site today and is the other candidate source. Wiring either into
-  `Relay.ingest` touches the relay's core ingestion path, which is why it was left out
-  of this pass rather than bundled with the store.
+**A bug this found in itself.** The first version filtered denied events on
+`payload["outcome"] == "DENIED"`; `ToolOutcome` is a lowercase-valued `StrEnum`
+(`hooks/lifecycle.py`), so the real value is `"denied"` and the filter matched
+nothing. The positional-count invariant above caught it immediately — a real C3 run
+that denies a write reported 1 refused verdict and 0 matched denials, which raised
+rather than silently returning zero edges. This is the same defect class as
+"Enforcement was unmeasurable, not merely unmeasured" below: a filter that looks
+plausible and matches nothing is worse than one that errors.
+
+**What it would take (remaining):**
+
+- *More population sources.* Only the denial-to-verdict relationship is populated.
+  The acceptance decision (`ACCEPTANCE_DECIDED`, see "Explicit acceptance decision
+  object" below) has no edge back to the evidence it was decided from, because there
+  is no chain event yet representing "the integration test that decided this run" —
+  `evaluate_outcome` runs directly on the integrated workspace, outside the chain.
+  Fabricating an edge to a synthetic id would misrepresent evidence; the honest fix
+  needs that test result to become a real chain event first, which this pass did not
+  attempt.
 - *A query-facing surface.* `EdgeIndex` (in-process) exists; a `causalmesh`-CLI-facing
   view (e.g. `causalmesh analyze --edges`, following the existing command's `--json`
   and PILOT/DERIVED labeling conventions) does not.
-
-Not blocked on anything else in this list — the store and query surface were built
-against the chain as it exists today, with no dependency on the acceptance-decision
-object or the agent-handoff package above.

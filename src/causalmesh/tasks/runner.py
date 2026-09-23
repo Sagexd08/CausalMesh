@@ -25,6 +25,7 @@ from ..channels import MetadataChannel, NullChannel, Room, TranscriptChannel
 from ..channels.base import CoordinationChannel
 from ..claims import ClaimRegistry
 from ..crypto.keys import KeyPair
+from ..edges import CausalEdge, RelationshipType
 from ..events.schema import EventIdentity, EventType
 from ..hooks import LifecycleBoundary, gate_for_arm
 from ..isolation import Workspace, build_run_workspaces
@@ -125,6 +126,13 @@ class RunResult:
     # run driven by the arms' own gate, which is the experiment's default
     # and has no contract to report against.
     gate_summary: dict[str, Any] = field(default_factory=dict)
+    # Typed causal relationships between chain events (see
+    # `causalmesh.edges`), e.g. a REQUIRED edge from a denied write's
+    # FAILURE event back to the POLICY_VERDICT that refused it. Empty
+    # whenever nothing produced one — no contract installed, or a contract
+    # that refused nothing — the same "absent means no data, not zero
+    # findings" convention `gate_summary` already follows.
+    edges: list[dict[str, Any]] = field(default_factory=list)
     error: str | None = None
 
     @property
@@ -146,6 +154,7 @@ class RunResult:
             "coordination_bytes": self.coordination_bytes(),
             "decision": self.decision.to_dict(),
             "denials": self.denials,
+            "edges": self.edges,
             "error": self.error,
             "events": len(self.records),
             "gate": self.gate_summary,
@@ -371,6 +380,11 @@ async def execute_task(
     # turn" instant, independent of how many turns actually ran.
     post_run_time_us = config.base_time_us + config.max_turns * config.tick_us
 
+    # Causal edges recorded for this run. Stays empty when no contract is
+    # installed — there are no verdicts to pair against denials — the same
+    # "absent means no data" convention `gate_summary` follows.
+    edges: list[dict[str, Any]] = []
+
     try:
         # Every verdict the policy gate reached becomes a real chain event —
         # not only refusals, so an unenforced arm's shadow-refusals (the
@@ -406,6 +420,51 @@ async def execute_task(
                         f"policy verdict {index} of {len(gate.verdicts)} could not "
                         f"be recorded on the chain: {ingested.reason}"
                     )
+
+            # A REQUIRED edge from each denied write's FAILURE event back to
+            # the POLICY_VERDICT event that refused it.
+            #
+            # The pairing is exact, not inferred from content: `gate.verdicts`
+            # and the chain's DENIED events are both produced by the same
+            # sequence of calls through `LifecycleBoundary.invoke`, one verdict
+            # and (on refusal) exactly one FAILURE event per mutating call, in
+            # the same order. `Verdict.to_dict()` does not record which agent
+            # was denied, so matching by content (path, rule, reason) would
+            # misattribute the moment two agents are denied identically in one
+            # run — a real shape under `concurrent_edit_collision`. Matching by
+            # position in these two same-order, same-cause sequences carries no
+            # such risk.
+            refused_verdict_ids = [
+                f"{config.run_id}_verdict_{index}"
+                for index, verdict in enumerate(gate.verdicts)
+                if verdict.refused
+            ]
+            denied_event_ids = [
+                record["event"]["event_id"]
+                for record in relay.records()
+                if record["event"]["event_type"] == "FAILURE"
+                # `payload["outcome"]` is `str(ToolOutcome.DENIED)`, and
+                # `ToolOutcome` is a lowercase-valued StrEnum (see
+                # `hooks/lifecycle.py`) — "denied", not "DENIED".
+                and record["event"]["payload"].get("outcome") == "denied"
+            ]
+            if len(refused_verdict_ids) != len(denied_event_ids):
+                # The invariant the pairing depends on has broken — pairing
+                # anyway would silently produce wrong edges, which is worse
+                # than producing none.
+                raise RuntimeError(
+                    f"{len(refused_verdict_ids)} refused verdicts but "
+                    f"{len(denied_event_ids)} denied events; cannot pair them "
+                    "positionally"
+                )
+            for verdict_id, denied_id in zip(refused_verdict_ids, denied_event_ids, strict=True):
+                edges.append(
+                    CausalEdge(
+                        from_event_id=denied_id,
+                        to_event_id=verdict_id,
+                        relationship=RelationshipType.REQUIRED,
+                    ).to_dict()
+                )
 
         # Every run reaches an acceptance decision, unconditionally — unlike
         # policy verdicts, which only exist when a contract is in play. The
@@ -456,6 +515,7 @@ async def execute_task(
             # no contract to report against, so an absent summary is the honest
             # answer rather than an empty one that implies a gate was consulted.
             gate_summary=gate.to_dict() if hasattr(gate, "to_dict") else {},
+            edges=edges,
             relay_summary=relay.summary(),
             boundary_summaries={
                 agent_id: boundary.summary() for agent_id, boundary in boundaries.items()
