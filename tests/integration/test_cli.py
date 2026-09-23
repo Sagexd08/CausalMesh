@@ -15,6 +15,7 @@ a test change.
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 
 import pytest
@@ -133,6 +134,84 @@ class TestPlan:
     def test_an_unknown_profile_is_a_usage_error(self) -> None:
         result = invoke("experiment", "plan", "--profile", "nonsense", "--root", str(REPO))
         assert result.exit_code == 2
+
+
+@pytest.mark.slow
+class TestContractDiscovery:
+    """`experiment run` auto-discovers `causalmesh.yaml` (docs/backlog.md:
+    "The gate is installable but not yet installed by default").
+
+    The repository's own `causalmesh.yaml` is real, so a run through it is
+    the same discovery path `causalmesh serve` already uses (`Contract.find`),
+    exercised for real rather than against a fixture contract.
+    """
+
+    def _run_artifact(self, experiment_id: str) -> dict:
+        run_dir = next((REPO / "data" / "raw" / experiment_id).glob("*_r0000"))
+        return json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+
+    def _cleanup(self, experiment_id: str) -> None:
+        shutil.rmtree(REPO / "data" / "raw" / experiment_id, ignore_errors=True)
+        shutil.rmtree(REPO / "data" / "work" / experiment_id, ignore_errors=True)
+
+    def test_a_discovered_contract_installs_the_contract_gate(self) -> None:
+        experiment_id = "exp_test_contract_discovery_on"
+        self._cleanup(experiment_id)
+        try:
+            result = invoke(
+                "experiment",
+                "run",
+                "--profile",
+                "smoke",
+                "--id",
+                experiment_id,
+                # The smoke profile plans 1 task x 4 arms; --limit 4 completes
+                # the whole (small) plan so the run is not left PLANNED and
+                # the CLI exits 0.
+                "--limit",
+                "4",
+                "--root",
+                str(REPO),
+                "--json",
+            )
+            assert result.exit_code == 0, result.stdout
+
+            artifact = self._run_artifact(experiment_id)
+            assert artifact["provenance"]["contract_path"] == str(REPO / "causalmesh.yaml")
+            # ContractGate reaches a verdict on every mutating call once
+            # installed, contract or not — this is the fact that proves the
+            # gate actually ran rather than just recording a path string.
+            verdict_types = {event["event"]["event_type"] for event in artifact["chain"]}
+            assert "POLICY_VERDICT" in verdict_types
+        finally:
+            self._cleanup(experiment_id)
+
+    def test_no_contract_flag_skips_discovery_even_with_one_present(self) -> None:
+        experiment_id = "exp_test_contract_discovery_off"
+        self._cleanup(experiment_id)
+        try:
+            result = invoke(
+                "experiment",
+                "run",
+                "--profile",
+                "smoke",
+                "--id",
+                experiment_id,
+                "--limit",
+                "4",
+                "--no-contract",
+                "--root",
+                str(REPO),
+                "--json",
+            )
+            assert result.exit_code == 0, result.stdout
+
+            artifact = self._run_artifact(experiment_id)
+            assert "contract_path" not in artifact["provenance"]
+            verdict_types = {event["event"]["event_type"] for event in artifact["chain"]}
+            assert "POLICY_VERDICT" not in verdict_types
+        finally:
+            self._cleanup(experiment_id)
 
 
 @needs_pilot
