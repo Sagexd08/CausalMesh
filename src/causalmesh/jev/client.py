@@ -24,7 +24,7 @@ from typing import Any
 from causalmesh.adapters.transport import HttpTransport
 
 from .questions import Choice, Noul, Score
-from .response import JevResponse, parse_response
+from .response import JevResponse, JevResponseError, parse_response
 
 __all__ = ["JevClient"]
 
@@ -62,6 +62,15 @@ class JevClient:
             timeout_s=self.timeout_s,
         )
 
+    @property
+    def provider(self) -> str:
+        # Matches OpenAIClient/AnthropicClient/LocalClient's `provider`
+        # property (adapters/clients.py), so anything that logs or records
+        # "which adapter answered this" — a run artifact's envelope, say —
+        # has one consistent attribute to read across every client rather
+        # than a special case for Jev.
+        return "jev"
+
     def ask(self, *, state: dict[str, Any], questions: Sequence[Question]) -> JevResponse:
         """Evaluate `state` against every question, in one request.
 
@@ -69,10 +78,36 @@ class JevClient:
         several things at once costs about the same latency as asking one
         — batch related questions into a single `ask()` call rather than
         issuing one per question.
+
+        Raises `ValueError` before any request is sent for an empty
+        `questions` sequence or a duplicate question id: a `dict`
+        comprehension keyed by id would otherwise silently drop the earlier
+        of two questions sharing an id, sending fewer questions than the
+        caller asked for with nothing to indicate why. After the response
+        comes back, raises `JevResponseError` (via `parse_response`) if an
+        answer names an option that was never offered, or if any question
+        asked has no corresponding answer in the reply.
         """
+        if not questions:
+            raise ValueError("ask() requires at least one question")
+
+        by_id: dict[str, Question] = {}
+        for q in questions:
+            if q.id in by_id:
+                raise ValueError(f"duplicate question id {q.id!r} in a single ask() call")
+            by_id[q.id] = q
+
         body = {
             "state": state,
-            "questions": {q.id: q.to_dict() for q in questions},
+            "questions": {q.id: q.to_dict() for q in by_id.values()},
         }
         decoded, _latency_ms = self._transport.post_json("systemone", body)
-        return parse_response(decoded)
+        response = parse_response(decoded, questions=by_id)
+
+        missing = sorted(by_id.keys() - response.answers.keys())
+        if missing:
+            raise JevResponseError(
+                f"Jev did not answer question(s) {missing}; asked "
+                f"{sorted(by_id)}, answered {sorted(response.answers)}"
+            )
+        return response
