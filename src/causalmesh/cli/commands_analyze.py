@@ -33,6 +33,76 @@ def _rate(value: float | None) -> str:
     return "-" if value is None else f"{value:.0%}"
 
 
+def _resolve_experiment(repo: Repo, *, experiment_id: str | None, latest: bool) -> str:
+    available = repo.experiments()
+    if not available:
+        fail("no experiments found", hint="Run `causalmesh experiment run` first.")
+        raise typer.Exit(Exit.FAILED)
+    if experiment_id is None:
+        if not latest:
+            fail(
+                "nothing selected", hint=f"Pass --latest or --id. Available: {', '.join(available)}"
+            )
+            raise typer.Exit(Exit.USAGE)
+        return available[0]
+    if experiment_id not in available:
+        fail(f"unknown experiment {experiment_id!r}", hint=f"Available: {', '.join(available)}")
+        raise typer.Exit(Exit.USAGE)
+    return experiment_id
+
+
+def _analyze_edges(repo: Repo, experiment_id: str, *, as_json: bool) -> None:
+    """`causalmesh analyze --edges`: the causal edges a collection recorded.
+
+    Reads `result.edges` straight out of each run artifact (see
+    `causalmesh.edges.report`) rather than through the cost-accounting path
+    above — an edge is evidence about relationships between events, not a
+    cost, and routing it through `RunMetrics` would stretch that type to
+    carry something outside its stated scope.
+    """
+    from causalmesh.edges import EdgeReportError, collect_edges, run_edges_to_dict
+
+    try:
+        runs = collect_edges(repo.experiment_dir(experiment_id))
+    except EdgeReportError as exc:
+        fail(str(exc))
+        raise typer.Exit(Exit.ERROR) from exc
+
+    total_edges = sum(len(run.edges) for run in runs)
+    payload = {
+        "experiment_id": experiment_id,
+        "runs": [run_edges_to_dict(run) for run in runs],
+        "runs_with_edges": sum(1 for run in runs if run.edges),
+        "total_edges": total_edges,
+        "total_runs": len(runs),
+    }
+
+    if not emit(payload, as_json=as_json):
+        rendered = table(
+            f"{experiment_id} - causal edges",
+            ["run", "arm", "task", "relationship", "from (effect)", "to (cause)"],
+        )
+        for run in runs:
+            for edge in run.edges:
+                rendered.add_row(
+                    run.run_id,
+                    run.arm,
+                    run.task_id,
+                    str(edge.relationship),
+                    edge.from_event_id,
+                    edge.to_event_id,
+                )
+        out_console.print(rendered)
+        if total_edges == 0:
+            note(
+                "no edges recorded in this collection; edges are populated only "
+                "when a contract refuses at least one call"
+            )
+        note(f"{total_edges} edge(s) across {len(runs)} run(s)")
+
+    raise typer.Exit(Exit.OK)
+
+
 def analyze_command(
     experiment_id: Annotated[
         str | None, typer.Option("--id", help="Experiment to analyze.")
@@ -43,6 +113,10 @@ def analyze_command(
     task_filter: Annotated[str | None, typer.Option("--task", help="Restrict to one task.")] = None,
     pooled: Annotated[
         bool, typer.Option("--pooled", help="Also show contrasts pooled across tasks.")
+    ] = False,
+    edges: Annotated[
+        bool,
+        typer.Option("--edges", help="Show causal edges recorded by this collection instead."),
     ] = False,
     root_option: Annotated[Path | None, typer.Option("--root")] = None,
     as_json: Annotated[bool, typer.Option("--json")] = False,
@@ -56,20 +130,11 @@ def analyze_command(
         raise typer.Exit(Exit.USAGE)
     repo = Repo(root)
 
-    available = repo.experiments()
-    if not available:
-        fail("no experiments found", hint="Run `causalmesh experiment run` first.")
-        raise typer.Exit(Exit.FAILED)
-    if experiment_id is None:
-        if not latest:
-            fail(
-                "nothing selected", hint=f"Pass --latest or --id. Available: {', '.join(available)}"
-            )
-            raise typer.Exit(Exit.USAGE)
-        experiment_id = available[0]
-    elif experiment_id not in available:
-        fail(f"unknown experiment {experiment_id!r}", hint=f"Available: {', '.join(available)}")
-        raise typer.Exit(Exit.USAGE)
+    experiment_id = _resolve_experiment(repo, experiment_id=experiment_id, latest=latest)
+
+    if edges:
+        _analyze_edges(repo, experiment_id, as_json=as_json)
+        return
 
     try:
         metrics = collect(repo.experiment_dir(experiment_id))

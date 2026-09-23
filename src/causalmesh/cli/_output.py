@@ -66,10 +66,37 @@ def note(message: str) -> None:
     err_console.print(f"[dim]{message}[/dim]")
 
 
+def _supports_ellipsis(console: Console) -> bool:
+    """Whether this console can encode Rich's overflow character.
+
+    Asked of the console rather than inferred from the platform (AGENTS.md,
+    and the same convention `tui.palette.supports_unicode` already follows):
+    the same machine answers differently in Windows Terminal and in a piped
+    cp1252 stream, so this checks the console's own reported encoding
+    instead of assuming ASCII-only or assuming any particular codepage.
+    """
+    encoding = console.encoding or "utf-8"
+    try:
+        "\N{HORIZONTAL ELLIPSIS}".encode(encoding)
+    except (UnicodeEncodeError, LookupError):
+        return False
+    return True
+
+
 def table(title: str, columns: list[str]) -> Table:
+    """A table whose columns never overflow into a character this console
+    cannot encode.
+
+    Rich's default column overflow is "ellipsis" (U+2026); a console that
+    cannot encode it — a plain ASCII pipe, for instance — would raise or
+    mangle the cell rather than truncate it cleanly. Folding onto the next
+    line instead is always safe, so that is the fallback when the console
+    cannot manage the nicer truncation.
+    """
+    overflow = "ellipsis" if _supports_ellipsis(out_console) else "fold"
     t = Table(title=title, title_justify="left", header_style="bold")
     for column in columns:
-        t.add_column(column)
+        t.add_column(column, overflow=overflow)
     return t
 
 
