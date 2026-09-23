@@ -149,13 +149,28 @@ discipline is for.
 
 ### Spend is enforced, but nothing speaks x402
 
-**Status:** `spend` resources pass through allowlists, per-call ceilings and
-totals, with exact decimal arithmetic. No adapter obtains one from an
-`HTTP 402` response.
+**Status: the gate-and-parse half is built.** `src/causalmesh/adapters/x402.py` parses a
+real 402 challenge — V1's JSON body or V2's base64-encoded `PAYMENT-REQUIRED` header,
+both verified against the reference implementation
+(`github.com/coinbase/x402`, `python/x402/schemas/`) rather than written from memory —
+into a `Resource.spend` and asks the already-tested `Gate` about it, returning a typed
+`PaymentDecision`. `decide_payment` tries every accepted way to pay in the order the
+server listed them and returns the first the gate allows, or the last refusal if none
+are payable, so a server offering several payment options gets a real answer rather
+than a decision based on only the first one listed.
 
-**What it would take:** a client that reads the 402 challenge, forms a
-`Resource.spend`, asks the gate, and only then pays. The gate half is done;
-the protocol half is not started.
+**What this does not do, on purpose.** It does not sign a payment, hold a wallet or a
+private key, or make the HTTP request itself. Actually paying needs a signer for one of
+x402's payment schemes and networks — a real runtime dependency this project has never
+carried, and AGENTS.md gates adding one without a reason that survives "what does this
+cost a person installing the package." An operator's own payment code is the thing that
+calls `decide_payment`, pays when it allows, and records the spend to `Ledger`
+afterward — the module stops exactly where this project's own boundary is: the
+financial audit layer, not a payment SDK.
+
+**What it would still take:** a signer, for whichever scheme and network an operator
+actually needs to pay on, wired in as an operator's own dependency rather than this
+project's.
 
 ### Verdicts do not enter the signed chain
 
