@@ -159,6 +159,19 @@ evidence:
   export: [otel, manifest]
 ```
 
+**Status update (built after this document was written).** `identity.keys` and
+`policy.checkpoints` are real now — see `docs/backlog.md`, "Checkpoints and identity,
+from parsed-and-ignored to real". Two differences from the sketch above, both because
+the real contract parser is stricter than illustrative YAML:
+
+- `checkpoints[].on` names a `ResourceKind` value (`path`, `spend`, `endpoint`,
+  `budget`), not the word `payment` used above — write `on: spend`, not `on: payment`.
+- `identity.attribution` and `evidence.export` are not parsed; only `identity.keys` and
+  `evidence.{sign,verify_on_exit}` are. Both remaining keys would need the same
+  treatment `docs/backlog.md` describes for every other schema key this build does not
+  yet enforce: accepted and inert is not an option, so they are still rejected by the
+  contract parser rather than silently accepted.
+
 ### The four planes
 
 **1 · Contract.** Ownership, archetypes, budgets, contested paths, spend limits.

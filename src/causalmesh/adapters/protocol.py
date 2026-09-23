@@ -43,8 +43,6 @@ class ProtocolError(ValueError):
 
     def __init__(self, message: str, *, kind: str) -> None:
         super().__init__(message)
-        # Classified rather than free text, so non-compliance can be counted
-        # by kind instead of grepped out of log messages (§52).
         self.kind = kind
 
 
@@ -57,9 +55,6 @@ PARSE_FAILURE_KINDS = (
     "bad_arguments",
 )
 
-# Arguments each tool requires. Checked before dispatch so a missing
-# argument is a protocol failure attributable to the model, rather than a
-# TypeError from inside the toolbox that looks like a harness bug.
 REQUIRED_ARGUMENTS: dict[str, tuple[str, ...]] = {
     "read_file": ("path",),
     "write_file": ("path", "content"),
@@ -74,9 +69,6 @@ REQUIRED_ARGUMENTS: dict[str, tuple[str, ...]] = {
     "git_diff": (),
 }
 
-# Which argument names carry workspace paths. The executor needs these
-# separately: events record the paths a call touched, and the claim gate
-# checks them before the call runs.
 PATH_ARGUMENTS: dict[str, tuple[str, ...]] = {
     "read_file": ("path",),
     "write_file": ("path",),
@@ -126,8 +118,6 @@ def _extract_json(text: str) -> str:
     if fenced:
         return fenced.group(1)
 
-    # Fall back to the outermost brace pair, scanning for balance so a
-    # nested object does not truncate the match.
     start = text.find("{")
     if start == -1:
         raise ProtocolError("reply contains no JSON object", kind="no_json")
@@ -171,7 +161,6 @@ def parse_action(reply: str) -> ParsedAction:
     tool = decoded.get("tool")
     done = bool(decoded.get("done", False))
 
-    # A model that says it is finished need not name a tool.
     if tool is None and done:
         return ParsedAction(
             tool="", arguments={}, reasoning=str(decoded.get("reasoning", "")), done=True

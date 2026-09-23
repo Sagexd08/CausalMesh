@@ -142,9 +142,6 @@ class RunRecord:
             repetition=row["repetition"],
             plan_order=row["plan_order"],
             state=row["state"],
-            # SQLite has no boolean type. The explicit None check keeps
-            # "unknown" distinct from "failed"; `bool(row[...])` would
-            # collapse them and make an unfinished run look like a failure.
             succeeded=None if row["succeeded"] is None else bool(row["succeeded"]),
             task_hash=row["task_hash"],
             head_hash=row["head_hash"],
@@ -160,10 +157,6 @@ class RunIndex:
     """A SQLite index of run states, safe across threads and processes."""
 
     def __init__(self, database: Path | str) -> None:
-        # No ":memory:" special case here, unlike the claim registry: this
-        # index is only meaningful when it outlives the process, since its
-        # entire purpose is resume. Tests pass a tmp_path file, which is the
-        # production path.
         Path(database).parent.mkdir(parents=True, exist_ok=True)
         self._database = str(database)
         self._local = threading.local()
@@ -226,8 +219,6 @@ class RunIndex:
             raise
         else:
             connection.execute("COMMIT")
-
-    # -- planning ---------------------------------------------------------
 
     def register_plan(self, plan: Any, *, now_us: int) -> int:
         """Record a plan and its runs. Returns how many rows were new.
@@ -297,8 +288,6 @@ class RunIndex:
             (experiment_id,),
         ).fetchone()
         return row["plan_hash"] if row else None
-
-    # -- claiming and finishing -------------------------------------------
 
     def claim_next(self, experiment_id: str, *, now_us: int) -> RunRecord | None:
         """Atomically take the next runnable run and mark it RUNNING.
@@ -424,8 +413,6 @@ class RunIndex:
                     ),
                 )
             return len(rows)
-
-    # -- reading ----------------------------------------------------------
 
     def get(self, run_id: str) -> RunRecord | None:
         row = self._connection.execute("SELECT * FROM runs WHERE run_id = ?", (run_id,)).fetchone()

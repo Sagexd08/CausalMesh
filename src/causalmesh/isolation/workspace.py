@@ -91,13 +91,8 @@ class Workspace:
 
         candidate = Path(relative_path)
         if candidate.is_absolute() or (os.name == "nt" and candidate.drive):
-            # Absolute paths are refused outright rather than reinterpreted:
-            # silently rebasing one would hide the agent's actual intent.
             raise PathEscapeError(relative_path, candidate, self.root)
 
-        # strict=False: the target need not exist yet (create_file, write_file
-        # to a new path). Resolution still collapses `..` and follows every
-        # existing symlink or junction along the way.
         resolved = (self.root / candidate).resolve(strict=False)
 
         if not self._is_contained(resolved):

@@ -177,19 +177,6 @@ class ClaimRegistry:
     """
 
     def __init__(self, database: Path | str = ":memory:") -> None:
-        # ":memory:" is backed by a real file in a temporary directory rather
-        # than by SQLite's in-memory mode. Two reasons, both about honesty:
-        #
-        # - A plain ":memory:" database is private to its connection, so
-        #   threads would each get their own empty registry and the
-        #   exclusivity tests would pass vacuously.
-        # - The shared-cache in-memory form fixes that but uses table-level
-        #   locking that fails immediately with "database table is locked"
-        #   instead of honouring the busy timeout, so it behaves differently
-        #   under contention than the file-backed path used in real runs.
-        #
-        # Using a temporary file means tests exercise exactly the code path
-        # production uses, including WAL and the busy timeout.
         self._temporary_directory: tempfile.TemporaryDirectory[str] | None = None
         if str(database) == ":memory:":
             self._temporary_directory = tempfile.TemporaryDirectory(
@@ -207,13 +194,8 @@ class ClaimRegistry:
 
     def _connect(self) -> sqlite3.Connection:
         """Open one connection with the settings every caller depends on."""
-        # isolation_level=None puts transaction control in this class's hands,
-        # so BEGIN IMMEDIATE means what it says rather than fighting sqlite3's
-        # implicit transaction handling.
         connection = sqlite3.connect(self._database, isolation_level=None, timeout=30.0)
         connection.row_factory = sqlite3.Row
-        # WAL lets readers proceed during a writer's transaction, which matters
-        # once several agent processes share the file.
         connection.execute("PRAGMA journal_mode=WAL")
         connection.execute("PRAGMA foreign_keys=ON")
         return connection
@@ -236,10 +218,6 @@ class ClaimRegistry:
         if connection is None:
             connection = self._connect()
             self._local.connection = connection
-            # Tracked so `close` can release connections opened by threads
-            # that have since finished. Without this the registry leaks a file
-            # handle per worker thread, which on Windows also makes the
-            # database file undeletable.
             with self._connections_lock:
                 self._connections.append(connection)
         return connection
@@ -249,19 +227,11 @@ class ClaimRegistry:
         with self._connections_lock:
             connections, self._connections = self._connections, []
         for connection in connections:
-            # A connection whose thread died mid-statement may refuse to
-            # close; that must not prevent releasing the others.
             with suppress(sqlite3.Error):
                 connection.close()
         self._local = threading.local()
 
         if self._temporary_directory is not None:
-            # Windows can hold a handle briefly after the last connection
-            # closes (WAL checkpointing on close), so removal may fail even
-            # though every connection is shut. `ignore_cleanup_errors` leaves
-            # the OS to reap the directory instead: a stray temp file is
-            # cosmetic, whereas a `close` that raises would mask the real
-            # outcome of whatever the caller was doing.
             self._temporary_directory.cleanup()
             self._temporary_directory = None
 
@@ -405,7 +375,6 @@ class ClaimRegistry:
                 return ClaimOutcome(granted=False, claim=None, reason=reason, holder=holder)
 
             if holder is not None:
-                # Same agent re-acquiring: extend rather than duplicate.
                 connection.execute(
                     """
                     UPDATE claims
@@ -441,8 +410,6 @@ class ClaimRegistry:
                     ),
                 )
             except sqlite3.IntegrityError as exc:
-                # A reused claim_id would make two leases indistinguishable in
-                # the log, breaking idempotency (§42).
                 raise ClaimError(f"claim_id {claim_id!r} already exists") from exc
 
             row = connection.execute(
@@ -519,7 +486,6 @@ class ClaimRegistry:
                     holder=claim,
                 )
             if claim.status != ClaimStatus.ACTIVE:
-                # Idempotent: releasing twice is not an error (§42).
                 return ClaimOutcome(True, claim, f"already {claim.status}")
 
             connection.execute(

@@ -35,7 +35,6 @@ from .tokens import estimate_tokens
 __all__ = ["DEFAULT_WINDOW", "MetadataChannel"]
 
 
-# §18's default information window.
 DEFAULT_WINDOW = 8
 
 
@@ -78,12 +77,7 @@ class MetadataChannel:
         self.scorer = scorer or RelevanceScorer()
         self.interests = interests or AgentInterests(agent_id=agent_id)
         self._accounting = InjectionAccounting(agent_id=agent_id)
-        # Events this agent has already been shown, so causal-distance
-        # scoring can tell "follows something you know" from "out of the blue".
         self._known_event_ids: set[str] = set()
-        # Delivered but not yet injected. Kept rather than discarded: an event
-        # dropped by this turn's window may be the most relevant one next turn,
-        # and dropping it permanently would be silent information loss.
         self._pending: list[tuple[Event, int]] = []
 
     @property
@@ -122,7 +116,6 @@ class MetadataChannel:
             self._known_event_ids.add(score.event_id)
             self.interests.record_touch(by_id[score.event_id].paths)
 
-        # Injected events leave the queue; the rest stay for next turn.
         self._pending = [
             (event, event_turn)
             for event, event_turn in self._pending

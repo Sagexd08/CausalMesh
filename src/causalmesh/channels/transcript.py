@@ -152,7 +152,6 @@ class TranscriptChannel:
                 )
             )
 
-        # An agent re-reading its own words is not coordination.
         history = self.room.history(exclude_actor=self.agent_id)
         text = "\n".join(message.render() for message in history)
 
@@ -160,7 +159,6 @@ class TranscriptChannel:
             text=text,
             events_available=len(events),
             events_selected=len(events),
-            # The whole history is injected every turn — that is the point.
             events_injected=len(history),
             events_dropped=0,
             selection_reasons=({"policy": "unbounded transcript", "messages": len(history)},),

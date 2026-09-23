@@ -42,9 +42,6 @@ __all__ = [
 ]
 
 
-# The chain's starting value. A fixed, domain-separated label rather than
-# 32 zero bytes: it names the protocol inside the very first digest, so a
-# chain from a different system can never accidentally validate here.
 GENESIS_HASH = hashlib.sha256(b"causalmesh/chain/genesis/v1").hexdigest()
 
 

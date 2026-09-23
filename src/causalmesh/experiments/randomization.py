@@ -43,11 +43,6 @@ __all__ = [
     "shuffled",
 ]
 
-# Namespaced so a seed used for planning can never collide with the same
-# seed used for key derivation. `crypto.keys` uses "causalmesh/ed25519/v1";
-# an overlap would make a run's signing key predictable from its position
-# in the schedule, which is not a security property this project needs but
-# is exactly the kind of accident that is hard to notice later.
 _PLAN_INFO = b"causalmesh/plan/v1"
 _RUN_SEED_INFO = b"causalmesh/run-seed/v1"
 
@@ -90,10 +85,6 @@ def shuffled(items: list[Any], master_seed: bytes, label: str) -> list[Any]:
     result = list(items)
     counter = 0
     for i in range(len(result) - 1, 0, -1):
-        # Rejection sampling for a uniform index in [0, i]. Taking a
-        # modulus of a fixed-width draw would bias low indices whenever the
-        # range does not divide 2**64 evenly. The bias is tiny, but a
-        # documented uniform shuffle costs nothing more than a loop.
         bound = i + 1
         limit = (2**64 // bound) * bound
         while True:
@@ -220,13 +211,8 @@ def plan_experiment(
         raise ValueError(f"duplicate task ids in plan: {task_ids}")
 
     for arm_id in profile.arms:
-        # Fail here rather than at run time: a plan naming a nonexistent arm
-        # would otherwise be discovered part-way through a collection.
         lookup_arm(arm_id)
 
-    # Sorted before truncation so `max_tasks` picks the same subset on every
-    # machine. Taking the first N of a directory listing would depend on
-    # filesystem ordering.
     selected = sorted(task_ids)
     if profile.max_tasks is not None:
         selected = selected[: profile.max_tasks]
@@ -242,7 +228,7 @@ def plan_experiment(
                         task_id=task_id,
                         arm=arm_id,
                         repetition=repetition,
-                        order=-1,  # assigned below, once the order is known
+                        order=-1,
                     )
                 )
 

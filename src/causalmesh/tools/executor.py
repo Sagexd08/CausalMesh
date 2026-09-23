@@ -54,9 +54,6 @@ class ToolExecutor:
         self.relay = relay
         self._event_counter = 0
         self._event_id_factory = event_id_factory or self._default_event_id
-        # The last peer event this agent consumed, recorded as the causal
-        # parent of what it does next. This is what makes "what did the agent
-        # know before it acted" answerable from the chain (§57).
         self.last_observed_event_id: str | None = None
 
     def _default_event_id(self) -> str:
@@ -98,8 +95,6 @@ class ToolExecutor:
             event_type = TOOL_EVENT_TYPES[result.call.tool]
             payload: dict[str, Any] = {"tool": result.call.tool, "outcome": "executed"}
             if isinstance(result.value, CommandResult):
-                # to_event_payload, not to_dict: command output is not
-                # reproducible and must not enter the signed chain.
                 payload.update(result.value.to_event_payload())
             elif isinstance(result.value, int):
                 payload["bytes_written"] = result.value
@@ -117,25 +112,8 @@ class ToolExecutor:
             if result.outcome == ToolOutcome.DENIED and result.decision:
                 payload["holder_agent"] = result.decision.holder_agent
                 payload["blocked_path"] = result.decision.blocked_path
-                # Which rule refused, as a key rather than as prose. The
-                # reason is already here and is what a person reads; this is
-                # what analysis groups by, so rewording an error message
-                # cannot silently change what a measurement counts.
-                #
-                # Reproducible: the rule is a fixed identifier chosen by the
-                # gate, not a timestamp, a path or anything the machine
-                # supplies.
                 if result.decision.rule:
                     payload["rule"] = result.decision.rule
-
-        # Wall-clock duration is deliberately NOT written into the payload.
-        # It varies between runs, and the payload is inside the signed hash
-        # chain, so including it would make two identical runs produce
-        # different chains and §84's reproducibility requirement
-        # unsatisfiable. Timing is still measured — the lifecycle boundary
-        # records it, and the metrics layer reads it from there (§85) — but
-        # a performance measurement must not contaminate the integrity
-        # record.
 
         ingested = self.relay.ingest(
             event_id=self._event_id_factory(),
@@ -148,9 +126,6 @@ class ToolExecutor:
             payload=payload,
         )
         if not ingested.accepted:
-            # The relay refusing an event means the record would be
-            # incomplete, which invalidates the run's evidence. Better to
-            # fail loudly here than to finish a run whose log has holes.
             raise RuntimeError(f"relay refused an event for {result.call.tool}: {ingested.reason}")
 
     def observe(self, now_us: int) -> tuple[Event, ...]:

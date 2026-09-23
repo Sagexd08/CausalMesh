@@ -31,16 +31,17 @@ from typing import Any
 
 from causalmesh.policy.resource import Resource, ResourceKind
 
-__all__ = ["Contract", "ContractError", "Role"]
+__all__ = ["Checkpoint", "Contract", "ContractError", "Role"]
 
 CONTRACT_FILENAME = "causalmesh.yaml"
 
-# Every key this version understands, by section. Used to reject typos with a
-# message naming the valid neighbours rather than ignoring them.
 _TOP_LEVEL = {"version", "identity", "roles", "policy", "evidence"}
 _ROLE_KEYS = {"agent_id", "archetype", "owns", "allow", "budget"}
 _BUDGET_KEYS = {"usd_total", "usd_per_call", "tokens", "wall_clock_s", "coordination_bytes"}
 _POLICY_KEYS = {"arm", "contested", "budgets", "checkpoints"}
+_EVIDENCE_KEYS = {"sign", "verify_on_exit"}
+_IDENTITY_KEYS = {"keys"}
+_CHECKPOINT_KEYS = {"on", "when", "require"}
 
 SUPPORTED_VERSION = 1
 
@@ -50,13 +51,31 @@ class ContractError(ValueError):
 
 
 @dataclass(frozen=True, slots=True)
+class Checkpoint:
+    """One `policy.checkpoints` rule: when it fires, and what it requires.
+
+    Shape matches `docs/FRAMEWORK-PLAN.md`'s proposed contract
+    (`when: {usd: ">0.50"}`, `require: human`), with one difference: `on`
+    names a `ResourceKind` value (`path`, `spend`, `endpoint`, `budget`) —
+    that document's illustrative `on: payment` was prose, not the enum; the
+    real key is `on: spend`.
+    """
+
+    on: str
+    require: str
+    when: dict[str, str] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"on": self.on, "require": self.require, "when": dict(self.when)}
+
+
+@dataclass(frozen=True, slots=True)
 class Role:
     """One agent, and what it is permitted."""
 
     agent_id: str
     archetype: str = ""
     owns: tuple[str, ...] = ()
-    # None means unrestricted; an empty frozenset means nothing is allowed.
     allow: frozenset[str] | None = None
     budget: dict[str, Decimal] = field(default_factory=dict)
 
@@ -80,9 +99,10 @@ class Contract:
     contested: dict[str, str] = field(default_factory=dict)
     budgets: dict[str, Decimal] = field(default_factory=dict)
     sign: bool = True
+    verify_on_exit: bool = True
+    identity_keys_dir: Path | None = None
+    checkpoints: tuple[Checkpoint, ...] = ()
     source: Path | None = None
-
-    # -- lookups the gate uses --------------------------------------------
 
     def role(self, agent_id: str) -> Role | None:
         return next((role for role in self.roles if role.agent_id == agent_id), None)
@@ -144,13 +164,14 @@ class Contract:
         return {
             "arm": self.arm,
             "budgets": {key: f"{value:f}" for key, value in sorted(self.budgets.items())},
+            "checkpoints": [checkpoint.to_dict() for checkpoint in self.checkpoints],
             "contested": dict(sorted(self.contested.items())),
+            "identity_keys_dir": str(self.identity_keys_dir) if self.identity_keys_dir else None,
             "roles": [role.to_dict() for role in self.roles],
             "sign": self.sign,
+            "verify_on_exit": self.verify_on_exit,
             "version": self.version,
         }
-
-    # -- loading -----------------------------------------------------------
 
     @classmethod
     def load(cls, path: Path | str) -> Contract:
@@ -160,7 +181,7 @@ class Contract:
             raise ContractError(f"no contract at {path}")
         try:
             import yaml
-        except ImportError as exc:  # pragma: no cover - declared dependency
+        except ImportError as exc:
             raise ContractError("pyyaml is required to read a contract") from exc
         try:
             raw = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -213,6 +234,19 @@ class Contract:
         evidence = raw.get("evidence") or {}
         if not isinstance(evidence, dict):
             raise ContractError("`evidence` must be a mapping")
+        _reject_unknown(evidence, _EVIDENCE_KEYS, "evidence")
+
+        identity = raw.get("identity") or {}
+        if not isinstance(identity, dict):
+            raise ContractError("`identity` must be a mapping")
+        _reject_unknown(identity, _IDENTITY_KEYS, "identity")
+        identity_keys = identity.get("keys")
+        identity_keys_dir = Path(identity_keys) if identity_keys else None
+
+        checkpoints = tuple(
+            _parse_checkpoint(entry, index)
+            for index, entry in enumerate(policy.get("checkpoints") or [])
+        )
 
         roles = tuple(
             _parse_role(entry, index) for index, entry in enumerate(raw.get("roles") or [])
@@ -226,10 +260,13 @@ class Contract:
         return cls(
             arm=arm,
             budgets=_parse_budget(policy.get("budgets") or {}, "policy.budgets"),
+            checkpoints=checkpoints,
             contested={str(key): str(value) for key, value in contested.items()},
+            identity_keys_dir=identity_keys_dir,
             roles=roles,
             sign=bool(evidence.get("sign", True)),
             source=source,
+            verify_on_exit=bool(evidence.get("verify_on_exit", True)),
             version=int(version),
         )
 
@@ -252,8 +289,6 @@ def _parse_role(entry: Any, index: int) -> Role:
     if allow is not None:
         if not isinstance(allow, list) or not all(isinstance(item, str) for item in allow):
             raise ContractError(f"{where}.allow must be a list of hosts")
-        # Lower-cased here so the gate compares like with like; hosts are
-        # case-insensitive and `Resource` folds them the same way.
         allow = frozenset(item.strip().lower() for item in allow)
 
     return Role(
@@ -265,6 +300,31 @@ def _parse_role(entry: Any, index: int) -> Role:
     )
 
 
+def _parse_checkpoint(entry: Any, index: int) -> Checkpoint:
+    where = f"policy.checkpoints[{index}]"
+    if not isinstance(entry, dict):
+        raise ContractError(f"{where} must be a mapping")
+    _reject_unknown(entry, _CHECKPOINT_KEYS, where)
+
+    on = entry.get("on")
+    if not isinstance(on, str) or not on.strip():
+        raise ContractError(f"{where} needs a non-empty `on`")
+
+    require = entry.get("require", "human")
+    if not isinstance(require, str) or not require.strip():
+        raise ContractError(f"{where}.require must be a non-empty string")
+
+    when = entry.get("when") or {}
+    if not isinstance(when, dict):
+        raise ContractError(f"{where}.when must be a mapping")
+
+    return Checkpoint(
+        on=on.strip(),
+        require=require.strip(),
+        when={str(key): str(value) for key, value in when.items()},
+    )
+
+
 def _parse_budget(raw: Any, where: str) -> dict[str, Decimal]:
     if not isinstance(raw, dict):
         raise ContractError(f"{where} must be a mapping")
@@ -272,8 +332,6 @@ def _parse_budget(raw: Any, where: str) -> dict[str, Decimal]:
     parsed: dict[str, Decimal] = {}
     for key, value in raw.items():
         if isinstance(value, float):
-            # A float budget is already imprecise before it is compared.
-            # Rejecting it here points at the line that wrote it.
             raise ContractError(
                 f"{where}.{key} must be quoted or an integer, not a float "
                 f"({value!r} cannot be represented exactly)"
@@ -306,10 +364,6 @@ def _budget_key(resource: Resource) -> str | None:
     if resource.kind is ResourceKind.SPEND:
         return "usd_total"
     if resource.kind is ResourceKind.BUDGET:
-        # A budget resource names its own allowance: Resource.budget(
-        # name="tokens", ...) is governed by the `tokens` key. `to_dict`
-        # returns a mixed mapping, so the name is narrowed here rather than
-        # handed back as Any.
         name: str = resource.to_dict()["name"]
         return name
     return None

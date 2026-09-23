@@ -24,8 +24,6 @@ app = typer.Typer(
     help="Inspect the agents and infrastructure on this machine.", no_args_is_help=True
 )
 
-# Fast enough to feel live, slow enough that a monitor costs nothing next to
-# the run it is watching.
 REFRESH_HZ = 4
 
 
@@ -84,9 +82,6 @@ def watch_command(
             while True:
                 snapshot = read_snapshot(directory, started_at=started)
                 live.update(render(snapshot, console=out_console))
-                # Stop when the collection is done rather than spinning
-                # forever: a watcher left running on a finished collection
-                # is a process the operator has to remember to kill.
                 if snapshot.total and snapshot.finished >= snapshot.total:
                     break
                 time.sleep(1 / REFRESH_HZ)
@@ -176,8 +171,6 @@ def welcome_command(
         raise typer.Exit(Exit.OK if sequence.ready else Exit.FAILED)
 
     if not sequence.ready:
-        # Offering a menu whose every option would fail is worse than
-        # saying plainly that the environment is not ready.
         note("fix the failures above, then run `causalmesh welcome` again")
         raise typer.Exit(Exit.FAILED)
 
@@ -186,22 +179,16 @@ def welcome_command(
 
     choice = welcome.choose(out_console)
     if choice is None:
-        # Piped, or the operator left. Printing the menu was still the right
-        # thing; blocking on a read that will never come was not.
         raise typer.Exit(Exit.OK)
 
     out_console.print()
     note(f"running: {choice.command}")
     out_console.print()
 
-    # The chosen command is invoked in this process rather than shelled out:
-    # a first run that spawned `causalmesh` again would lose the exit code
-    # and depend on the binary being on PATH, which is exactly what a first
-    # run cannot assume.
     from causalmesh.cli.main import app
 
     try:
         app(args=choice.command.split()[1:], standalone_mode=False)
-    except SystemExit as exc:  # typer.Exit propagates as SystemExit
+    except SystemExit as exc:
         raise typer.Exit(int(exc.code or 0)) from None
     raise typer.Exit(Exit.OK)

@@ -62,9 +62,6 @@ STATE_STYLE = {
     "ABANDONED": DENIAL,
 }
 
-# What each arm is, in the words the experiment uses. Stated here so the
-# operator does not have to hold the design in their head to read the
-# comparison in front of them.
 ARM_CONDITION = {
     "C0": "no peer information",
     "C1": "full transcripts",
@@ -243,8 +240,6 @@ def read_snapshot(experiment_dir: Path, *, started_at: float | None = None) -> S
         _merge_artifact(experiment_dir / run_id, view)
         snapshot.runs.append(view)
 
-    # A collection that has produced artifacts without an index still shows:
-    # an export copied from another machine has no index at all.
     if not records and experiment_dir.is_dir():
         for run_dir in sorted(p for p in experiment_dir.iterdir() if p.is_dir()):
             if not (run_dir / "run.json").is_file():
@@ -255,8 +250,6 @@ def read_snapshot(experiment_dir: Path, *, started_at: float | None = None) -> S
 
     for run in snapshot.runs:
         snapshot.counts[run.state] = snapshot.counts.get(run.state, 0) + 1
-    # One nondeterministic run is enough to make the collection
-    # non-reproducible; the warning is about the whole set.
     snapshot.reproducible = all(run.reproducible for run in snapshot.runs)
     return snapshot
 
@@ -294,13 +287,9 @@ def _merge_artifact(run_dir: Path, view: RunView) -> None:
     try:
         artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
-        # A partially written artifact is normal while a run is finishing.
         return
     result = artifact.get("result") or {}
     outcome = result.get("outcome")
-    # Absent means an older artifact written before the field existed, which
-    # was MockAgent-driven and therefore reproducible. Only an explicit
-    # false demotes the collection.
     view.reproducible = artifact.get("reproducible", True) is not False
     view.arm = artifact.get("arm") or view.arm
     view.coordination_bytes = int(result.get("coordination_bytes") or 0)
@@ -308,14 +297,6 @@ def _merge_artifact(run_dir: Path, view: RunView) -> None:
     view.events = int(result.get("events") or 0)
     view.succeeded = outcome.get("succeeded") if isinstance(outcome, dict) else None
     view.task_id = result.get("task_id") or view.task_id
-
-
-# -- rendering -------------------------------------------------------------
-#
-# Every glyph below is ASCII or comes from a rich primitive. The development
-# terminal reports cp1252, where a box-drawing character raises
-# UnicodeEncodeError on write; rich substitutes for its own boxes, but a
-# literal here would not be.
 
 
 def _meter(done: int, total: int, width: int) -> Text:
@@ -396,8 +377,6 @@ def _arm_table(snapshot: Snapshot) -> Table:
     table.add_column("condition", ratio=1, no_wrap=True, overflow="ellipsis")
     table.add_column("passed", justify="right", width=7, no_wrap=True)
     table.add_column("rate", justify="right", width=5, no_wrap=True)
-    # Costs right-aligned so digits line up by magnitude: comparing 361
-    # against 196 should be visible in the column, not read off the numbers.
     table.add_column("bytes/run", justify="right", width=9, no_wrap=True)
     table.add_column("refused", justify="right", width=7, no_wrap=True)
 
@@ -475,7 +454,6 @@ def _active_runs(snapshot: Snapshot) -> Table | None:
     table.add_column("run", width=6, no_wrap=True)
     table.add_column("state", justify="right", width=9, no_wrap=True)
 
-    # Running first: the live one is what the operator is looking for.
     ordered = sorted(pending, key=lambda r: (r.state != "RUNNING", r.arm, r.run_id))
     for run in ordered[:6]:
         table.add_row(
@@ -560,9 +538,6 @@ def _masthead(snapshot: Snapshot, width: int, unicode_ok: bool) -> RenderableTyp
     right.append(f"/{total}", style=TEXT_MUTED)
     right.append(" runs", style=TEXT_FAINT)
 
-    # One space minimum, and the right block is dropped entirely rather
-    # than wrapped if the terminal is too narrow to hold both: a masthead
-    # that folds onto a second line stops being a masthead.
     gap = width - len(left.plain) - len(right.plain)
     band = Text()
     band.append_text(left)
@@ -574,7 +549,6 @@ def _masthead(snapshot: Snapshot, width: int, unicode_ok: bool) -> RenderableTyp
     return Group(band, Text(rule, style=TEXT_FAINT))
 
 
-# Panel border (2) plus its horizontal padding (2 each side).
 PANEL_CHROME = 6
 
 

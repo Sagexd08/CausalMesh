@@ -27,8 +27,6 @@ from causalmesh.provenance.environment import Environment, freeze_hash
 
 MANIFEST_VERSION = 1
 
-# Read in blocks: a run artifact carries its whole chain and can be large
-# enough that reading it into memory to hash it is wasteful.
 _BLOCK = 1 << 20
 
 
@@ -168,9 +166,6 @@ def build(
     for path in sorted(experiment_dir.rglob("*")):
         if not path.is_file():
             continue
-        # The operational index is mutable by design — it records progress,
-        # not evidence — so hashing it would make every manifest disagree
-        # with the next run's copy of the same collection.
         if path.name == "index.db":
             continue
         entries.append(

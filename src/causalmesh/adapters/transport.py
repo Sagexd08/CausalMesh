@@ -104,12 +104,6 @@ class ChatResponse:
         }
 
 
-# Schemes this transport will open. `urllib.request.urlopen` honours
-# `file://`, `ftp://` and anything else a handler is registered for, so a
-# base URL that reached here from a config file or an environment variable
-# could read a local path and return its contents as a model reply. The
-# adapter is the one place in the substrate that talks to the network, and
-# it is the one place an unvalidated scheme would matter.
 _ALLOWED_SCHEMES = frozenset({"http", "https"})
 
 
@@ -143,7 +137,6 @@ class HttpTransport:
     base_url: str
     api_key: str | None = None
     timeout_s: float = 120.0
-    # Extra headers a provider needs (Anthropic's version header, say).
     headers: dict[str, str] = field(default_factory=dict)
 
     def post_json(self, path: str, body: dict[str, Any]) -> tuple[dict[str, Any], int]:
@@ -166,19 +159,11 @@ class HttpTransport:
 
         started = time.monotonic()
         try:
-            # The scheme is validated in `_http_url` above, which raises for
-            # anything that is not http or https. Bandit cannot see across
-            # the helper, and a standing finding everyone learns to scroll
-            # past is worse than a suppression that says why.
-            with urllib.request.urlopen(  # nosec B310
-                request, timeout=self.timeout_s
-            ) as response:
+            with urllib.request.urlopen(request, timeout=self.timeout_s) as response:
                 body_bytes = response.read()
                 status = response.status
         except urllib.error.HTTPError as exc:
             detail = exc.read().decode("utf-8", "replace")[:2000]
-            # 429 and 5xx are the transient classes. Marked rather than
-            # retried here: the caller decides, and the decision is recorded.
             raise TransportError(
                 f"{url} returned {exc.code}: {detail}",
                 status=exc.code,

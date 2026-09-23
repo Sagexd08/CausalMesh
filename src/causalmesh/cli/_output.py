@@ -19,8 +19,6 @@ from typing import Any
 from rich.console import Console
 from rich.table import Table
 
-# stderr, so `causalmesh ... --json > out.json` stays valid JSON even when
-# something is written for the operator at the same time.
 err_console = Console(stderr=True)
 out_console = Console()
 
@@ -34,9 +32,9 @@ class Exit(IntEnum):
     """
 
     OK = 0
-    FAILED = 1  # the command ran; the answer is negative
-    USAGE = 2  # the invocation was wrong
-    ERROR = 3  # the command could not complete
+    FAILED = 1
+    USAGE = 2
+    ERROR = 3
 
 
 def emit(payload: dict[str, Any] | list[Any], *, as_json: bool) -> bool:

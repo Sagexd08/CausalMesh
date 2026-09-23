@@ -37,10 +37,6 @@ class RelationshipType(StrEnum):
     SUPERSEDED = "SUPERSEDED"
 
 
-# Same conservative pattern events.schema uses for event_id: identifiers
-# appear in canonical bytes and database keys elsewhere in this codebase, so
-# an edge endpoint is held to the same shape even though edges themselves are
-# never hashed or signed.
 _IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$")
 
 

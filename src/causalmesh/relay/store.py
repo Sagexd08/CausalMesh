@@ -46,9 +46,6 @@ class ChainStore:
         if self._path is not None:
             self._path.parent.mkdir(parents=True, exist_ok=True)
             if self._path.exists() and self._path.stat().st_size > 0:
-                # Refuse to append to an existing chain rather than extending
-                # someone else's evidence: a run's raw log belongs to exactly
-                # one run (§31, §42).
                 raise StoreError(
                     f"{self._path} already contains data; raw chains are append-only "
                     "and must not be reopened for a new run"
@@ -64,10 +61,6 @@ class ChainStore:
             self._records.append(chained.to_dict())
             if self._handle is not None:
                 self._handle.write(line + "\n")
-                # Flushed per record so a crash loses at most the event in
-                # flight. fsync is optional because it dominates run time and
-                # a lost final event is visible as a short chain, not as
-                # silent corruption.
                 self._handle.flush()
                 if self._fsync:
                     os.fsync(self._handle.fileno())

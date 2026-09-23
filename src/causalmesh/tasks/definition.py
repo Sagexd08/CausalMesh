@@ -102,11 +102,7 @@ class SuccessCriteria:
     file check, never from anyone's judgement.
     """
 
-    # Command run inside a workspace; success is exit code 0.
     integration_test: tuple[str, ...] = ("python", "-m", "pytest", "-q")
-    # Text that must NOT appear in the named file once the task is done.
-    # This is the "induced divergence": the marker a conflicting or stale
-    # write leaves behind.
     divergence_file: str | None = None
     divergence_marker: str | None = None
 

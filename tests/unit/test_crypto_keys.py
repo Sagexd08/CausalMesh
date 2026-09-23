@@ -7,6 +7,8 @@ becomes unsatisfiable.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from causalmesh.crypto.keys import (
@@ -14,6 +16,7 @@ from causalmesh.crypto.keys import (
     PublicKeyRing,
     SignatureError,
     derive_signing_key,
+    load_identity_keys,
     verify_signature,
 )
 
@@ -21,6 +24,8 @@ pytestmark = pytest.mark.unit
 
 SEED = b"causalmesh-test-master-seed-0001"
 OTHER_SEED = b"causalmesh-test-master-seed-0002"
+RAW_SEED_A = bytes(range(32))
+RAW_SEED_B = bytes(range(1, 33))
 
 
 class TestDerivation:
@@ -146,3 +151,59 @@ class TestPublicKeyRing:
             {"agent_a": KeyPair.derive(SEED, "agent_a"), "agent_b": KeyPair.derive(SEED, "agent_b")}
         )
         assert one.fingerprint() != two.fingerprint()
+
+
+class TestKeyPairFromFile:
+    """`identity.keys` in `causalmesh.yaml`: a directory of raw 32-byte seed
+
+    files, one per agent, for a deployment where participants must not share
+    a derivation seed (see `KeyPair.generate`'s docstring for why that case
+    exists). The file holds exactly what `KeyPair.derive` already produces
+    internally -- 32 raw bytes -- so nothing new has to be taught to an
+    operator generating one by hand.
+    """
+
+    def test_loads_the_exact_key_the_bytes_encode(self, tmp_path: Path) -> None:
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+        path = tmp_path / "agent_a.key"
+        path.write_bytes(RAW_SEED_A)
+        loaded = KeyPair.from_seed_file(path, actor_id="agent_a")
+        expected = KeyPair(
+            actor_id="agent_a",
+            _private_key=Ed25519PrivateKey.from_private_bytes(RAW_SEED_A),
+        )
+        assert loaded.public_key_hex == expected.public_key_hex
+
+    def test_wrong_length_is_refused_rather_than_silently_truncated(self, tmp_path: Path) -> None:
+        path = tmp_path / "agent_a.key"
+        path.write_bytes(RAW_SEED_A[:16])
+        with pytest.raises(SignatureError, match="32 bytes"):
+            KeyPair.from_seed_file(path, actor_id="agent_a")
+
+    def test_a_missing_file_is_refused_rather_than_falling_back(self, tmp_path: Path) -> None:
+        with pytest.raises(SignatureError, match="no key file"):
+            KeyPair.from_seed_file(tmp_path / "absent.key", actor_id="agent_a")
+
+
+class TestLoadIdentityKeys:
+    def test_loads_one_keypair_per_agent(self, tmp_path: Path) -> None:
+        (tmp_path / "agent_a.key").write_bytes(RAW_SEED_A)
+        (tmp_path / "agent_b.key").write_bytes(RAW_SEED_B)
+        keys = load_identity_keys(tmp_path, agent_ids=["agent_a", "agent_b"])
+        assert set(keys) == {"agent_a", "agent_b"}
+        assert keys["agent_a"].public_key_hex != keys["agent_b"].public_key_hex
+
+    def test_a_missing_agent_key_is_refused_rather_than_derived(self, tmp_path: Path) -> None:
+        """Falling back to a derived key for a missing file would silently
+
+        defeat the reason an operator declared `identity.keys` at all: to
+        stop keys being derived from a shared seed.
+        """
+        (tmp_path / "agent_a.key").write_bytes(RAW_SEED_A)
+        with pytest.raises(SignatureError, match="agent_b"):
+            load_identity_keys(tmp_path, agent_ids=["agent_a", "agent_b"])
+
+    def test_a_missing_directory_is_refused(self, tmp_path: Path) -> None:
+        with pytest.raises(SignatureError, match="no such directory"):
+            load_identity_keys(tmp_path / "absent", agent_ids=["agent_a"])

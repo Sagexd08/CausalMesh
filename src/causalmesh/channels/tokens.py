@@ -26,7 +26,6 @@ from __future__ import annotations
 
 __all__ = ["CHARS_PER_TOKEN", "estimate_tokens"]
 
-# The conventional approximation for English text under BPE tokenizers.
 CHARS_PER_TOKEN = 4
 
 

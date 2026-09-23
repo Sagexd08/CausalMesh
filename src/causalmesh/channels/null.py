@@ -20,9 +20,6 @@ from .base import ChannelError, Injection, InjectionAccounting
 
 __all__ = ["NullChannel"]
 
-# Every C0 turn injects this, and its digest is therefore constant. Recording
-# it explicitly means a C0 run has a positive audit trail — "these are the
-# bytes that entered" — rather than an empty one that proves nothing.
 _EMPTY_INJECTION = Injection(
     text="",
     events_available=0,

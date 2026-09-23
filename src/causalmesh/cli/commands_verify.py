@@ -76,8 +76,6 @@ def verify_command(
     as_json: Annotated[bool, typer.Option("--json")] = False,
 ) -> None:
     """Verify signed chains offline, from persisted artifacts."""
-    # A single directory needs no repository at all — that is the §82
-    # clean-room case, where an auditor has an export and nothing else.
     if run_path is not None:
         if not (run_path / "run.json").is_file():
             fail(f"{run_path} has no run.json")

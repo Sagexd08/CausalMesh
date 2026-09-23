@@ -22,14 +22,13 @@ import typer
 
 from causalmesh.cli._output import Exit, emit, fail, note, out_console, table
 
-if TYPE_CHECKING:  # pragma: no cover - typing only
+if TYPE_CHECKING:
     from causalmesh.policy import Contract, Resource
 
 app = typer.Typer(
     help="Read the contract, and ask the gate what it would do.", no_args_is_help=True
 )
 
-# How a resource is named on the command line, and how to build one.
 KINDS = ("path", "spend", "endpoint", "budget")
 
 
@@ -117,9 +116,6 @@ def check_command(
         fail(str(exc))
         raise typer.Exit(Exit.USAGE) from None
 
-    # No registry and no ledger: this is a question about the declared
-    # contract, asked without a run. Leases and spend-to-date belong to a
-    # run, and inventing one here would answer a different question.
     gate = Gate(contract, run_id="policy-check", enforcing=contract.arm == "C3")
     verdict = gate.check(agent_id=agent, resource=resource, now_us=0)
 
@@ -175,8 +171,6 @@ def init_command(
     raise typer.Exit(Exit.OK)
 
 
-# Written as a literal rather than dumped from a dict so the comments
-# survive: the comments are most of the value of a starter file.
 _STARTER = """\
 # causalmesh.yaml - what agents in this repository may do.
 #

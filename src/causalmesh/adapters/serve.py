@@ -70,7 +70,6 @@ class _Handler(BaseHTTPRequestHandler):
     state: _RelayState
 
     def log_message(self, fmt: str, *args: Any) -> None:  # noqa: A003
-        # The chain is the record; suppress BaseHTTPRequestHandler's stderr log.
         pass
 
     def do_GET(self) -> None:  # noqa: N802
@@ -96,8 +95,14 @@ class _Handler(BaseHTTPRequestHandler):
         now_us = time.time_ns() // 1_000
 
         verdict = self._check_gate(agent_id=agent_id, body=body, now_us=now_us)
-        self._record_event(agent_id=agent_id, body=body, verdict_allowed=verdict.allowed,
-                            reason=verdict.reason, rule=verdict.rule, now_us=now_us)
+        self._record_event(
+            agent_id=agent_id,
+            body=body,
+            verdict_allowed=verdict.allowed,
+            reason=verdict.reason,
+            rule=verdict.rule,
+            now_us=now_us,
+        )
 
         if not verdict.allowed:
             self._json(
@@ -116,26 +121,36 @@ class _Handler(BaseHTTPRequestHandler):
         completion = self._forward_or_stub(body)
         self._json(200, completion, extra_headers={"X-CausalMesh-Verdict": "allowed"})
 
-    # -- gate ----------------------------------------------------------
-
     def _check_gate(self, *, agent_id: str, body: dict[str, Any], now_us: int) -> Verdict:
         upstream = self.state.config.upstream_base_url
         if not upstream:
-            return Verdict(allowed=True, resource=Resource.endpoint("none"),
-                            reason="no upstream configured; recorded only", rule="no-upstream")
+            return Verdict(
+                allowed=True,
+                resource=Resource.endpoint("none"),
+                reason="no upstream configured; recorded only",
+                rule="no-upstream",
+            )
         host = upstream.split("://", 1)[-1].split("/", 1)[0]
         try:
             resource = Resource.endpoint(host)
         except ResourceError as exc:
-            return Verdict(allowed=False, resource=Resource.endpoint("invalid"),
-                            reason=str(exc), rule="malformed")
+            return Verdict(
+                allowed=False,
+                resource=Resource.endpoint("invalid"),
+                reason=str(exc),
+                rule="malformed",
+            )
         return self.state.gate.check(agent_id=agent_id, resource=resource, now_us=now_us)
 
-    # -- chain -----------------------------------------------------------
-
     def _record_event(
-        self, *, agent_id: str, body: dict[str, Any], verdict_allowed: bool, reason: str,
-        rule: str, now_us: int,
+        self,
+        *,
+        agent_id: str,
+        body: dict[str, Any],
+        verdict_allowed: bool,
+        reason: str,
+        rule: str,
+        now_us: int,
     ) -> None:
         relay = self.state.relay
         identity = EventIdentity(
@@ -159,8 +174,6 @@ class _Handler(BaseHTTPRequestHandler):
                 "rule": rule,
             },
         )
-
-    # -- upstream ----------------------------------------------------------
 
     def _forward_or_stub(self, body: dict[str, Any]) -> dict[str, Any]:
         upstream = self.state.config.upstream_base_url
@@ -192,14 +205,17 @@ class _Handler(BaseHTTPRequestHandler):
                 payload: dict[str, Any] = json.loads(resp.read())
         except urllib.error.URLError as exc:
             return {
-                "error": {"message": f"upstream unreachable: {exc}", "type": "causalmesh_upstream_error"}
+                "error": {
+                    "message": f"upstream unreachable: {exc}",
+                    "type": "causalmesh_upstream_error",
+                }
             }
         payload.setdefault("causalmesh", {})["gated"] = True
         return payload
 
-    # -- output ----------------------------------------------------------
-
-    def _json(self, status: int, payload: dict[str, Any], *, extra_headers: dict[str, str] | None = None) -> None:
+    def _json(
+        self, status: int, payload: dict[str, Any], *, extra_headers: dict[str, str] | None = None
+    ) -> None:
         data = json.dumps(payload).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json")

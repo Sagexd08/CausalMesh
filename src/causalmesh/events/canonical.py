@@ -43,8 +43,6 @@ __all__ = [
 ]
 
 
-# A deeply nested structure is not a legitimate event; the bound also stops a
-# malformed payload from exhausting the stack during verification.
 MAX_NESTING_DEPTH = 32
 
 
@@ -81,8 +79,6 @@ def _canonicalize_value(value: Any, depth: int, path: str) -> Any:
             "events must be shallow enough to verify without deep recursion"
         )
 
-    # Order matters: bool is a subclass of int, so it must be tested first or
-    # True would be canonicalized as the integer 1.
     if value is None or isinstance(value, bool):
         return value
 
@@ -90,9 +86,6 @@ def _canonicalize_value(value: Any, depth: int, path: str) -> Any:
         return value
 
     if isinstance(value, float):
-        # Rejected even when finite: 0.1 has no exact binary representation, so
-        # its shortest-repr text can differ across implementations. Integrity
-        # digests must not depend on floating-point formatting.
         detail = "NaN" if math.isnan(value) else "infinite" if math.isinf(value) else "finite"
         raise CanonicalizationError(
             f"at {path}: float ({detail}) has no canonical form. Use an integer "
@@ -109,14 +102,11 @@ def _canonicalize_value(value: Any, depth: int, path: str) -> Any:
         )
 
     if isinstance(value, (list, tuple)):
-        # Sequence order is meaningful and is preserved exactly.
         return [_canonicalize_value(v, depth + 1, f"{path}[{i}]") for i, v in enumerate(value)]
 
     if isinstance(value, dict):
         result: dict[str, Any] = {}
         for key, item in value.items():
-            # Non-string keys would be coerced by the encoder, letting 2 and
-            # "2" collide into one entry. Reject instead.
             if not isinstance(key, str) or isinstance(key, bool):
                 raise CanonicalizationError(
                     f"at {path}: mapping key {key!r} is {type(key).__name__}, not str. "
@@ -124,8 +114,6 @@ def _canonicalize_value(value: Any, depth: int, path: str) -> Any:
                 )
             normalized_key = normalize_text(key)
             if normalized_key in result:
-                # Two distinct spellings normalized to the same key; keeping
-                # either one would discard data without telling anyone.
                 raise CanonicalizationError(
                     f"at {path}: keys collide after Unicode NFC normalization: {normalized_key!r}"
                 )
@@ -150,10 +138,10 @@ def canonical_json(value: Any) -> str:
     prepared = _canonicalize_value(value, depth=0, path="$")
     return json.dumps(
         prepared,
-        sort_keys=True,  # order independent of dict insertion order
-        ensure_ascii=False,  # emit real UTF-8, not \uXXXX escapes
-        separators=(",", ":"),  # no insignificant whitespace
-        allow_nan=False,  # belt-and-braces; floats already rejected
+        sort_keys=True,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        allow_nan=False,
         check_circular=True,
     )
 

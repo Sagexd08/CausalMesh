@@ -39,11 +39,8 @@ __all__ = [
 
 DEFAULT_OPENAI_BASE = "https://api.openai.com/v1"
 DEFAULT_ANTHROPIC_BASE = "https://api.anthropic.com/v1"
-# The convention every local OpenAI-compatible server follows.
 DEFAULT_LOCAL_BASE = "http://localhost:11434/v1"
 
-# Pinned. Anthropic's API is versioned by header, and letting it float would
-# mean a stored run could not be replayed against the semantics it ran under.
 ANTHROPIC_VERSION = "2023-06-01"
 
 
@@ -104,12 +101,11 @@ class LocalClient:
 
     base_url: str = DEFAULT_LOCAL_BASE
     api_key: str | None = None
-    timeout_s: float = 300.0  # local models on CPU are slow; this is not a hang
+    timeout_s: float = 300.0
 
     def __post_init__(self) -> None:
         self._transport = HttpTransport(
             base_url=self.base_url,
-            # Some local servers want a placeholder; most ignore it entirely.
             api_key=self.api_key or os.environ.get("CAUSALMESH_LOCAL_API_KEY"),
             timeout_s=self.timeout_s,
         )
@@ -158,10 +154,6 @@ class AnthropicClient:
         return "anthropic"
 
     def complete(self, messages: Sequence[ChatMessage], settings: Any) -> ChatResponse:
-        # System messages are hoisted out of the list. Anthropic rejects
-        # `role: "system"` inside `messages`, so leaving them there would
-        # fail the request — or worse, on a lenient proxy, silently drop the
-        # agent's entire instruction set.
         system = "\n\n".join(m.content for m in messages if m.role == "system")
         conversation = [m.to_dict() for m in messages if m.role != "system"]
 
@@ -192,9 +184,6 @@ def _parse_openai_response(
     usage = decoded.get("usage") or {}
     return ChatResponse(
         text=text,
-        # The model the provider says it used, which can differ from the one
-        # requested when an alias resolves to a dated snapshot. The actual
-        # one is the confound (§43).
         model=decoded.get("model") or requested_model,
         prompt_tokens=int(usage.get("prompt_tokens") or 0),
         completion_tokens=int(usage.get("completion_tokens") or 0),
@@ -210,8 +199,6 @@ def _parse_anthropic_response(
     content = decoded.get("content")
     if not isinstance(content, list) or not content:
         raise TransportError(f"response has no content blocks: {str(decoded)[:400]}")
-    # Text blocks are concatenated: a reply may be split across several, and
-    # taking only the first would truncate the model's action silently.
     text = "".join(
         block.get("text", "")
         for block in content

@@ -29,7 +29,7 @@ MINIMUM_PYTHON = (3, 11)
 @dataclass
 class Check:
     name: str
-    status: str  # PASS, WARN, FAIL
+    status: str
     detail: str
     hint: str = ""
 
@@ -120,8 +120,6 @@ def _unbuilt_check() -> Check:
             unbuilt.append(subsystem)
     if not unbuilt:
         return Check("coverage", "PASS", "every subsystem has an implementation")
-    # Name the command each gap actually costs, rather than a fixed list
-    # that goes stale the moment one of them is built.
     blocked = []
     if "reporting" in unbuilt:
         blocked.append("`report`")

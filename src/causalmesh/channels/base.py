@@ -135,8 +135,6 @@ class InjectionAccounting:
             "events_selected": self.events_selected,
             "received_no_coordination": self.received_no_coordination,
             "turns": self.turns,
-            # The digest list is the per-turn audit trail; kept whole rather
-            # than summarised so any turn can be checked individually.
             "turn_digests": list(self.digests),
         }
 

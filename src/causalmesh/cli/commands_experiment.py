@@ -20,9 +20,6 @@ from causalmesh.cli._output import Exit, emit, fail, note, out_console, table
 
 app = typer.Typer(help="Plan and run experiments.", no_args_is_help=True)
 
-# The seed is an input to the design, not a secret, and it is recorded in
-# the plan. A default makes the quickstart one command; `--seed` makes a
-# different collection possible without editing anything.
 DEFAULT_SEED = "causalmesh-default-collection-01"
 
 
@@ -67,8 +64,6 @@ def _build_plan(repo: Repo, *, experiment_id: str, profile_name: str, seed: str,
         fail("no tasks found", hint=f"Expected task YAML in {repo.tasks_dir}.")
         raise typer.Exit(Exit.ERROR)
 
-    # `max_tasks` is part of the profile's definition of scale, so the
-    # truncation happens here rather than being pushed into the planner.
     if selected.max_tasks is not None:
         tasks = tasks[: selected.max_tasks]
 
@@ -172,21 +167,9 @@ def run_command(
         index_path=repo.index_path(name),
     )
 
-    # §30: which code ran, on what, run by whom. These three RunConfig
-    # fields existed and defaulted to "unknown" because nothing populated
-    # them, so every run produced before this was unattributable.
     captured = Environment.capture(repo.root)
     run_config = captured.to_run_config()
 
-    # `causalmesh.yaml` discovery follows the exact pattern `causalmesh
-    # serve` already uses (`Contract.find`), so a contract found here means
-    # the same thing it means there. Off by default would leave the gap
-    # this exists to close; on by default is safe because `_gate_for`
-    # (tasks/runner.py) keeps every arm's own enforcement semantics even
-    # with a contract installed — C3 still enforces, C0/C1/C2 still reach a
-    # verdict and allow anyway, so the C2-to-C3 contrast is unaffected.
-    # `--no-contract` skips discovery outright for an operator who wants
-    # the arms' bare gate with certainty, not just an empty causalmesh.yaml.
     if use_contract:
         try:
             contract = Contract.find(repo.root)
@@ -233,9 +216,6 @@ def run_command(
         note(f"artifacts: {repo.experiment_dir(name)}")
         note(f"verify with: causalmesh verify --id {name}")
 
-    # A failed *run* is evidence, not a CLI failure (§81): the collection
-    # did what it was asked to do. Only an incomplete collection is a
-    # non-zero exit, because that means work is still outstanding.
     raise typer.Exit(Exit.OK if report.is_complete else Exit.FAILED)
 
 
@@ -284,10 +264,6 @@ def status_command(
             arm, {"runs": 0, "successes": 0, "denials": 0, "bytes": 0, "unknown": 0}
         )
         bucket["runs"] += 1
-        # Success lives on the outcome, not the result. Reading a missing key
-        # here would report a confident zero — the exact failure mode that
-        # made enforcement unmeasurable (docs/backlog.md), so an absent
-        # outcome is counted as unknown rather than as a failure.
         outcome = result.get("outcome")
         if isinstance(outcome, dict) and "succeeded" in outcome:
             bucket["successes"] += 1 if outcome["succeeded"] else 0

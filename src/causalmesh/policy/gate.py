@@ -30,9 +30,10 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
+from causalmesh.policy.checkpoints import AutoDenyHandler, CheckpointHandler, evaluate_checkpoints
 from causalmesh.policy.resource import Resource, ResourceKind
 
-if TYPE_CHECKING:  # pragma: no cover - typing only
+if TYPE_CHECKING:
     from causalmesh.claims.registry import ClaimRegistry
     from causalmesh.policy.contract import Contract
 
@@ -90,13 +91,13 @@ class Gate:
         run_id: str,
         registry: ClaimRegistry | None = None,
         enforcing: bool = True,
+        checkpoint_handler: CheckpointHandler | None = None,
     ) -> None:
         self.contract = contract
         self.run_id = run_id
         self.registry = registry
         self.enforcing = enforcing
-
-    # -- the decision ------------------------------------------------------
+        self.checkpoint_handler = checkpoint_handler or AutoDenyHandler()
 
     def check(self, *, agent_id: str, resource: Resource, now_us: int) -> Verdict:
         """Decide whether this agent may act on this resource. Read-only.
@@ -106,12 +107,14 @@ class Gate:
         """
         verdict = self._evaluate(agent_id=agent_id, resource=resource, now_us=now_us)
 
+        if not verdict.refused:
+            checkpoint_verdict = self._check_checkpoints(
+                agent_id=agent_id, resource=resource, now_us=now_us
+            )
+            if checkpoint_verdict is not None:
+                verdict = checkpoint_verdict
+
         if verdict.refused and not self.enforcing:
-            # The arm has information but no enforcement. The gate still
-            # reached a verdict — that is what makes the counterfactual
-            # measurable — but it does not act on it. `would_refuse` carries
-            # the shadow verdict so an unenforced arm can still report what
-            # enforcement would have cost it.
             return Verdict(
                 allowed=True,
                 resource=resource,
@@ -121,6 +124,32 @@ class Gate:
                 detail={**verdict.detail, "would_refuse": True},
             )
         return verdict
+
+    def _check_checkpoints(
+        self, *, agent_id: str, resource: Resource, now_us: int
+    ) -> Verdict | None:
+        """A matched, denied checkpoint as a refusing `Verdict`; `None` otherwise.
+
+        Runs only once every other rule has already allowed: a resource
+        already refused on ownership or budget does not also need a human
+        decision.
+        """
+        decision = evaluate_checkpoints(
+            self.contract.checkpoints,
+            agent_id=agent_id,
+            resource=resource,
+            handler=self.checkpoint_handler,
+            now_us=now_us,
+        )
+        if decision is None or decision.approved:
+            return None
+        return Verdict(
+            allowed=False,
+            resource=resource,
+            reason=decision.reason,
+            rule="checkpoint",
+            detail={"checkpoint": decision.checkpoint.to_dict()},
+        )
 
     def _evaluate(self, *, agent_id: str, resource: Resource, now_us: int) -> Verdict:
         """The rules, in the order they are allowed to refuse.
@@ -147,12 +176,6 @@ class Gate:
             reason="no rule refuses this",
             rule="default-allow",
         )
-
-    # -- rules -------------------------------------------------------------
-    #
-    # Each returns a refusing Verdict, or None meaning "nothing to say".
-    # None rather than an allowing verdict so the caller above can tell
-    # "this rule permitted it" from "this rule did not apply".
 
     def _rule_ownership(self, *, agent_id: str, resource: Resource, now_us: int) -> Verdict | None:
         """Declared ownership. Paths only, and only where someone owns it.
@@ -280,8 +303,6 @@ class Gate:
             holder=holder.agent_id if holder else None,
         )
 
-    # -- ledger ------------------------------------------------------------
-
     def spent(self, *, agent_id: str, resource: Resource) -> Decimal:
         """What this agent has already consumed of this resource's allowance.
 
@@ -310,6 +331,5 @@ def _host_allowed(host: str, allowed: set[str]) -> bool:
     covered by `example.com`, and a naive `endswith` would let it through —
     which is a real way an allowlist silently fails open.
     """
-    # A destination may carry a path or port; the allowlist is about hosts.
     bare = host.split("/", 1)[0].split(":", 1)[0]
     return any(bare == entry or bare.endswith(f".{entry}") for entry in allowed)

@@ -1,4 +1,3 @@
-# src/causalmesh/jev/questions.py
 """The three typed questions Jev answers: Choice, Score, Noul.
 
 Each is a request to evaluate the *current* program state against a fixed
@@ -29,10 +28,6 @@ class Choice:
                 f"question {self.id!r}: a Choice needs at least two options, got {self.options!r}"
             )
         if len(set(self.options)) != len(self.options):
-            # A duplicate option is almost certainly a caller mistake, and
-            # letting it through would mean an answer's `selected` value is
-            # ambiguous between two entries — undermining the "picks from a
-            # closed set" guarantee this type exists to make.
             raise ValueError(f"question {self.id!r}: options must be unique, got {self.options!r}")
 
     def to_dict(self) -> dict[str, Any]:

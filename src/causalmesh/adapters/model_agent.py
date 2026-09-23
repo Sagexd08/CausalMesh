@@ -54,8 +54,6 @@ class ModelSettings:
     temperature: float = 0.0
     max_tokens: int = 2048
     top_p: float = 1.0
-    # Honoured by some providers and ignored by others. Recorded either way,
-    # so a run states what it asked for even where the request had no effect.
     seed: int | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -123,10 +121,6 @@ class ModelAgent(CodingAgent):
         self.channel = channel
         self.owns = owns
         self.depends_on = depends_on
-        # Bounded: a model stuck emitting prose would otherwise burn the
-        # whole turn budget and every token in it. The cap is recorded so
-        # "gave up on a non-compliant model" is distinguishable from
-        # "finished normally" (§52).
         self.max_protocol_failures = max_protocol_failures
         self.tick_us = tick_us
 
@@ -146,8 +140,6 @@ class ModelAgent(CodingAgent):
         self.tool_results: list[ToolResult] = []
         self.observations: list[tuple[int, tuple[str, ...]]] = []
         self.informed_paths: set[str] = set()
-
-    # -- lifecycle --------------------------------------------------------
 
     async def initialize(self) -> None:
         """Seed the conversation. No model call is made here.
@@ -175,9 +167,6 @@ class ModelAgent(CodingAgent):
 
         self.observations.append((context.turn, tuple(event.event_id for event in delivered)))
 
-        # The injected text is the *only* peer information the model sees.
-        # Appending it as a user message keeps it inside the same token
-        # accounting as everything else the model reads.
         if injection.text:
             self._history.append(
                 ChatMessage(
@@ -210,9 +199,6 @@ class ModelAgent(CodingAgent):
         try:
             response: ChatResponse = self.client.complete(self._history, self.settings)
         except TransportError as exc:
-            # The provider failing is a run event, not a crash: §81 wants
-            # the evidence either way, and an unreachable endpoint must not
-            # take the surrounding chain down with it.
             record.transport_failure = f"{type(exc).__name__}: {exc}"
             self.turn_records.append(record)
             self._finished = True
@@ -228,9 +214,6 @@ class ModelAgent(CodingAgent):
         except ProtocolError as exc:
             self._protocol_failures += 1
             record.protocol_failure = f"{exc.kind}: {exc}"
-            # Told what it did wrong, once, rather than silently re-prompted
-            # forever. A model that cannot comply is a measurement, not a
-            # thing to work around.
             self._history.append(
                 ChatMessage(
                     role="user",
@@ -278,9 +261,6 @@ class ModelAgent(CodingAgent):
             self.turn_records[-1].action = action.to_dict()
             self.turn_records[-1].outcome = str(tool_result.outcome)
 
-        # A denial is fed back so the model can respond to enforcement
-        # rather than repeating the same refused write. This is the C3
-        # behaviour the arm exists to measure.
         if tool_result.outcome == ToolOutcome.DENIED:
             reason = tool_result.decision.reason if tool_result.decision else "denied"
             self._history.append(
@@ -304,8 +284,6 @@ class ModelAgent(CodingAgent):
 
     async def finalize(self) -> dict[str, Any]:
         return self.summary()
-
-    # -- reporting --------------------------------------------------------
 
     def summary(self) -> dict[str, Any]:
         """Everything this agent did, for the run artifact.

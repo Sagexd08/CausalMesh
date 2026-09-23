@@ -32,7 +32,7 @@ __all__ = [
     "policy_for_arm",
 ]
 
-from .core import NullDelivery  # re-exported: C0's policy lives with the protocol
+from .core import NullDelivery
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,8 +63,6 @@ class PathScopedDelivery:
     interests: dict[str, frozenset[str]]
 
     def recipients(self, event: Event, participants: Iterable[str]) -> tuple[str, ...]:
-        # Events that name no path (INTENT, FAILURE) carry run-level meaning
-        # and go to everyone; scoping them by path would silently hide them.
         if not event.paths:
             return tuple(participants)
         touched = set(event.paths)
@@ -73,8 +71,6 @@ class PathScopedDelivery:
         )
 
 
-# Event classes that describe a change to the shared repository. Retained for
-# the channel layer's relevance scoring; the relay itself does not filter.
 MUTATING_EVENT_TYPES = frozenset(
     {
         EventType.WRITE,

@@ -59,8 +59,6 @@ class ArmMetrics:
     arm: str
     runs: list[RunMetrics] = field(default_factory=list)
 
-    # -- counts -----------------------------------------------------------
-
     @property
     def run_count(self) -> int:
         return len(self.runs)
@@ -81,8 +79,6 @@ class ArmMetrics:
     def denials(self) -> int:
         return sum(run.denials for run in self.runs)
 
-    # -- rates ------------------------------------------------------------
-
     @property
     def success_rate(self) -> float | None:
         """Successes over runs whose outcome is known.
@@ -95,8 +91,6 @@ class ArmMetrics:
         if not known:
             return None
         return self.successes / len(known)
-
-    # -- cost -------------------------------------------------------------
 
     @property
     def mean_coordination_bytes(self) -> float | None:
@@ -208,7 +202,6 @@ def _read_run(path: Path) -> RunMetrics:
 
     return RunMetrics(
         arm=artifact.get("arm") or result.get("arm") or "?",
-        # Tokens are summed per agent: the run-level total records bytes only.
         coordination_bytes=int(result.get("coordination_bytes") or 0),
         coordination_tokens=sum(int(c.get("coordination_tokens") or 0) for c in coordination),
         denials=len(result.get("denials") or ()),

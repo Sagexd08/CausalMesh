@@ -17,12 +17,23 @@ the enforcement plane does not know or care which kind it just refused.
 
 from __future__ import annotations
 
-from causalmesh.policy.contract import Contract, ContractError, Role
+from causalmesh.policy.checkpoints import (
+    AutoDenyHandler,
+    CheckpointDecision,
+    CheckpointHandler,
+    ScriptedHandler,
+    evaluate_checkpoints,
+)
+from causalmesh.policy.contract import Checkpoint, Contract, ContractError, Role
 from causalmesh.policy.gate import Gate, Verdict
 from causalmesh.policy.ledger import Entry, Ledger
 from causalmesh.policy.resource import Resource, ResourceError, ResourceKind
 
 __all__ = [
+    "AutoDenyHandler",
+    "Checkpoint",
+    "CheckpointDecision",
+    "CheckpointHandler",
     "Contract",
     "ContractError",
     "Entry",
@@ -32,5 +43,7 @@ __all__ = [
     "ResourceError",
     "ResourceKind",
     "Role",
+    "ScriptedHandler",
     "Verdict",
+    "evaluate_checkpoints",
 ]

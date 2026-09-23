@@ -24,11 +24,12 @@ from ..agents import AgentContext, AgentIdentity, MockAgent, Scenario
 from ..channels import MetadataChannel, NullChannel, Room, TranscriptChannel
 from ..channels.base import CoordinationChannel
 from ..claims import ClaimRegistry
-from ..crypto.keys import KeyPair
+from ..crypto.keys import KeyPair, load_identity_keys
 from ..edges import CausalEdge, RelationshipType
 from ..events.schema import EventIdentity, EventType
 from ..hooks import LifecycleBoundary, gate_for_arm
 from ..isolation import Workspace, build_run_workspaces
+from ..policy import Contract
 from ..relay import ChainStore, Relay, policy_for_arm
 from ..relevance import AgentInterests
 from ..tools import Toolbox, ToolExecutor
@@ -44,8 +45,6 @@ from .outcome import (
 
 __all__ = ["RunConfig", "RunResult", "execute_task"]
 
-# Enough turns for the longest scripted agent plus a margin. Bounded so a
-# stalled agent cannot hang a run indefinitely (§22).
 DEFAULT_MAX_TURNS = 20
 DEFAULT_TICK_US = 1_000_000
 DEFAULT_LEASE_US = 120 * 1_000_000
@@ -72,16 +71,8 @@ class RunConfig:
     operator_id: str = "unknown"
     machine_id: str = "unknown"
     git_commit: str = "unknown"
-    # A declared contract, when the operator has one. Absent is the
-    # experiment's own case: the arms install `ClaimGate`, which refuses on
-    # exactly one factor, and that is what the C2 to C3 contrast measures.
-    # Present, the contract gate is installed instead and can also refuse on
-    # ownership, allowlists, ceilings and budgets.
-    #
-    # A path rather than a Contract so RunConfig stays serialisable: it is
-    # recorded in the run artifact, and an object with a Decimal in it is
-    # not JSON.
     contract_path: str | None = None
+    checkpoint_handler: Any = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -122,16 +113,7 @@ class RunResult:
     denials: list[dict[str, Any]] = field(default_factory=list)
     relay_summary: dict[str, Any] = field(default_factory=dict)
     boundary_summaries: dict[str, dict[str, Any]] = field(default_factory=dict)
-    # What the contract gate decided, when one was installed. Empty for a
-    # run driven by the arms' own gate, which is the experiment's default
-    # and has no contract to report against.
     gate_summary: dict[str, Any] = field(default_factory=dict)
-    # Typed causal relationships between chain events (see
-    # `causalmesh.edges`), e.g. a REQUIRED edge from a denied write's
-    # FAILURE event back to the POLICY_VERDICT that refused it. Empty
-    # whenever nothing produced one — no contract installed, or a contract
-    # that refused nothing — the same "absent means no data, not zero
-    # findings" convention `gate_summary` already follows.
     edges: list[dict[str, Any]] = field(default_factory=list)
     error: str | None = None
 
@@ -194,7 +176,7 @@ def _make_channel(
     )
 
 
-def _gate_for(config: RunConfig, *, registry: Any):
+def _gate_for(config: RunConfig, *, registry: Any, contract: Any = None):
     """The gate this run installs, and why.
 
     Without a contract the arms install their own gate: `AllowAllGate` for
@@ -206,6 +188,10 @@ def _gate_for(config: RunConfig, *, registry: Any):
     on ownership, allowlists, ceilings and budgets, and it keeps the arm's
     enforcement semantics: C3 enforces, the others reach a verdict and allow
     anyway so the counterfactual stays measurable.
+
+    `contract`, when given, is the already-loaded `Contract` for
+    `config.contract_path` -- `execute_task` loads it once, ahead of this
+    call, so `identity.keys` can be resolved before keypairs are built.
     """
     if config.contract_path is None:
         return gate_for_arm(config.arm, registry=registry, run_id=config.run_id)
@@ -214,9 +200,10 @@ def _gate_for(config: RunConfig, *, registry: Any):
     from ..policy import Contract
 
     return ContractGate.build(
-        Contract.load(config.contract_path),
+        contract if contract is not None else Contract.load(config.contract_path),
         run_id=config.run_id,
         registry=registry,
+        checkpoint_handler=config.checkpoint_handler,
         enforcing=config.arm == "C3",
     )
 
@@ -245,17 +232,17 @@ async def execute_task(
         fixture=Path(fixtures_root) / task.fixture,
     )
 
-    keypairs = {agent: KeyPair.derive(config.master_seed, agent) for agent in agent_ids}
-    # The policy plane is not an agent, but its verdicts still need a real
-    # signing identity so they can enter the chain — see docs/backlog.md's
-    # "Verdicts do not enter the signed chain" entry. Only derived when a
-    # contract is in play; an experiment run with no contract has no
-    # ContractGate and therefore no verdicts to sign.
-    if config.contract_path is not None:
+    contract = Contract.load(config.contract_path) if config.contract_path is not None else None
+
+    if contract is not None and contract.identity_keys_dir is not None:
+        keypairs = load_identity_keys(contract.identity_keys_dir, agent_ids=agent_ids)
+    else:
+        keypairs = {agent: KeyPair.derive(config.master_seed, agent) for agent in agent_ids}
+
+    if contract is not None:
         keypairs["policy_gate"] = KeyPair.derive(config.master_seed, "policy_gate")
-    # Every run reaches an acceptance decision, contract or not, so this
-    # identity is derived unconditionally — unlike policy_gate's, which only
-    # exists when there is a contract to reach verdicts against.
+        if contract.checkpoints:
+            keypairs["checkpoint"] = KeyPair.derive(config.master_seed, "checkpoint")
     keypairs["acceptance"] = KeyPair.derive(config.master_seed, "acceptance")
     claims = (
         ClaimRegistry(workspace_root / f"{config.run_id}_claims.db") if config.arm == "C3" else None
@@ -270,7 +257,7 @@ async def execute_task(
         claims=claims,
         participants=agent_ids,
     )
-    gate = _gate_for(config, registry=claims)
+    gate = _gate_for(config, registry=claims, contract=contract)
     room = Room(config.run_id, task.task_id)
 
     agents: dict[str, MockAgent] = {}
@@ -313,9 +300,6 @@ async def execute_task(
             tick_us=config.tick_us,
         )
 
-    # Under C3 each agent takes a lease on what it owns. This is the
-    # enforcement the arm is defined by: an agent that owns a path holds it
-    # for the run, so a peer's conflicting write is refused.
     if claims is not None:
         for agent_id in agent_ids:
             for index, path in enumerate(sorted(task.role_for(agent_id).owns)):
@@ -350,19 +334,6 @@ async def execute_task(
         error = f"{type(exc).__name__}: {exc}"
         summaries = {agent_id: agent.summary() for agent_id, agent in agents.items()}
 
-    # Success is judged on an *integrated* workspace, not on any single
-    # agent's copy.
-    #
-    # Per-agent workspaces are an isolation mechanism (§11), not the
-    # research model: the experiment is about agents coordinating over a
-    # shared codebase that is later integrated. Judging one agent's copy
-    # would ask the wrong question — it would score whether that agent's
-    # local view is self-consistent, when what matters is whether the
-    # agents' combined work is.
-    #
-    # Integration takes each file from the agent that owns it, which is
-    # what an ownership-based merge does and what the claim registry
-    # already encodes. A file nobody owns is taken from the fixture.
     integrated = _integrate_workspaces(
         task,
         workspaces,
@@ -372,28 +343,11 @@ async def execute_task(
     exit_code = _run_integration_test(task, integrated)
     outcome = evaluate_outcome(task.success, workspace=integrated, test_exit_code=exit_code)
 
-    # The deterministic instant for every event recorded after the scripted
-    # turn loop ends. `utc_now_micros()` is wall-clock time — fine for an
-    # envelope field, but a chain payload timestamp must be reproducible
-    # (§84), and this run's clock model is `base_time_us + turn * tick_us`
-    # throughout. `max_turns` is the deterministic "after the last possible
-    # turn" instant, independent of how many turns actually ran.
     post_run_time_us = config.base_time_us + config.max_turns * config.tick_us
 
-    # Causal edges recorded for this run. Stays empty when no contract is
-    # installed — there are no verdicts to pair against denials — the same
-    # "absent means no data" convention `gate_summary` follows.
     edges: list[dict[str, Any]] = []
 
     try:
-        # Every verdict the policy gate reached becomes a real chain event —
-        # not only refusals, so an unenforced arm's shadow-refusals (the
-        # counterfactual §-referenced throughout policy_gate.py) are
-        # provable too. The same `contract_path is not None` condition that
-        # decided whether to derive the `policy_gate` keypair above decides
-        # whether there is anything to emit here, rather than duck-typing
-        # on `.verdicts` — the two must always agree, and naming the same
-        # condition twice keeps that obvious rather than assumed.
         if config.contract_path is not None:
             policy_identity = EventIdentity(
                 experiment_id=config.experiment_id,
@@ -412,28 +366,37 @@ async def execute_task(
                     payload=verdict.to_dict(),
                 )
                 if not ingested.accepted:
-                    # A verdict that cannot be recorded is exactly the silent
-                    # gap this change exists to close — fail loudly rather
-                    # than returning a result that looks complete but is
-                    # missing evidence.
                     raise RuntimeError(
                         f"policy verdict {index} of {len(gate.verdicts)} could not "
                         f"be recorded on the chain: {ingested.reason}"
                     )
 
-            # A REQUIRED edge from each denied write's FAILURE event back to
-            # the POLICY_VERDICT event that refused it.
-            #
-            # The pairing is exact, not inferred from content: `gate.verdicts`
-            # and the chain's DENIED events are both produced by the same
-            # sequence of calls through `LifecycleBoundary.invoke`, one verdict
-            # and (on refusal) exactly one FAILURE event per mutating call, in
-            # the same order. `Verdict.to_dict()` does not record which agent
-            # was denied, so matching by content (path, rule, reason) would
-            # misattribute the moment two agents are denied identically in one
-            # run — a real shape under `concurrent_edit_collision`. Matching by
-            # position in these two same-order, same-cause sequences carries no
-            # such risk.
+            checkpoint_verdicts = [
+                v for v in gate.verdicts if v.detail.get("checkpoint") is not None
+            ]
+            if checkpoint_verdicts:
+                checkpoint_identity = EventIdentity(
+                    experiment_id=config.experiment_id,
+                    task_id=task.task_id,
+                    run_id=config.run_id,
+                    agent_id="checkpoint",
+                    arm=config.arm,
+                )
+                for index, verdict in enumerate(checkpoint_verdicts):
+                    ingested = relay.ingest(
+                        event_id=f"{config.run_id}_checkpoint_{index}",
+                        agent_id="checkpoint",
+                        event_type=EventType.CHECKPOINT_DECIDED,
+                        identity=checkpoint_identity,
+                        timestamp_us=post_run_time_us,
+                        payload=verdict.to_dict(),
+                    )
+                    if not ingested.accepted:
+                        raise RuntimeError(
+                            f"checkpoint decision {index} of {len(checkpoint_verdicts)} could "
+                            f"not be recorded on the chain: {ingested.reason}"
+                        )
+
             refused_verdict_ids = [
                 f"{config.run_id}_verdict_{index}"
                 for index, verdict in enumerate(gate.verdicts)
@@ -443,15 +406,9 @@ async def execute_task(
                 record["event"]["event_id"]
                 for record in relay.records()
                 if record["event"]["event_type"] == "FAILURE"
-                # `payload["outcome"]` is `str(ToolOutcome.DENIED)`, and
-                # `ToolOutcome` is a lowercase-valued StrEnum (see
-                # `hooks/lifecycle.py`) — "denied", not "DENIED".
                 and record["event"]["payload"].get("outcome") == "denied"
             ]
             if len(refused_verdict_ids) != len(denied_event_ids):
-                # The invariant the pairing depends on has broken — pairing
-                # anyway would silently produce wrong edges, which is worse
-                # than producing none.
                 raise RuntimeError(
                     f"{len(refused_verdict_ids)} refused verdicts but "
                     f"{len(denied_event_ids)} denied events; cannot pair them "
@@ -466,11 +423,6 @@ async def execute_task(
                     ).to_dict()
                 )
 
-        # Every run reaches an acceptance decision, unconditionally — unlike
-        # policy verdicts, which only exist when a contract is in play. The
-        # decision is a total function of `outcome` (§38), so this makes an
-        # already-determined fact a signed, chained record instead of
-        # something read back off `outcome.succeeded` by every caller.
         decision = decide_acceptance(outcome)
         acceptance_identity = EventIdentity(
             experiment_id=config.experiment_id,
@@ -488,8 +440,6 @@ async def execute_task(
             payload=decision.to_dict(),
         )
         if not ingested.accepted:
-            # Same discipline as the policy verdict above: a decision that
-            # cannot be recorded is a silent gap, not a result to return.
             raise RuntimeError(
                 f"acceptance decision could not be recorded on the chain: {ingested.reason}"
             )
@@ -511,9 +461,6 @@ async def execute_task(
                 [c.to_dict() for c in claims.history(run_id=config.run_id)] if claims else []
             ),
             denials=claims.denials(run_id=config.run_id) if claims else [],
-            # `to_dict` only exists on the contract gate. The arms' gates have
-            # no contract to report against, so an absent summary is the honest
-            # answer rather than an empty one that implies a gate was consulted.
             gate_summary=gate.to_dict() if hasattr(gate, "to_dict") else {},
             edges=edges,
             relay_summary=relay.summary(),
@@ -523,11 +470,6 @@ async def execute_task(
             error=error,
         )
     finally:
-        # Every exit from this point on — including the RuntimeError above,
-        # which is deliberately allowed to propagate rather than being
-        # folded into `RunResult.error` — must still release the chain
-        # store and the claims database. A run that fails to record its
-        # evidence should not also leak the handles that evidence lives in.
         store.close()
         if claims is not None:
             claims.close()
@@ -560,22 +502,10 @@ def _integrate_workspaces(
 
     owner_of = {path: role.agent_id for role in task.roles for path in role.owns}
 
-    # A contested path has no single owner, by definition. Resolving it by
-    # ownership would decide the contest before the arms could differ:
-    # agent_b's write would be discarded in every arm, informed or not, and
-    # the task would measure nothing.
-    #
-    # So contested paths are excluded from the ownership rule and merged
-    # last-writer-wins instead — which is exactly what an unsynchronised
-    # shared filesystem does, and therefore the behaviour the enforcement
-    # factor exists to change.
     contested = set(task.contested_paths)
     for path in contested:
         owner_of.pop(path, None)
 
-    # Lay down every agent's files first, then let owners overwrite. The
-    # two passes matter: an owner's version must win regardless of the
-    # order agents happen to be iterated in.
     for agent_id in sorted(workspaces):
         workspace = workspaces[agent_id]
         for relative in workspace.list_files():
@@ -585,23 +515,6 @@ def _integrate_workspaces(
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(workspace.resolve(relative).read_bytes())
 
-    # Contested paths are resolved from the *chain*, which is the only
-    # authoritative record of who wrote what and in what order.
-    #
-    # The first version of this took the alphabetically last agent's copy
-    # and called it last-writer-wins. It is not: under C3, agent_b's write
-    # to the contested file was refused, so its workspace still held the
-    # untouched fixture — and that empty copy overwrote agent_a's
-    # successful write purely because "agent_b" sorts after "agent_a".
-    # C3 then looked like it had lost both registrations when it had
-    # actually preserved one. Filesystem mtimes would be no better: they
-    # have coarse resolution and record when a file was touched, not which
-    # write the system accepted.
-    #
-    # The relay assigns a monotonic sequence to every accepted event, and a
-    # denied write produces no write event at all. Reading the order from
-    # there means the merge agrees with the signed evidence by
-    # construction.
     for relative in sorted(contested):
         writer = _last_writer(relative, records or [])
         candidates = [writer] if writer else sorted(workspaces)
@@ -640,11 +553,6 @@ def _last_writer(path: str, records: list[dict[str, Any]]) -> str | None:
     win a contested path. Returns None when nobody wrote it, leaving the
     caller to fall back to whatever the fixture provided.
     """
-    # Compared case-insensitively against the event vocabulary: the chain
-    # serialises these as "WRITE", and a lowercase comparison silently
-    # matched nothing — every contested path then fell back to the fixture
-    # and all four arms failed identically, which looks like a broken task
-    # rather than a broken lookup.
     mutating = {"write", "create", "modify", "rename", "delete"}
     winner: str | None = None
     best = -1
@@ -679,10 +587,6 @@ def _run_integration_test(task: TaskDefinition, workspace: Workspace) -> int | N
             text=True,
             timeout=300,
             env={
-                # Same allowlist the tool layer uses, for the same reasons —
-                # including APPDATA, without which `python -m pytest` cannot
-                # find user-site packages on Windows and every task's
-                # integration test fails identically in every arm.
                 **{name: os.environ[name] for name in _INHERITED_ENVIRONMENT if name in os.environ},
                 "PYTHONHASHSEED": "0",
                 "PYTHONDONTWRITEBYTECODE": "1",
@@ -690,7 +594,5 @@ def _run_integration_test(task: TaskDefinition, workspace: Workspace) -> int | N
             check=False,
         )
     except (OSError, subprocess.TimeoutExpired):
-        # A test that could not run is not a pass. Returning None keeps
-        # "never ran" distinguishable from "ran and failed" in the evidence.
         return None
     return completed.returncode

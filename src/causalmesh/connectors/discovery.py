@@ -28,13 +28,6 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
-# Measured on the development machine rather than guessed: the slowest
-# honest answer is `gemini` at 6-7 seconds, consistently, and `opencode` at
-# 2-3. Ten seconds clears both with room and turns a genuinely hung binary
-# into a `degraded` row within a breath rather than stalling the screen.
-#
-# This was 25 before it was measured, which meant one wedged agent CLI held
-# a first run for half a minute with no way to tell it apart from slow.
 PROBE_TIMEOUT_S = 10
 
 
@@ -49,7 +42,7 @@ class Probe:
     """What one tool on this machine turned out to be."""
 
     name: str
-    kind: str  # "agent" or "infra"
+    kind: str
     availability: Availability
     path: str | None = None
     version: str | None = None
@@ -79,13 +72,10 @@ class ToolSpec:
     kind: str
     command: str
     version_args: tuple[str, ...] = ("--version",)
-    # Some CLIs print their version to stderr, or wrap it in a banner.
     version_pattern: str = r"\d+\.\d+(?:\.\d+)?"
     description: str = ""
 
 
-# The agents this build knows how to look for. Presence here is not a claim
-# that a connector can drive it — `connectors/` says which are drivable.
 AGENT_SPECS: tuple[ToolSpec, ...] = (
     ToolSpec("claude", "agent", "claude", description="Claude Code"),
     ToolSpec("codex", "agent", "codex", description="OpenAI Codex CLI"),
@@ -125,8 +115,6 @@ def _run(command: str, args: tuple[str, ...]) -> tuple[int | None, str]:
             text=True,
             timeout=PROBE_TIMEOUT_S,
             check=False,
-            # A probe must never inherit a terminal: an agent CLI that
-            # decides it is interactive will wait for input forever.
             stdin=subprocess.DEVNULL,
             env={**os.environ, "NO_COLOR": "1"},
         )
@@ -160,9 +148,6 @@ def probe(spec: ToolSpec) -> Probe:
 
     match = re.search(spec.version_pattern, output)
     if code != 0 or match is None:
-        # Installed and executable, but it did not answer. The first line
-        # of its output is usually the reason, and is worth surfacing
-        # verbatim rather than paraphrasing.
         first = next((line for line in output.splitlines() if line.strip()), "")
         return Probe(
             availability=Availability.DEGRADED,

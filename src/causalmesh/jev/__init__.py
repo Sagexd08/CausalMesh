@@ -1,4 +1,3 @@
-# src/causalmesh/jev/__init__.py
 """Jev: TypeSafe AI's typed decision engine, as a client for this substrate.
 
 Jev takes program state and a set of typed questions — Choice (pick one of

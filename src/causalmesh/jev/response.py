@@ -1,4 +1,3 @@
-# src/causalmesh/jev/response.py
 """Parsing a Jev response into typed answers.
 
 Jev (TypeSafe AI's "System One" model) returns one of three answer shapes
@@ -54,7 +53,6 @@ class JevResponseError(ValueError):
 
 
 def _require_unit_interval(question_id: str, field_name: str, value: float) -> float:
-    # `value != value` catches NaN without importing math for one check.
     if value != value or not (0.0 <= value <= 1.0):
         raise JevResponseError(
             f"question {question_id!r}: {field_name} must be a probability in "
