@@ -4,6 +4,14 @@ project keeps the reasoning for decisions that are not obvious from the
 diff, and most of the interesting ones are not.
 -->
 
+## Issue
+
+<!--
+CONTRIBUTING.md asks for an accepted, assigned issue before a PR: Fixes #123
+or Refs #123. A trivial fix (typo, broken link, a stale doc claim) can skip
+this -- say so instead of a number.
+-->
+
 ## What this changes
 
 ## Why
