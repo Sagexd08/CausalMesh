@@ -34,9 +34,6 @@ __all__ = [
 ]
 
 
-# Bumped whenever the wire format changes in a way that affects canonical
-# bytes. Recorded on every event so a verifier can refuse a log it cannot
-# faithfully interpret rather than guessing.
 SCHEMA_VERSION = 1
 
 
@@ -63,21 +60,11 @@ class EventType(StrEnum):
     RELEASE = "RELEASE"
     COMMIT = "COMMIT"
     FAILURE = "FAILURE"
-    # Emitted by the policy plane (ContractGate), not by an agent, whenever
-    # it reaches a verdict — allowed or refused. Signed under a dedicated
-    # "policy_gate" identity (see tasks/runner.py) rather than an agent's
-    # key, because a verdict is not an agent's action.
     POLICY_VERDICT = "POLICY_VERDICT"
-    # Emitted once per run, unconditionally, after the outcome is evaluated.
-    # Signed under a dedicated "acceptance" identity (see tasks/runner.py)
-    # rather than an agent's or the policy gate's key, because accepting or
-    # rejecting a run's result is a decision distinct from both what an
-    # agent did and what the policy plane allowed.
     ACCEPTANCE_DECIDED = "ACCEPTANCE_DECIDED"
+    CHECKPOINT_DECIDED = "CHECKPOINT_DECIDED"
 
 
-# Identifiers appear in file paths, database keys and canonical bytes, so they
-# are restricted to a conservative, case-sensitive set.
 _IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$")
 
 
@@ -165,8 +152,6 @@ class Event:
                 f"event_type must be an EventType, got {type(self.event_type).__name__}"
             )
 
-        # bool is a subclass of int; reject it explicitly so True cannot pass
-        # as sequence 1.
         for name in ("sequence", "timestamp_us"):
             value = getattr(self, name)
             if isinstance(value, bool) or not isinstance(value, int):

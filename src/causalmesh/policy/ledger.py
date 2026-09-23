@@ -128,8 +128,6 @@ class Ledger:
     def __exit__(self, *exc_info: object) -> None:
         self.close()
 
-    # -- recording ---------------------------------------------------------
-
     def record(
         self,
         *,
@@ -183,8 +181,6 @@ class Ledger:
         )
         return entry
 
-    # -- reading -----------------------------------------------------------
-
     def total(self, *, agent_id: str, resource: Resource) -> Decimal:
         """What this agent has consumed against this resource's allowance."""
         from causalmesh.policy.contract import _budget_key
@@ -196,9 +192,6 @@ class Ledger:
             "SELECT amount FROM consumption WHERE run_id = ? AND agent_id = ? AND budget_key = ?",
             (self.run_id, agent_id, key),
         ).fetchall()
-        # Summed as Decimal rather than in SQL: SQLite would coerce the TEXT
-        # column to a float to add it, reintroducing exactly the imprecision
-        # the string storage exists to avoid.
         return sum((Decimal(row["amount"]) for row in rows), Decimal(0))
 
     def entries(self, *, agent_id: str | None = None) -> list[Entry]:

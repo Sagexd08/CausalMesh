@@ -35,21 +35,14 @@ from rich.console import Console, Group, RenderableType
 from rich.live import Live
 from rich.text import Text
 
-# The palette the monitor uses, so the two surfaces read as one product.
 DENIAL = "dark_orange3"
 PASS = "green3"
 FAIL = "red3"
 LIVE = "cyan"
 
-# A spinner that survives cp1252. Braille dots are the rich default and the
-# first thing to crash on a Windows console; these are four rotations of an
-# ASCII bar, which reads as rotation rather than as flicker.
 FRAMES = ("|", "/", "-", "\\")
 FRAME_S = 0.09
 
-# Long enough that a resolved step registers as having happened, short
-# enough that eight of them do not become a loading screen. Motion that
-# conveys state should not make the operator wait for choreography.
 SETTLE_S = 0.06
 
 
@@ -62,8 +55,6 @@ class Step:
     detail: str = ""
     ok: bool | None = None
     optional: bool = False
-    # Shown while the probe runs. A spinner with no subject makes a slow
-    # check look broken; naming the reason makes the same wait legible.
     waiting: str = ""
 
     @property
@@ -101,7 +92,6 @@ def _wordmark(revealed: int) -> Text:
     line = Text()
     line.append(name[:revealed], style="bold white")
     if revealed < len(name):
-        # The cursor sits where the next character will land.
         line.append("_", style=LIVE)
     else:
         line.append("  coordination you can prove", style="grey42")
@@ -131,9 +121,6 @@ def _step_line(step: Step, frame: int) -> Text:
         line.append("+", style=PASS)
         line.append(f"  {step.label}", style="grey70")
     else:
-        # An optional dependency that is missing is not a failure; saying so
-        # in the same red as a broken install sends the operator hunting for
-        # a problem they do not have.
         line.append("!" if step.optional else "x", style=DENIAL if step.optional else FAIL)
         line.append(f"  {step.label}", style="grey70")
 
@@ -146,9 +133,6 @@ def _verdict(sequence: Sequence) -> Text:
     """What the operator can do next, named as an action."""
     line = Text()
     if sequence.ready:
-        # Deliberately does not name a command: the welcome screen's menu
-        # names them, and a verdict that repeats the first option turns the
-        # menu into an echo rather than a choice.
         line.append("  ready", style=f"bold {PASS}")
         warnings = len(sequence.warnings)
         if warnings:
@@ -249,10 +233,6 @@ def build_sequence(root: Any) -> Sequence:
                 "coding agents",
                 agents_probe,
                 optional=True,
-                # This one really is slow: it starts every agent binary on
-                # the machine, and some take six seconds to say their own
-                # version. Saying so is better than a spinner that looks
-                # stuck.
                 waiting="starting each one to check it runs",
             ),
         ]
@@ -291,10 +271,6 @@ def run(sequence: Sequence, console: Console, *, animate: bool = True) -> Sequen
             time.sleep(FRAME_S / 2)
 
         for index, step in enumerate(sequence.steps):
-            # The probe runs on a worker so the spinner keeps turning while
-            # it works. Animating on the same thread that blocks would give
-            # a frozen spinner during exactly the wait it exists to cover —
-            # the agent probe invokes several binaries and takes seconds.
             with ThreadPoolExecutor(max_workers=1) as pool:
                 future = pool.submit(step.probe)
                 tick = 0

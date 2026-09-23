@@ -57,7 +57,6 @@ def _was_injected(event_id: str, injection: Any) -> bool:
 
     per_event = [reason for reason in injection.selection_reasons if "event_id" in reason]
     if not per_event:
-        # No per-event selection was performed, so nothing was filtered out.
         return True
     return any(reason["event_id"] == event_id for reason in per_event)
 
@@ -102,19 +101,9 @@ class MockAgent(CodingAgent):
         self._finalized = False
         self.turns: list[TurnResult] = []
         self.tool_results: list[ToolResult] = []
-        # Peer events observed, per turn. The stale-read analysis (§23) needs
-        # to know what an agent had seen at the moment it acted.
         self.observations: list[tuple[int, tuple[str, ...]]] = []
-        # Paths this agent has been told a peer touched. Populated only from
-        # events the channel actually injected, so it reflects what reached
-        # the agent's context rather than what the relay delivered.
         self.informed_paths: set[str] = set()
-        # Actions skipped because their guard was not satisfied. Retained so
-        # a run's evidence shows the agent chose not to act, rather than the
-        # action silently vanishing.
         self.skipped_actions: list[tuple[int, str]] = []
-
-    # -- lifecycle --------------------------------------------------------
 
     async def initialize(self) -> None:
         self._initialized = True
@@ -134,11 +123,6 @@ class MockAgent(CodingAgent):
         injection = self.channel.offer(delivered, turn=context.turn)
         context.injection = injection
 
-        # Record which paths this agent has actually been *told about*, so a
-        # conditional action can depend on it. Only events the channel
-        # injected count: an event that was delivered but dropped by the
-        # window (§18) never reached the agent's context, and treating it as
-        # known would credit C2 with information it did not receive.
         for event in delivered:
             if _was_injected(event.event_id, injection):
                 self.informed_paths.update(event.paths)
@@ -172,9 +156,6 @@ class MockAgent(CodingAgent):
         try:
             result = self._perform(action, context)
         except MockAgentCrashError as crash:
-            # An induced crash is data: the run records it and stops this
-            # agent, rather than the exception escaping and losing the
-            # surrounding evidence (§81).
             result = TurnResult(turn=context.turn, crashed=True, finished=True, error=str(crash))
 
         self.clock_us += self.tick_us
@@ -185,17 +166,11 @@ class MockAgent(CodingAgent):
         self._finalized = True
         return self.summary()
 
-    # -- action dispatch --------------------------------------------------
-
     def _perform(self, action: Action, context: AgentContext) -> TurnResult:
         now = context.now_us
 
         skip_reason = self._guard_blocks(action)
         if skip_reason is not None:
-            # The agent deliberately does not act. Recorded rather than
-            # silently dropped: "chose not to act because it was told" is a
-            # finding, and it is the mechanism by which information changes
-            # an outcome.
             self.skipped_actions.append((context.turn, skip_reason))
             return TurnResult(turn=context.turn, actions=0, notes={"skipped": skip_reason})
 
@@ -203,10 +178,6 @@ class MockAgent(CodingAgent):
             raise MockAgentCrashError(action.note or "scripted crash")
 
         if action.kind in {ActionKind.WAIT, ActionKind.STALL}:
-            # A wait advances the agent's clock without acting. This is how
-            # §23's deliberation window is induced: the agent read something,
-            # then took time before writing, during which a peer may have
-            # invalidated it.
             self.clock_us += action.duration_us
             return TurnResult(
                 turn=context.turn,
@@ -244,9 +215,6 @@ class MockAgent(CodingAgent):
             self.tool_results.append(result)
             if result.outcome != ToolOutcome.DENIED:
                 break
-            # Retrying a denied write is realistic behaviour and is what
-            # produces lease-wait time (§21). The retry itself is recorded,
-            # so the wait is measured rather than inferred.
 
         assert result is not None
         return TurnResult(
@@ -330,8 +298,6 @@ class MockAgent(CodingAgent):
         if action.content is not None:
             return action.content
         return f"# written by {self.agent_id} (action {self._cursor})\n"
-
-    # -- reporting --------------------------------------------------------
 
     def summary(self) -> dict[str, Any]:
         denied = sum(1 for r in self.tool_results if r.outcome == ToolOutcome.DENIED)

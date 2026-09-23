@@ -47,8 +47,6 @@ __all__ = [
 ]
 
 
-# Action kinds that change a file. Shared with the scenario's own
-# contention analysis so the two cannot drift apart.
 _MUTATING_KINDS = frozenset(
     {
         ActionKind.WRITE,
@@ -64,7 +62,7 @@ _MUTATING_KINDS = frozenset(
 class ValidationIssue:
     """One problem with a task, located and explained."""
 
-    severity: str  # "error" or "warning"
+    severity: str
     code: str
     detail: str
 
@@ -130,7 +128,6 @@ def validate_structure(
     """
     report = ValidationReport(task_id=task.task_id)
 
-    # -- fixture ----------------------------------------------------------
     if fixtures_root is not None:
         fixture_path = Path(fixtures_root) / task.fixture
         if not fixture_path.is_dir():
@@ -142,14 +139,12 @@ def validate_structure(
         elif not any(fixture_path.rglob("*")):
             report.error("fixture_empty", f"fixture {task.fixture!r} contains no files")
 
-    # -- scenario ---------------------------------------------------------
     try:
         scenario = Scenario.from_dict(task.scenario)
     except ScriptError as exc:
         report.error("scenario_invalid", str(exc))
         return report
 
-    # -- roles versus behaviour -------------------------------------------
     for role in task.roles:
         script = scenario.agents.get(role.agent_id)
         if script is None:
@@ -163,9 +158,6 @@ def validate_structure(
             )
 
         touched = script.paths_touched()
-        # A declared dependency the agent never reads is a documentation
-        # error that would mislead the relevance scorer into ranking
-        # irrelevant events highly.
         unused = role.depends_on - touched
         if unused:
             report.warn(
@@ -173,19 +165,6 @@ def validate_structure(
                 f"role {role.agent_id!r} declares dependencies it never touches: {sorted(unused)}",
             )
 
-    # -- coordination structure -------------------------------------------
-    #
-    # A task is coordination-sensitive when one agent's work can invalidate
-    # another's. There are two distinct shapes, and requiring the first
-    # would wrongly reject the second:
-    #
-    #   contention   two agents write the same path
-    #   dependency   agent A writes a path agent B declares a dependency on
-    #
-    # The dependency shape is the schema/handler family (§35) and it was
-    # verified empirically to separate the arms with no contested path at
-    # all: C0 fails, C1/C2/C3 succeed. Insisting on contention here would
-    # have rejected a task that demonstrably works.
     observed_contention = scenario.contested_paths()
 
     writers: dict[str, set[str]] = {}
@@ -211,15 +190,12 @@ def validate_structure(
         )
 
     if task.contested_paths and observed_contention != task.contested_paths:
-        # The declaration is a claim about the task; if the scenario
-        # disagrees, one of them is wrong and the run would be mislabelled.
         report.error(
             "contention_mismatch",
             f"task declares contested paths {sorted(task.contested_paths)} but the "
             f"scenario actually contests {sorted(observed_contention)}",
         )
 
-    # -- success criteria --------------------------------------------------
     if not task.success.integration_test:
         report.error(
             "no_integration_test",
@@ -235,16 +211,6 @@ def validate_structure(
             "one without the other cannot be evaluated",
         )
     if divergence_file:
-        # The divergence file must be *reachable* by the scenario — some
-        # agent has to write it, or the marker can never change and the
-        # check is vacuous.
-        #
-        # It need not be a contested path. The two coordination defects have
-        # different shapes: a conflicting write happens on a path two agents
-        # both write, while a stale dependency shows up in a file only one
-        # agent writes, invalidated by a peer's write *elsewhere*. Requiring
-        # contention here would reject every stale-dependency task, which is
-        # the family the schema/handler tasks belong to (§35).
         writers = {
             script.agent_id
             for script in scenario.agents.values()

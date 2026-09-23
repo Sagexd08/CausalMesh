@@ -205,13 +205,62 @@ deterministic instant after the scripted turn loop ends. Recorded here rather th
 silently folded into the acceptance-decision commit, because it is a correctness fix to
 already-shipped code, not new behaviour.
 
-### Checkpoints and identity are parsed and ignored
+### Checkpoints and identity, from parsed-and-ignored to real
 
-`policy.checkpoints` (human-in-the-loop) and `identity` (per-agent keys) are
-accepted by the contract parser and read by nothing. They are in the schema
-because the shape is known and leaving them out would force a version bump
-later; they are listed here because a key that parses and does nothing is
-exactly the silent gap this file exists to prevent.
+**Status: resolved.** `policy.checkpoints` (human-in-the-loop) and `identity`
+(per-agent keys) were accepted by the contract parser and read by nothing —
+exactly the silent gap this file exists to prevent. Both are now real.
+
+**`identity.keys`.** `Contract.identity_keys_dir` (`policy/contract.py`)
+parses the directory `docs/FRAMEWORK-PLAN.md` proposed. `load_identity_keys`
+(`crypto/keys.py`) loads one raw 32-byte Ed25519 seed file per agent
+(`<dir>/<agent_id>.key` — the same seed shape `KeyPair.derive` already
+produces internally, so an operator generating one by hand learns one
+format). `execute_task` (`tasks/runner.py`) uses it in place of
+`KeyPair.derive(master_seed, agent_id)` whenever a contract declares it; a
+missing agent's key file is refused rather than silently derived, because
+falling back would defeat the reason an operator declared external identity
+at all — to stop keys being derived from a shared seed. A run using
+`identity.keys` is not reproducible from `master_seed` alone (the keys are
+external, out-of-band material), which is the correct tradeoff for a
+deployment where participants must not share a derivation origin — the same
+tradeoff `KeyPair.generate`'s docstring already named before this had a
+contract-level switch.
+
+**`policy.checkpoints`.** `Checkpoint` (`policy/contract.py`) parses
+`{on, when, require}` rules in the shape `docs/FRAMEWORK-PLAN.md` proposed.
+`evaluate_checkpoints` (`policy/checkpoints.py`) matches a checkpoint against
+a resource's kind (`on`) and, for `spend` resources, a `when.usd` comparison
+against the amount. `Gate.check` (`policy/gate.py`) consults checkpoints
+after every other rule has already allowed — a resource already refused on
+ownership or budget is not also put to a human, the same "cheapest and most
+specific first" ordering the existing rules already followed.
+
+**The decision is a synchronous callback, not a new concurrency model.**
+`CheckpointHandler` is a plain `decide(...) -> (bool, str)` protocol, so the
+gate stays synchronous end to end and the run loop needed no new blocking
+primitive. `AutoDenyHandler` (the default) refuses every matched checkpoint:
+an unattended run cannot honor `require: human`, and treating that as
+approval would silently skip the safeguard the contract declared.
+`ScriptedHandler` supplies a deterministic sequence of answers, which is what
+keeps a checkpointed run reproducible (§84) the same way a scripted mock
+agent does — a real human-attached handler (reading a terminal prompt, an
+approval queue, anything with actual I/O) is left to whoever wires one in;
+none is built here, because that is an operator integration, not a contract
+mechanic.
+
+**On the chain.** A matched checkpoint decision is signed and recorded as
+`EventType.CHECKPOINT_DECIDED`, under a dedicated `checkpoint` identity —
+distinct from `policy_gate`'s, the same way `ACCEPTANCE_DECIDED` already gets
+its own `acceptance` identity, because a checkpoint decision is not itself
+one of the gate's ordinary rule verdicts even though it reaches the chain
+through the same `gate.verdicts` list.
+
+**What this does not do.** No real human-attached `CheckpointHandler` ships
+here — only the mechanism and the two reference implementations
+(auto-deny, scripted). Nothing in the CLI surfaces a pending checkpoint or
+prompts an operator; wiring a terminal-facing handler into `causalmesh
+experiment run` is separate, follow-on work.
 
 ## Items discovered during the build
 

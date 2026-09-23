@@ -25,32 +25,16 @@ from typing import Any
 from rich.console import Console
 from rich.theme import Theme
 
-# -- text ------------------------------------------------------------------
-# Three weights of neutral, and no more: a fourth would be indistinguishable
-# from one of these on a 16-colour terminal.
-TEXT = "bright_white"  # the thing you are reading
-TEXT_MUTED = "white"  # supporting detail, still legible
-TEXT_FAINT = "bright_black"  # structure, labels, rules — present, not read
+TEXT = "bright_white"
+TEXT_MUTED = "white"
+TEXT_FAINT = "bright_black"
 
-# -- meaning ---------------------------------------------------------------
-# The experiment's own vocabulary. `DENIAL` is the accent: enforcement
-# refusing a write is the only thing this system measures that has a colour,
-# so it gets the warmest one and nothing else competes for it.
 DENIAL = "bright_yellow"
 RESULT_PASS = "bright_green"
 RESULT_FAIL = "bright_red"
 LIVE = "bright_cyan"
 PLANNED = "bright_black"
 
-# -- identity --------------------------------------------------------------
-# Arms are the experiment's four conditions and appear on every screen, so
-# they get stable hues. Ordered as a gradient of involvement: none, full,
-# bounded, bounded plus enforcement.
-# C3 is deliberately NOT the denial colour, even though it is the enforcing
-# arm. Sharing that hue made the refused agent and the refusal itself one
-# mark, so the accent stopped meaning "a write was refused" and started
-# meaning "something to do with C3". Magenta keeps the arm identifiable
-# while leaving the accent to say one thing.
 ARM_COLORS = {
     "C0": "bright_red",
     "C1": "bright_blue",
@@ -58,7 +42,6 @@ ARM_COLORS = {
     "C3": "bright_magenta",
 }
 
-# -- surface ---------------------------------------------------------------
 BORDER = "bright_black"
 HEADING = "bright_white"
 LINK = "bright_cyan"

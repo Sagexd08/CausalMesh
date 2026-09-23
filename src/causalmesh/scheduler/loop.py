@@ -154,9 +154,6 @@ class ExperimentRunner:
         self.environment = environment
         self.master_seed = master_seed
         self.run_config = dict(run_config or {})
-        # Wall-clock is used only for operational bookkeeping — when a run
-        # started, how long the loop took. It never enters the signed chain,
-        # where non-reproducible values break determinism.
         self._clock = clock or (lambda: time.time_ns() // 1000)
 
         self.environment.raw_root.mkdir(parents=True, exist_ok=True)
@@ -226,16 +223,6 @@ class ExperimentRunner:
                 fixtures_root=self.environment.fixtures_root,
             )
         except BaseException as exc:
-            # Deliberately broad. A crash in the harness is exactly the
-            # case §81 is about: the run must still leave a record saying
-            # what happened, or the collection quietly shrinks. The
-            # traceback is written to the artifact so the failure is
-            # diagnosable rather than reduced to a class name.
-            #
-            # BaseException rather than Exception so a KeyboardInterrupt
-            # still records the run before propagating — otherwise an
-            # operator's Ctrl-C leaves a run stranded in RUNNING with no
-            # evidence of why.
             detail = traceback.format_exc()
             self._write_artifact(
                 artifact_path,
@@ -263,14 +250,8 @@ class ExperimentRunner:
                 raise
             return
 
-        # Evidence first, index second. A crash between the two leaves the
-        # run RUNNING, which `prepare` turns into ABANDONED and re-executes;
-        # the reverse order could mark a run COMPLETED with no artifact.
         self._write_artifact(artifact_path, self._artifact_for(result, record))
 
-        # `error` set means the agent loop raised but the run still produced
-        # an outcome and a chain. That is a completed run with a failed
-        # task, not a harness failure: the evidence is intact.
         state = RunState.COMPLETED
         self.index.finish(
             record.run_id,
@@ -313,16 +294,7 @@ class ExperimentRunner:
             "chain": result.records,
             "experiment_id": record.experiment_id,
             "plan_order": record.plan_order,
-            # §30: which code, which machine, which operator. Kept in the
-            # envelope rather than in the chain — the chain is
-            # bit-reproducible, and a hostname inside it would break that.
-            # `run_config` is whatever the caller supplied; an empty dict
-            # records "not captured" rather than inventing a value.
             "provenance": dict(self.run_config),
-            # A run is reproducible unless something nondeterministic drove
-            # it. `agent_kind` is set only when a real coding-agent CLI was
-            # connected; MockAgent leaves it unset, so the default is the
-            # deterministic case and a live run has to declare itself.
             "reproducible": "agent_kind" not in self.run_config,
             "repetition": record.repetition,
             "result": result.to_dict(),

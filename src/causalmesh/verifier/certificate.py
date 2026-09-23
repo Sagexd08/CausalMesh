@@ -23,8 +23,6 @@ from .result import VerificationResult
 
 __all__ = ["VerificationCertificate", "write_certificate"]
 
-# Bumped when the certificate's own shape changes, so a consumer can tell
-# whether it understands the document it is reading.
 CERTIFICATE_VERSION = 1
 
 

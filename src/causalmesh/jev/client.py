@@ -1,4 +1,3 @@
-# src/causalmesh/jev/client.py
 """JevClient: one HTTP call to TypeSafe AI's Jev decision engine.
 
 Jev takes unstructured program state and a set of typed questions (Choice,
@@ -50,9 +49,6 @@ class JevClient:
 
     api_key: str | None = None
     base_url: str = DEFAULT_BASE_URL
-    # Jev is documented as 40-200x faster than a frontier LLM call on
-    # comparable tasks; a chat-completion-sized timeout would be far too
-    # generous and would mask a genuinely hung request.
     timeout_s: float = 30.0
 
     def __post_init__(self) -> None:
@@ -64,11 +60,6 @@ class JevClient:
 
     @property
     def provider(self) -> str:
-        # Matches OpenAIClient/AnthropicClient/LocalClient's `provider`
-        # property (adapters/clients.py), so anything that logs or records
-        # "which adapter answered this" — a run artifact's envelope, say —
-        # has one consistent attribute to read across every client rather
-        # than a special case for Jev.
         return "jev"
 
     def ask(self, *, state: dict[str, Any], questions: Sequence[Question]) -> JevResponse:

@@ -229,3 +229,32 @@ class TestPolicyGateIdentity:
         policy_key = KeyPair.derive(seed, "policy_gate")
         agent_key = KeyPair.derive(seed, "agent_a")
         assert policy_key.public_key_hex != agent_key.public_key_hex
+
+
+class TestCheckpoints:
+    def test_a_matched_path_checkpoint_refuses_through_the_boundary(self) -> None:
+        from causalmesh.policy import ScriptedHandler
+
+        contract = Contract.from_dict(
+            {
+                "version": 1,
+                "policy": {"checkpoints": [{"on": "path", "require": "human"}]},
+            }
+        )
+        gate = ContractGate.build(contract, run_id="r1", checkpoint_handler=ScriptedHandler([False]))
+        decision = gate.check(write("agent_a", "src/schema.py"), NOW)
+        assert decision.allowed is False
+        assert decision.rule == "checkpoint"
+
+    def test_a_scripted_approval_lets_the_call_proceed(self) -> None:
+        from causalmesh.policy import ScriptedHandler
+
+        contract = Contract.from_dict(
+            {
+                "version": 1,
+                "policy": {"checkpoints": [{"on": "path", "require": "human"}]},
+            }
+        )
+        gate = ContractGate.build(contract, run_id="r1", checkpoint_handler=ScriptedHandler([True]))
+        decision = gate.check(write("agent_a", "src/schema.py"), NOW)
+        assert decision.allowed is True

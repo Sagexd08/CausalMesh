@@ -75,7 +75,6 @@ class ActionKind(StrEnum):
     INTENT = "intent"
 
 
-# Actions that name a file the agent operates on.
 _PATH_ACTIONS = frozenset(
     {
         ActionKind.READ,
@@ -132,17 +131,7 @@ class Action:
     duration_us: int = 0
     retries: int = 0
     note: str | None = None
-    # Guard: perform this action only if the agent has observed a peer event
-    # touching this path. This is how a mock agent "responds to coordination
-    # events" (§9) while staying deterministic — same observations, same
-    # behaviour. Without it a scripted agent acts identically in every arm
-    # and information could never change an outcome, making the C0 to C2
-    # contrast unmeasurable with mock agents.
     if_informed_about: str | None = None
-    # The mirror: perform this action only if the agent has NOT been told.
-    # Together the two let one script express both the informed and the
-    # uninformed path, so the arms diverge on behaviour rather than on
-    # having been given different scripts.
     if_uninformed_about: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -171,7 +160,6 @@ def _parse_action(raw: Any, *, index: int, agent_id: str) -> Action:
     where = f"{agent_id}.actions[{index}]"
 
     if isinstance(raw, str):
-        # A bare verb with no argument, e.g. `- test`.
         raw = {raw: None}
 
     if not isinstance(raw, dict):
@@ -184,7 +172,6 @@ def _parse_action(raw: Any, *, index: int, agent_id: str) -> Action:
         options = dict(raw)
         options.pop("kind")
     else:
-        # Compact form: the single key is the verb.
         keys = [key for key in raw if key in verbs]
         if not keys:
             raise ScriptError(
@@ -200,15 +187,9 @@ def _parse_action(raw: Any, *, index: int, agent_id: str) -> Action:
         primary = raw[kind_name]
 
         if isinstance(primary, dict):
-            # `{modify: {path: ..., old: ..., new: ...}}` — the verb's value
-            # carries the options. §9's own example uses this shape, and
-            # dropping it silently would lose `old`/`new` and fail validation
-            # with a misleading message.
             for key, value in primary.items():
                 options.setdefault(key, value)
         elif primary is not None:
-            # A scalar value: the path for path actions, the duration for
-            # waits, and a note otherwise.
             if kind_name in {str(k) for k in _PATH_ACTIONS}:
                 options.setdefault("path", primary)
             elif kind_name in {"wait", "stall"}:
@@ -224,10 +205,6 @@ def _parse_action(raw: Any, *, index: int, agent_id: str) -> Action:
             f"expected one of {sorted(str(k) for k in ActionKind)}"
         ) from exc
 
-    # `duration_us` is what `Action.to_dict` emits, so accepting both is what
-    # makes a scenario round-trip through a manifest (§32). Accepting only
-    # the authoring spelling would mean a serialised scenario could not be
-    # reloaded, which would break reproduction from an export (§82).
     duration = options.pop("duration", options.pop("duration_us", 0))
     action = Action(
         kind=kind,
@@ -244,8 +221,6 @@ def _parse_action(raw: Any, *, index: int, agent_id: str) -> Action:
     )
 
     if options:
-        # Unknown keys are refused rather than ignored: a typo in a scenario
-        # would otherwise silently change what the experiment ran.
         raise ScriptError(f"{where}: unrecognised option(s) {sorted(options)}")
 
     if kind in _PATH_ACTIONS and not action.path:

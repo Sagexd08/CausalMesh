@@ -72,8 +72,6 @@ class GitState:
         return cls(
             branch=_git(root, "rev-parse", "--abbrev-ref", "HEAD") or UNKNOWN,
             commit=commit,
-            # An empty status is a clean tree; None means git answered but
-            # the call failed, which is not the same as clean.
             dirty=None if status is None else bool(status),
         )
 

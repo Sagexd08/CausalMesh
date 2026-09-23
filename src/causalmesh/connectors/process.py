@@ -83,7 +83,7 @@ class ConnectorSpec:
     name: str
     command: str
     argv: tuple[str, ...]
-    reply_field: str | None = None  # a JSON key, or None for raw stdout
+    reply_field: str | None = None
     cost_field: str | None = None
     denials_field: str | None = None
 
@@ -91,10 +91,6 @@ class ConnectorSpec:
         return [arg.replace("{prompt}", prompt) for arg in self.argv]
 
 
-# Only agents whose headless interface has actually been exercised appear
-# here. An entry is a claim that this build can drive it, so an untested
-# one would be exactly the kind of "complete because it compiles" the
-# standing commitments forbid.
 SPECS: dict[str, ConnectorSpec] = {
     "claude": ConnectorSpec(
         argv=("-p", "{prompt}", "--output-format", "json"),
@@ -172,9 +168,6 @@ async def invoke(
         cwd=str(workspace),
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
-        # Never inherit a terminal: an agent that decides it is interactive
-        # waits for input that will never come, and the run hangs rather
-        # than failing.
         stdin=asyncio.subprocess.DEVNULL,
         env={**os.environ, "NO_COLOR": "1", **(env or {})},
     )

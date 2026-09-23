@@ -93,16 +93,10 @@ def evaluate_outcome(
         try:
             resolved = workspace.resolve(criteria.divergence_file)
         except WorkspaceError as exc:
-            # A divergence path that escapes the workspace is a finding, not
-            # a crash: the check could not be performed, so the run cannot be
-            # called successful on the strength of it.
             divergence_absent = False
             evidence.append(f"divergence_file_unresolvable={exc}")
         else:
             if not resolved.is_file():
-                # A missing file is not "no divergence". It means the check
-                # could not be performed, and reporting success on that
-                # basis would be a false negative in the primary outcome.
                 divergence_absent = False
                 evidence.append(f"divergence_file_missing={criteria.divergence_file}")
             else:

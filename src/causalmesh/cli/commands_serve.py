@@ -25,7 +25,9 @@ def serve_command(
     run_id: Annotated[str, typer.Option("--run-id")] = "serve",
     upstream: Annotated[
         str | None,
-        typer.Option("--upstream", help="Base URL to forward allowed calls to, e.g. https://api.openai.com."),
+        typer.Option(
+            "--upstream", help="Base URL to forward allowed calls to, e.g. https://api.openai.com."
+        ),
     ] = None,
     upstream_api_key: Annotated[
         str | None, typer.Option("--upstream-api-key", envvar="CAUSALMESH_UPSTREAM_API_KEY")

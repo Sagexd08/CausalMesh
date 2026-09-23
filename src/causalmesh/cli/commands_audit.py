@@ -71,9 +71,6 @@ def write_command(
     name = _resolve(repo, experiment_id, latest)
     destination = _manifest_path(repo, name)
 
-    # A manifest records evidence as it stood. Silently replacing one would
-    # destroy the record that a later state differed from an earlier one,
-    # which is the only way a mutation becomes visible after the fact.
     if destination.exists() and not force:
         fail(
             f"a manifest for {name} already exists",
@@ -138,9 +135,6 @@ def audit_command(
         manifest_path = _manifest_path(repo, name)
 
         if not manifest_path.is_file():
-            # An unrecorded collection is not corrupt; it is unprovable.
-            # §83 asks audit to detect missing provenance, so this is a
-            # finding rather than a skip.
             entry["manifest"] = None
             entry["findings"] = ["no manifest recorded"]
         else:
@@ -162,8 +156,6 @@ def audit_command(
                 problems.append("recorded from a dirty working tree")
             entry["findings"] = problems
 
-        # Chains are re-verified regardless: a manifest proves the bytes
-        # have not changed, not that they were ever valid.
         results = [_verify_one(d) for d in repo.run_dirs(name)]
         verified = sum(1 for r in results if r["valid"])
         entry["chains"] = {"runs": len(results), "verified": verified}

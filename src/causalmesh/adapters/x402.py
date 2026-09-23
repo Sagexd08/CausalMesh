@@ -60,8 +60,8 @@ __all__ = [
 PAYMENT_REQUIRED_HEADER = "PAYMENT-REQUIRED"
 PAYMENT_SIGNATURE_HEADER = "PAYMENT-SIGNATURE"
 PAYMENT_RESPONSE_HEADER = "PAYMENT-RESPONSE"
-X_PAYMENT_HEADER = "X-PAYMENT"  # V1 legacy
-X_PAYMENT_RESPONSE_HEADER = "X-PAYMENT-RESPONSE"  # V1 legacy
+X_PAYMENT_HEADER = "X-PAYMENT"
+X_PAYMENT_RESPONSE_HEADER = "X-PAYMENT-RESPONSE"
 
 
 class X402Error(ValueError):
@@ -109,8 +109,6 @@ class PaymentRequired:
 
 def _to_decimal(value: Any, *, field_name: str) -> Decimal:
     if isinstance(value, float):
-        # The same rule Resource.spend already enforces: a float amount is
-        # rejected at the call site, not silently coerced and rounded later.
         raise X402Error(f"{field_name} must not be a float; the wire value should be a string")
     try:
         return Decimal(str(value))

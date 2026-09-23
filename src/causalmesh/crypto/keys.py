@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
+from pathlib import Path
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes
@@ -38,15 +39,11 @@ __all__ = [
     "PublicKeyRing",
     "SignatureError",
     "derive_signing_key",
+    "load_identity_keys",
 ]
 
-
-# Domain-separation string mixed into every derivation. It pins the derived
-# keys to this protocol version, so a seed reused by some other component of
-# the system can never yield the same signing key.
 DERIVATION_INFO = b"causalmesh/ed25519/v1"
 
-# Ed25519 private keys are exactly 32 bytes of seed material.
 _SEED_LENGTH = 32
 
 
@@ -111,6 +108,33 @@ class KeyPair:
         """
         return cls(actor_id=actor_id, _private_key=Ed25519PrivateKey.generate())
 
+    @classmethod
+    def from_seed_file(cls, path: Path | str, *, actor_id: str) -> KeyPair:
+        """Load a keypair from a raw 32-byte seed file (`identity.keys` in
+
+        `causalmesh.yaml`).
+
+        The file holds exactly the seed material `KeyPair.derive` produces
+        internally, and nothing else — no PEM header, no metadata. That is
+        deliberately the smallest possible format: an operator bringing an
+        externally-generated identity needs to place 32 bytes at a path, not
+        learn an encoding.
+
+        Refuses rather than guessing on a wrong-length file: silently
+        truncating or zero-padding would derive a *different*, plausible
+        key rather than the one the operator meant to supply, which is
+        exactly the "confident wrong answer" defect class AGENTS.md names.
+        """
+        path = Path(path)
+        if not path.is_file():
+            raise SignatureError(f"no key file for {actor_id!r} at {path}")
+        raw = path.read_bytes()
+        if len(raw) != _SEED_LENGTH:
+            raise SignatureError(
+                f"{path} must hold exactly {_SEED_LENGTH} bytes for {actor_id!r}, got {len(raw)}"
+            )
+        return cls(actor_id=actor_id, _private_key=Ed25519PrivateKey.from_private_bytes(raw))
+
     @property
     def public_key(self) -> Ed25519PublicKey:
         return self._private_key.public_key()
@@ -125,7 +149,6 @@ class KeyPair:
         return self._private_key.sign(message).hex()
 
     def __repr__(self) -> str:
-        # Never let a private key reach a log line or a traceback.
         return f"KeyPair(actor_id={self.actor_id!r}, public_key={self.public_key_hex[:16]}...)"
 
 
@@ -187,3 +210,24 @@ class PublicKeyRing:
     @classmethod
     def from_dict(cls, data: dict[str, str]) -> PublicKeyRing:
         return cls(keys=dict(data))
+
+
+def load_identity_keys(directory: Path | str, *, agent_ids: list[str]) -> dict[str, KeyPair]:
+    """Load one keypair per agent from `identity.keys` (a directory of raw
+
+    32-byte seed files named `<agent_id>.key`).
+
+    Every named agent must have a file. Falling back to a derived key for a
+    missing one would silently defeat the reason an operator declared
+    `identity.keys` in the first place: to keep participants from sharing a
+    derivation seed. A partially-external identity set is not a smaller
+    version of the feature, it is a different, unstated trust model, so it
+    is refused rather than filled in.
+    """
+    directory = Path(directory)
+    if not directory.is_dir():
+        raise SignatureError(f"no such directory for identity.keys: {directory}")
+    return {
+        agent_id: KeyPair.from_seed_file(directory / f"{agent_id}.key", actor_id=agent_id)
+        for agent_id in agent_ids
+    }

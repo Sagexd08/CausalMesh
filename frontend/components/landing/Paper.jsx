@@ -95,6 +95,7 @@ const REF_INDEX = Object.fromEntries(
 
 const SECTIONS = [
   ["abstract", "Abstract", null],
+  ["terminology", "Terminology", null],
   ["question", "The question", "1"],
   ["design", "Experimental design", "2"],
   ["guarantees", "What the substrate guarantees", "3"],
@@ -103,6 +104,42 @@ const SECTIONS = [
   ["framework", "From experiment to framework", "6"],
   ["limitations", "Limitations", "7"],
   ["references", "References", null],
+];
+
+/**
+ * Terms this paper uses with a specific, load-bearing meaning.
+ *
+ * Ordered by first appearance in the argument, not alphabetically, so a
+ * reader working through the contents rail top to bottom meets each term
+ * just before or as it starts doing work. Every definition is restated from
+ * where the term is actually implemented, not paraphrased from memory --
+ * the same discipline REFERENCES already applies to citations.
+ */
+const TERMS = [
+  {
+    term: "arm",
+    def: "One of four fixed configurations of information and enforcement (C0-C3) that a task is run under. Arms differ by exactly one factor from their neighbour, which is what makes a difference between two arms attributable to that factor rather than to how the two happened to be built.",
+  },
+  {
+    term: "coordination byte",
+    def: "One byte of peer information delivered to an agent through the coordination channel, and counted there. A byte that reaches an agent by any other route is not a coordination byte, however much it looks like one -- see the channel-bypass finding in section 3.",
+  },
+  {
+    term: "claim",
+    def: "An exclusive lease on one resource, held by one agent for a bounded duration. Enforced with a `BEGIN IMMEDIATE` SQLite transaction rather than an in-process lock, because agents run as separate OS processes and the lease must hold across that boundary.",
+  },
+  {
+    term: "verdict",
+    def: "What the gate decided about one action -- allowed or refused -- and the reason. Data returned from a call, never an exception raised from one: a refusal is the primary measurement, and a measurement that can only be observed by catching an exception is a measurement that is easy to lose.",
+  },
+  {
+    term: "resource",
+    def: "The one thing a verdict can be about: a kind (path, spend, endpoint or budget) plus a normalized identity. A refused write and a refused payment are the same event under this definition, which is why one gate covers both.",
+  },
+  {
+    term: "contract",
+    def: "The declared, versioned statement of who owns what, who may spend how much, and where -- read from causalmesh.yaml. Never inferred from what agents did: a rule derived from behaviour cannot refuse that behaviour.",
+  },
 ];
 
 /** Tracks which section is in view, so the contents rail stays honest. */
@@ -353,6 +390,33 @@ export default function Paper() {
               </P>
             </section>
 
+            {/* -- Terminology --------------------------------------------
+                An unnumbered glossary, not part of the argument's own
+                numbering: definitions support the argument, they are not a
+                step in it. Ordered by first appearance rather than
+                alphabetically so a reader moving top to bottom meets each
+                term just before it starts doing work. */}
+            <section className="mt-16">
+              <H id="terminology">Terminology</H>
+              <P>
+                Six terms carry specific, load-bearing meaning throughout
+                this paper. Each is restated from where it is actually
+                implemented, not paraphrased from memory.
+              </P>
+              <dl className="mt-6 divide-y divide-rule-soft border-t border-rule-soft">
+                {TERMS.map(({ term, def }) => (
+                  <div key={term} className="grid grid-cols-1 gap-1.5 py-4 sm:grid-cols-[9rem_1fr] sm:gap-6">
+                    <dt className="font-mono text-[13px] font-medium text-ink-900">
+                      {term}
+                    </dt>
+                    <dd className="text-[14px] leading-relaxed text-ink-700">
+                      {def}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </section>
+
             {/* -- 1 ------------------------------------------------------ */}
             <section className="mt-16">
               <H id="question" number="1">
@@ -520,6 +584,64 @@ export default function Paper() {
                 why="The claim registry was written for file paths and treats a path as an opaque normalized string, so it holds an exclusive lease on a payment destination without modification. That is why one substrate covers agents that write code, spend money, or run unattended."
                 tag="measured"
               />
+
+              <h3 className="mt-9 font-display text-[1.05rem] font-semibold text-ink-900">
+                <span className="cm-nums mr-2.5 font-mono text-[12.5px] font-normal text-ink-400">
+                  3.5
+                </span>
+                Key derivation, stated formally
+                <Tag kind="measured" />
+              </h3>
+              <P>
+                Every signing identity in a run, one per agent plus the policy
+                plane&rsquo;s own, is derived rather than generated, which is
+                what lets a run be reproduced byte for byte from its seed.
+                The derivation is HKDF-SHA256 (RFC 5869), instantiated as
+              </P>
+
+              <Algorithm
+                formula={
+                  <>
+                    K<sub>actor</sub> = HKDF&#8209;SHA256(IKM = seed, salt =
+                    actor_id, info = D, L = 32)
+                  </>
+                }
+                terms={[
+                  ["seed", "the run’s master seed, ≥ 16 bytes of entropy"],
+                  ["actor_id", "the agent or plane identity being keyed, as UTF-8 bytes"],
+                  ["D", "the fixed domain-separation string causalmesh/ed25519/v1"],
+                  ["L", "output length in bytes; 32, matching an Ed25519 seed"],
+                ]}
+                properties={[
+                  [
+                    "Determinism",
+                    "the same (seed, actor_id) pair always yields the same K_actor, so a run reproduces its own signatures exactly.",
+                  ],
+                  [
+                    "Independence",
+                    "HKDF’s output is indistinguishable from random without seed, so learning one actor’s derived key reveals nothing about another’s, even though every key shares an origin.",
+                  ],
+                ]}
+                source="crypto/keys.py :: derive_signing_key"
+              />
+
+              <P>
+                D is mixed into every derivation specifically so a seed
+                reused by some other component of the system, now or later,
+                can never collide with a key this protocol derived. K
+                <sub>actor</sub> is then used directly as the 32-byte seed
+                for an Ed25519 keypair, which is what signs every event the
+                actor produces (3.1).
+              </P>
+              <P>
+                This is the reproducible path. An operator whose agents must
+                not share a derivation origin, because they are mutually
+                distrusting participants rather than roles inside one run,
+                supplies external keys instead; that run is no longer
+                reproducible from the seed alone, which is the correct
+                tradeoff for that deployment shape and is stated as such
+                rather than left implicit.
+              </P>
             </section>
 
             {/* -- 4 ------------------------------------------------------ */}
@@ -872,6 +994,49 @@ function Claim({ n, title, statement, why, tag }) {
       <p className="mt-2.5 text-[14.5px] leading-relaxed text-ink-800">{statement}</p>
       <p className="mt-2 text-[13px] leading-relaxed text-ink-500">{why}</p>
     </div>
+  );
+}
+
+/**
+ * A mechanism stated with real notation, on the same
+ * `border-rule-soft bg-paper-raised` panel Figure 1 already uses so a
+ * formal box reads as a sibling of the paper's other set-apart content
+ * rather than a new visual language dropped in for one section.
+ *
+ * No LaTeX renderer: the paper has one formula in it, and a KaTeX
+ * dependency for one equation is a much larger cost than setting it in
+ * the mono face the page already uses everywhere for data.
+ */
+function Algorithm({ formula, terms, properties, source }) {
+  return (
+    <figure className="mt-6 rounded-xl border border-rule-soft bg-paper-raised p-6 sm:p-7">
+      <div className="overflow-x-auto rounded-lg border border-rule-soft bg-paper px-5 py-4">
+        <p className="cm-nums whitespace-nowrap font-mono text-[14.5px] text-ink-900">
+          {formula}
+        </p>
+      </div>
+
+      <dl className="mt-5 space-y-1.5">
+        {terms.map(([symbol, meaning]) => (
+          <div key={symbol} className="flex gap-3 text-[13px] leading-relaxed">
+            <dt className="w-20 shrink-0 font-mono text-ink-600">{symbol}</dt>
+            <dd className="text-ink-700">{meaning}</dd>
+          </div>
+        ))}
+      </dl>
+
+      <ul className="mt-5 space-y-2.5 border-t border-rule-soft pt-5">
+        {properties.map(([name, detail]) => (
+          <li key={name} className="text-[13px] leading-relaxed text-ink-700">
+            <span className="font-medium text-ink-900">{name}.</span> {detail}
+          </li>
+        ))}
+      </ul>
+
+      <figcaption className="mt-5 border-t border-rule-soft pt-3 font-mono text-[11.5px] text-ink-500">
+        {source}
+      </figcaption>
+    </figure>
   );
 }
 

@@ -174,8 +174,6 @@ class Relay:
         self._seen_event_ids: set[str] = set()
         self.stats = RelayStats()
 
-    # -- properties -------------------------------------------------------
-
     @property
     def head_hash(self) -> str:
         """The current chain head — what an anchor would record (§28)."""
@@ -190,8 +188,6 @@ class Relay:
     def key_ring(self) -> PublicKeyRing:
         """The public keys an offline verifier needs (§26)."""
         return PublicKeyRing.from_keypairs(self._keypairs)
-
-    # -- ingestion --------------------------------------------------------
 
     def ingest(
         self,
@@ -270,8 +266,6 @@ class Relay:
                     payload=payload or {},
                 )
             except ValueError as exc:
-                # Rejected as given, never silently corrected: a relay that
-                # repaired malformed events would be editing evidence.
                 self.stats.events_rejected += 1
                 return IngestResult(
                     accepted=False, chained=None, sequence=None, reason=f"invalid event: {exc}"
@@ -286,8 +280,6 @@ class Relay:
             recipients = tuple(
                 agent
                 for agent in self._delivery.recipients(event, self._participants)
-                # An agent is never notified of its own event: it already
-                # knows, and counting it would inflate coordination volume.
                 if agent != agent_id and agent in self._inboxes
             )
             for agent in recipients:
@@ -305,8 +297,6 @@ class Relay:
             reason="accepted",
         )
 
-    # -- fan-out ----------------------------------------------------------
-
     def pending_for(self, agent_id: str) -> tuple[Event, ...]:
         """Peek at an agent's undelivered events without consuming them."""
         with self._lock:
@@ -319,8 +309,6 @@ class Relay:
             if agent_id in self._inboxes:
                 self._inboxes[agent_id] = []
             return pending
-
-    # -- claim gate -------------------------------------------------------
 
     def may_write(self, *, path: str, agent_id: str, now_us: int) -> ClaimOutcome:
         """Ask the claim gate whether a write is permitted.
@@ -335,8 +323,6 @@ class Relay:
         return self._claims.may_write(
             path=path, agent_id=agent_id, run_id=self.run_id, now_us=now_us
         )
-
-    # -- export -----------------------------------------------------------
 
     def export(self, destination: Path) -> dict[str, Path]:
         """Write the chain and key ring for offline verification (§26, §82).

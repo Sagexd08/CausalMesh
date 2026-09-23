@@ -39,8 +39,9 @@ from typing import TYPE_CHECKING, Any
 from causalmesh.hooks.lifecycle import GateDecision, ToolCall
 from causalmesh.policy import Contract, Gate as PolicyGate, Resource, Verdict
 
-if TYPE_CHECKING:  # pragma: no cover - typing only
+if TYPE_CHECKING:
     from causalmesh.claims.registry import ClaimRegistry
+    from causalmesh.policy.checkpoints import CheckpointHandler
 
 __all__ = ["ContractGate"]
 
@@ -55,13 +56,7 @@ class ContractGate:
     """
 
     policy: PolicyGate
-    # The registry, when there is one. Held so a refusal on the `claim`
-    # rule can be recorded as a denial; the lease *check* itself belongs to
-    # the policy gate, which consults the registry through `may_write`.
     registry: ClaimRegistry | None = None
-    # Every verdict this gate reached, in order. The run artifact records
-    # these so a refusal can be read back with its rule and reason months
-    # later, which is the whole point of the evidence plane.
     verdicts: list[Verdict] = field(default_factory=list)
 
     @classmethod
@@ -73,6 +68,7 @@ class ContractGate:
         registry: ClaimRegistry | None = None,
         enforcing: bool = True,
         ledger: object | None = None,
+        checkpoint_handler: CheckpointHandler | None = None,
     ) -> ContractGate:
         """Assemble a gate from a contract, and a registry when there is one.
 
@@ -81,13 +77,16 @@ class ContractGate:
         unenforced arm reports the counterfactual: what enforcement would
         have cost it, without paying the cost.
         """
-        policy = PolicyGate(contract, run_id=run_id, registry=registry, enforcing=enforcing)
+        policy = PolicyGate(
+            contract,
+            run_id=run_id,
+            registry=registry,
+            enforcing=enforcing,
+            checkpoint_handler=checkpoint_handler,
+        )
         if ledger is not None:
             policy.attach_ledger(ledger)
 
-        # Denials are only recorded where the gate actually stops a call.
-        # An unenforced arm reaches a verdict and allows anyway, so writing
-        # a denial there would count refusals that never happened.
         return cls(policy=policy, registry=registry if enforcing else None)
 
     def check(self, call: ToolCall, now_us: int) -> GateDecision:
@@ -106,16 +105,6 @@ class ContractGate:
             if not verdict.refused:
                 continue
 
-            # A lease refusal has to be recorded, and `may_write` -- which is
-            # what the policy rule consulted -- deliberately records nothing:
-            # it is an advisory query a caller may make speculatively. This
-            # is the point at which a real write attempt was stopped, so the
-            # denial is written here.
-            #
-            # Without this the registry's `denials()` reports a confident
-            # zero however much enforcement happened, which is the exact
-            # defect recorded in `docs/backlog.md` and the reason `ClaimGate`
-            # carries the same call.
             if verdict.rule == "claim" and self.registry is not None:
                 holder = self.registry.check(
                     path=Resource.path(path).identity, run_id=self.policy.run_id, now_us=now_us
@@ -138,8 +127,6 @@ class ContractGate:
             )
 
         return GateDecision(allowed=True, reason="the contract permits this call")
-
-    # -- what the run artifact records -------------------------------------
 
     def refusals(self) -> list[Verdict]:
         """Every verdict that refused, in order."""

@@ -53,20 +53,8 @@ TOOL_NAMES = (
     "git_diff",
 )
 
-# Commands an agent may run. An allowlist rather than a denylist: a denylist
-# is a promise to have imagined every dangerous command, which is not a
-# promise this project can keep.
 ALLOWED_COMMANDS = frozenset({"python", "pytest", "git"})
 
-# Environment variables a subprocess inherits. An allowlist, so an operator's
-# API keys and proxy settings cannot reach an agent and runs do not depend on
-# whose shell launched them (§3).
-#
-# APPDATA and LOCALAPPDATA are here for a concrete reason found by running the
-# suite: on Windows, user-site packages live under %APPDATA%\Python, and
-# dropping it makes `python -m pytest` fail with "No module named pytest".
-# Every task's integration test would then fail identically in every arm, and
-# the experiment would report uniform failure while looking like it ran.
 _INHERITED_ENVIRONMENT = (
     "PATH",
     "SYSTEMROOT",
@@ -77,13 +65,10 @@ _INHERITED_ENVIRONMENT = (
     "LC_ALL",
     "APPDATA",
     "LOCALAPPDATA",
-    # Needed by some Windows Python builds to locate the interpreter's own
-    # installation when PATH alone is insufficient.
     "PATHEXT",
 )
 
 
-# Bounded so a hung or runaway command cannot stall a run indefinitely (§22).
 DEFAULT_COMMAND_TIMEOUT_SECONDS = 120
 
 
@@ -135,8 +120,6 @@ class CommandResult:
         return {
             "command": list(self.command),
             "exit_code": self.exit_code,
-            # Truncated: full output can be megabytes, and a run artifact is
-            # evidence, not a build log.
             "stderr": self.stderr[-4000:],
             "stdout": self.stdout[-4000:],
             "timed_out": self.timed_out,
@@ -154,8 +137,6 @@ class Toolbox:
         self.workspace = workspace
         self._timeout = command_timeout or DEFAULT_COMMAND_TIMEOUT_SECONDS
 
-    # -- reads ------------------------------------------------------------
-
     def read_file(self, path: str) -> str:
         resolved = self.workspace.resolve(path)
         if not resolved.is_file():
@@ -171,8 +152,6 @@ class Toolbox:
         return sorted(
             self.workspace.relative(child) for child in resolved.rglob("*") if child.is_file()
         )
-
-    # -- writes -----------------------------------------------------------
 
     def write_file(self, path: str, content: str) -> int:
         """Write a file, creating parent directories. Returns bytes written."""
@@ -221,8 +200,6 @@ class Toolbox:
         resolved.unlink()
 
     def rename_file(self, source: str, destination: str) -> None:
-        # Both ends are resolved, so a rename cannot be used to write outside
-        # the workspace via its destination.
         resolved_source = self.workspace.resolve(source)
         resolved_destination = self.workspace.resolve(destination)
         if not resolved_source.exists():
@@ -231,8 +208,6 @@ class Toolbox:
             raise ToolError(f"{destination!r} already exists")
         resolved_destination.parent.mkdir(parents=True, exist_ok=True)
         resolved_source.rename(resolved_destination)
-
-    # -- execution --------------------------------------------------------
 
     def run_command(self, command: Sequence[str], *, timeout: int | None = None) -> CommandResult:
         """Run an allowlisted command inside the workspace.
@@ -267,8 +242,6 @@ class Toolbox:
                 check=False,
             )
         except subprocess.TimeoutExpired as exc:
-            # A timeout is data, not a crash: §22 treats a hung command as an
-            # injectable failure mode the run must survive.
             return CommandResult(
                 command=tuple(parts),
                 exit_code=-1,
@@ -296,7 +269,6 @@ class Toolbox:
         """
         command = ["python", "-m", "pytest", "-q"]
         if target is not None:
-            # Resolved so a test target cannot escape the workspace either.
             command.append(self.workspace.relative(self.workspace.resolve(target)))
         return self.run_command(command)
 
@@ -305,8 +277,6 @@ class Toolbox:
 
     def git_diff(self) -> CommandResult:
         return self.run_command(["git", "diff"])
-
-    # -- environment ------------------------------------------------------
 
     def _scrubbed_environment(self) -> dict[str, str]:
         """A minimal environment for subprocesses (L1 of the isolation model).
@@ -320,7 +290,6 @@ class Toolbox:
         environment = {
             name: os.environ[name] for name in _INHERITED_ENVIRONMENT if name in os.environ
         }
-        # Deterministic hashing and no stray .pyc files in the workspace.
         environment["PYTHONHASHSEED"] = "0"
         environment["PYTHONDONTWRITEBYTECODE"] = "1"
         return environment

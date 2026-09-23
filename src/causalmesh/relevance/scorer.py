@@ -39,9 +39,6 @@ __all__ = [
 ]
 
 
-# Event classes that describe a change to the shared repository. A peer's
-# READ tells an agent almost nothing about what it must react to; a WRITE
-# may invalidate work in progress.
 MUTATING_EVENT_TYPES = frozenset(
     {
         EventType.WRITE,

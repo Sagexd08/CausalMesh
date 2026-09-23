@@ -41,17 +41,11 @@ from causalmesh.tui.palette import (
     supports_unicode,
 )
 
-# The scene is generated on a column grid rather than typed as literal
-# lines. Hand-counted spacing drifts the moment a label changes length, and
-# the first version of this drawing had every agent name off-centre from its
-# own body for exactly that reason.
 SCENE_WIDTH = 62
 AGENT_COLUMNS = (7, 19, 31, 53)
 AGENT_NAMES = ("agent_a", "agent_b", "agent_c", "agent_d")
 CONTESTED_FILE = " src/config.py "
 
-# The one warm mark on the screen, spent on the thing the experiment
-# measures: the write that was refused.
 ACCENT_MARKERS = ("REFUSED",)
 FILE_MARKERS = ("src/config.py",)
 
@@ -99,7 +93,6 @@ def _draw_scene(block: bool) -> list[str]:
         put(row, column, vertical)
     rows.append(row)
 
-    # Three writes converge on the file; the fourth keeps its own line.
     row = blank()
     put(row, AGENT_COLUMNS[0], corner_left)
     for column in range(AGENT_COLUMNS[0] + 1, AGENT_COLUMNS[2]):
@@ -109,7 +102,6 @@ def _draw_scene(block: bool) -> list[str]:
     put(row, AGENT_COLUMNS[3], vertical)
     rows.append(row)
 
-    # And stops short of it.
     row = blank()
     put(row, AGENT_COLUMNS[1], vertical)
     put(row, AGENT_COLUMNS[3], stopped)
@@ -205,8 +197,6 @@ def _scene(console: Console) -> Text:
         start = len(scene)
         scene.append(line, style=DIM)
 
-        # Agents are coloured at their own columns, so a body and the name
-        # under it share one hue and the eye groups them without a box.
         for column, arm in zip(AGENT_COLUMNS, ("C0", "C1", "C2", "C3"), strict=False):
             if column >= len(line) or line[column] == " ":
                 continue
@@ -339,8 +329,6 @@ def choose(console: Console, *, default: int = 1) -> Choice | None:
     escaped is worse than one that does nothing.
     """
     if not console.is_terminal:
-        # Piped or redirected: printing the menu is right, blocking on a
-        # read that will never come is not.
         return None
 
     valid = [str(index) for index in range(1, len(CHOICES) + 1)]

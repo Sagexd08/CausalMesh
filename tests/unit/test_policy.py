@@ -22,6 +22,7 @@ import pytest
 
 from causalmesh.claims.registry import ClaimRegistry
 from causalmesh.policy import (
+    Checkpoint,
     Contract,
     ContractError,
     Gate,
@@ -29,6 +30,7 @@ from causalmesh.policy import (
     Resource,
     ResourceError,
     ResourceKind,
+    ScriptedHandler,
 )
 
 pytestmark = [pytest.mark.unit]
@@ -179,6 +181,93 @@ class TestContract:
         loaded = Contract.load(path)
         assert loaded.arm == "C2"
         assert loaded.owner_of("src/schema.py") == "agent_a"
+
+    def test_identity_keys_dir_is_parsed(self) -> None:
+        """`identity.keys` (a directory of per-agent seed files) now has a
+
+        real consumer: `load_identity_keys` (crypto/keys.py), wired in by
+        `tasks/runner.py`. See `docs/backlog.md`, "Checkpoints and identity
+        are parsed and ignored" -- this is the "identity" half becoming real.
+        """
+        contract = Contract.from_dict(
+            {"version": 1, "identity": {"keys": ".causalmesh/keys/"}}
+        )
+        assert contract.identity_keys_dir == Path(".causalmesh/keys/")
+
+    def test_identity_without_keys_has_no_dir(self) -> None:
+        assert Contract.from_dict({"version": 1}).identity_keys_dir is None
+
+    def test_identity_must_be_a_mapping(self) -> None:
+        with pytest.raises(ContractError, match="identity.*mapping"):
+            Contract.from_dict({"version": 1, "identity": "not-a-mapping"})
+
+    def test_an_identity_typo_is_an_error_not_a_shrug(self) -> None:
+        with pytest.raises(ContractError, match="unknown key"):
+            Contract.from_dict({"version": 1, "identity": {"key": ".causalmesh/keys/"}})
+
+    def test_checkpoints_are_parsed(self) -> None:
+        """`policy.checkpoints` (human-in-the-loop rules) now has a real
+
+        consumer: `Gate` consults them after every other rule allows (see
+        `TestCheckpoints` below). See docs/backlog.md's "Checkpoints and
+        identity are parsed and ignored" -- this is the "checkpoints" half
+        becoming real.
+        """
+        contract = Contract.from_dict(
+            {
+                "version": 1,
+                "policy": {
+                    "checkpoints": [
+                        {"on": "spend", "when": {"usd": ">0.50"}, "require": "human"},
+                    ],
+                },
+            }
+        )
+        assert len(contract.checkpoints) == 1
+        checkpoint = contract.checkpoints[0]
+        assert checkpoint.on == "spend"
+        assert checkpoint.when == {"usd": ">0.50"}
+        assert checkpoint.require == "human"
+
+    def test_checkpoints_default_empty(self) -> None:
+        assert Contract.from_dict({"version": 1}).checkpoints == ()
+
+    def test_a_checkpoint_without_on_is_refused(self) -> None:
+        with pytest.raises(ContractError, match="`on`"):
+            Contract.from_dict(
+                {"version": 1, "policy": {"checkpoints": [{"require": "human"}]}}
+            )
+
+    def test_a_checkpoint_typo_is_an_error_not_a_shrug(self) -> None:
+        with pytest.raises(ContractError, match="unknown key"):
+            Contract.from_dict(
+                {
+                    "version": 1,
+                    "policy": {"checkpoints": [{"on": "spend", "requires": "human"}]},
+                }
+            )
+
+    def test_verify_on_exit_is_a_known_evidence_key(self) -> None:
+        """Unlike `identity`/`checkpoints`, `verify_on_exit` is real and used
+
+        today -- this repository's own causalmesh.yaml sets it. It must
+        parse rather than raise.
+        """
+        contract = Contract.from_dict(
+            {"version": 1, "evidence": {"sign": True, "verify_on_exit": True}}
+        )
+        assert contract.verify_on_exit is True
+
+    def test_verify_on_exit_defaults_true(self) -> None:
+        assert Contract.from_dict({"version": 1}).verify_on_exit is True
+
+    def test_an_evidence_typo_is_an_error_not_a_shrug(self) -> None:
+        """The same rule `policy.budgets` already gets: a typo silently
+
+        parsing as nothing is worse than a typo that fails the load.
+        """
+        with pytest.raises(ContractError, match="unknown key"):
+            Contract.from_dict({"version": 1, "evidence": {"verfy_on_exit": True}})
 
 
 class TestOwnership:
@@ -428,3 +517,89 @@ class TestEnforcementIsolatesOneFactor:
         assert payload["allowed"] is False
         assert payload["resource"]["identity"] == "path:src/schema.py"
         assert payload["rule"] == "ownership"
+
+
+class TestCheckpointsInTheGate:
+    def _checkpointed_contract(self) -> Contract:
+        return Contract.from_dict(
+            {
+                "version": 1,
+                "roles": [
+                    {
+                        "agent_id": "buyer",
+                        "archetype": "spender",
+                        "budget": {"usd_total": "100.00"},
+                    }
+                ],
+                "policy": {
+                    "arm": "C3",
+                    "checkpoints": [
+                        {"on": "spend", "when": {"usd": ">0.50"}, "require": "human"}
+                    ],
+                },
+            }
+        )
+
+    def test_a_matched_checkpoint_with_no_handler_refuses_by_default(self) -> None:
+        gate = gate_for(self._checkpointed_contract())
+        verdict = gate.check(
+            agent_id="buyer", resource=Resource.spend(to="api.example.com", amount="1.00"), now_us=NOW
+        )
+        assert verdict.refused
+        assert verdict.rule == "checkpoint"
+
+    def test_an_unmatched_checkpoint_does_not_refuse(self) -> None:
+        gate = gate_for(self._checkpointed_contract())
+        verdict = gate.check(
+            agent_id="buyer", resource=Resource.spend(to="api.example.com", amount="0.10"), now_us=NOW
+        )
+        assert verdict.allowed
+
+    def test_a_scripted_approval_allows_the_call(self) -> None:
+        gate = gate_for(self._checkpointed_contract(), checkpoint_handler=ScriptedHandler([True]))
+        verdict = gate.check(
+            agent_id="buyer", resource=Resource.spend(to="api.example.com", amount="1.00"), now_us=NOW
+        )
+        assert verdict.allowed
+
+    def test_a_prior_refusal_never_reaches_the_checkpoint(self) -> None:
+        """A ceiling refusal already answers the question; the human is not
+
+        asked about a call the contract already refuses on its own terms.
+        """
+        contract = Contract.from_dict(
+            {
+                "version": 1,
+                "roles": [
+                    {
+                        "agent_id": "buyer",
+                        "budget": {"usd_total": "100.00", "usd_per_call": "0.05"},
+                    }
+                ],
+                "policy": {
+                    "checkpoints": [{"on": "spend", "require": "human"}],
+                },
+            }
+        )
+        gate = gate_for(contract, checkpoint_handler=ScriptedHandler([True]))
+        verdict = gate.check(
+            agent_id="buyer", resource=Resource.spend(to="api.example.com", amount="1.00"), now_us=NOW
+        )
+        assert verdict.refused
+        assert verdict.rule == "ceiling"
+
+    def test_an_unenforced_gate_reports_the_checkpoint_as_a_shadow_refusal(self) -> None:
+        gate = gate_for(self._checkpointed_contract(), enforcing=False)
+        verdict = gate.check(
+            agent_id="buyer", resource=Resource.spend(to="api.example.com", amount="1.00"), now_us=NOW
+        )
+        assert verdict.allowed
+        assert verdict.detail["would_refuse"] is True
+        assert verdict.rule == "checkpoint"
+
+    def test_a_checkpoint_ignores_a_resource_kind_it_does_not_declare(
+        self, contract: Contract
+    ) -> None:
+        gate = gate_for(contract, checkpoint_handler=ScriptedHandler([]))
+        verdict = gate.check(agent_id="agent_b", resource=Resource.path("README.md"), now_us=NOW)
+        assert verdict.allowed

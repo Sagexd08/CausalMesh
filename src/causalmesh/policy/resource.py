@@ -49,13 +49,9 @@ class ResourceKind(StrEnum):
     someone might have to answer for later.
     """
 
-    # A file in the repository. The built and measured case.
     PATH = "path"
-    # Money leaving the operator's account — x402, MPP, or any priced call.
     SPEND = "spend"
-    # A network destination an agent wants to reach.
     ENDPOINT = "endpoint"
-    # A consumable allowance: tokens, wall clock, coordination bytes.
     BUDGET = "budget"
 
 
@@ -74,9 +70,6 @@ class Resource:
 
     kind: ResourceKind
     name: str
-    # Only meaningful for SPEND and BUDGET: how much this action consumes.
-    # Decimal rather than float because money that rounds is money that is
-    # wrong, and a budget that drifts is a budget that does not hold.
     amount: Decimal | None = None
     unit: str = ""
 
@@ -113,12 +106,6 @@ class Resource:
             "name": _normalize_name(self.kind, self.name),
             "unit": self.unit,
         }
-
-    # -- constructors ------------------------------------------------------
-    #
-    # Named rather than positional because `Resource(kind, name, amount)` at a
-    # call site says nothing about which kind, and the kinds behave
-    # differently enough that reading the call should tell you.
 
     @classmethod
     def path(cls, name: str) -> Resource:
@@ -158,10 +145,6 @@ class Resource:
         except ValueError as exc:
             known = ", ".join(sorted(member.value for member in ResourceKind))
             raise ResourceError(f"unknown resource kind {head!r}; known kinds: {known}") from exc
-        # SPEND and BUDGET require an amount at construction, and the
-        # identity has none. Zero is the honest reconstruction: it is what
-        # the identity actually tells us, and any other number would be
-        # invented.
         amount = Decimal(0) if kind in (ResourceKind.SPEND, ResourceKind.BUDGET) else None
         return cls(kind=kind, name=tail, amount=amount)
 
@@ -177,8 +160,6 @@ def _normalize_name(kind: ResourceKind, name: str) -> str:
     if kind is ResourceKind.PATH:
         return text.replace("\\", "/")
     if kind in (ResourceKind.ENDPOINT, ResourceKind.SPEND):
-        # Hosts are case-insensitive per RFC 4343; a payee that differs only
-        # by case is the same payee.
         return text.lower()
     return text
 

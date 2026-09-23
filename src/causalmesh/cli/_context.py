@@ -10,8 +10,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-# Markers that identify a CausalMesh checkout. `tasks/` alone is too common
-# a directory name to be evidence of anything.
 _MARKERS = ("pyproject.toml", "tasks", "fixtures")
 
 

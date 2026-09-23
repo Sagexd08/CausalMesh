@@ -186,7 +186,13 @@ would measure how often the gate was consulted.
   `HTTP 402` to obtain one.
 - **Verdicts do not enter the signed chain.** `Verdict.to_dict()` is
   chain-shaped and tested, but the event type is not defined.
-- **`checkpoints` is parsed and ignored.** Human-in-the-loop is declared in
-  the contract and not yet implemented.
-- **No per-agent keys.** `identity` in the contract is not read; the chain
-  signs per actor with keys the run supplies.
+- **A real human-attached checkpoint handler.** `policy.checkpoints` is
+  enforced (`policy/checkpoints.py`, `Gate.check`), decided by a
+  `CheckpointHandler`, and recorded as `EventType.CHECKPOINT_DECIDED`. The
+  default (`AutoDenyHandler`) and the reproducible one (`ScriptedHandler`)
+  ship; nothing here prompts an actual person, and the CLI does not surface a
+  pending checkpoint.
+- **Per-agent external keys are loaded, not generated on demand.**
+  `identity.keys` (`crypto.load_identity_keys`) reads a keyed operator's own
+  pre-existing files; nothing in this build helps an operator generate that
+  directory in the first place.

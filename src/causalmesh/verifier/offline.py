@@ -36,9 +36,6 @@ __all__ = [
 ]
 
 
-# Schema versions this verifier can faithfully interpret. A log written by a
-# newer protocol is refused rather than checked against rules that may no
-# longer describe it (§29).
 SUPPORTED_SCHEMA_VERSIONS = frozenset({SCHEMA_VERSION})
 
 _REQUIRED_RECORD_FIELDS = frozenset(
@@ -119,8 +116,6 @@ def load_chain(path: Path) -> list[dict[str, Any]]:
             try:
                 records.append(json.loads(stripped))
             except json.JSONDecodeError:
-                # Preserved as an explicitly unparseable marker so the index
-                # of every later record stays correct.
                 records.append({"__unparseable__": stripped[:200]})
     return records
 
@@ -137,7 +132,6 @@ def _verify_anchors(
     than glossed over.
     """
     if not anchors:
-        # No anchor means the entire log could have been truncated undetectably.
         return AnchorStatus.NOT_ANCHORED, len(chain), []
 
     by_sequence = {link.event.sequence: (index, link) for index, link in enumerate(chain)}
@@ -148,8 +142,6 @@ def _verify_anchors(
         expected = anchors[sequence]
         found = by_sequence.get(sequence)
         if found is None:
-            # The anchor attests to an event the log no longer contains —
-            # exactly the truncation (or deletion) an anchor exists to catch.
             failures.append(
                 VerificationFailure(
                     kind=FailureKind.ANCHOR_MISSING_EVENT,
@@ -230,8 +222,6 @@ def verify_chain(
             failures.append(
                 VerificationFailure(kind=FailureKind.MALFORMED_RECORD, index=index, detail=str(exc))
             )
-            # The chain cannot continue through an unparseable record: every
-            # later link would be reported as broken for the wrong reason.
             break
 
         chain.append(link)
@@ -253,8 +243,6 @@ def verify_chain(
                 )
             )
 
-        # 3 + 4: recompute the digest over the *expected* predecessor, so a
-        # relinked record is caught even if its own fields are self-consistent.
         try:
             recomputed: str | None = compute_chain_hash(previous_hash, event)
         except ValueError as exc:
@@ -290,8 +278,6 @@ def verify_chain(
                 )
             )
 
-        # 5: sequences must be contiguous. A gap means a deletion; a repeat or
-        # a step backwards means a reorder.
         if expected_sequence is not None and event.sequence != expected_sequence:
             failures.append(
                 VerificationFailure(
@@ -304,7 +290,6 @@ def verify_chain(
             )
         expected_sequence = event.sequence + 1
 
-        # 6: attribution, checked against the ring rather than the record.
         known_key = key_ring.public_key_for(event.identity.agent_id)
         if known_key is None:
             failures.append(
@@ -330,7 +315,6 @@ def verify_chain(
                 )
             )
 
-        # 7: the signature must verify under the ring's key for this actor.
         verifying_key = known_key or link.actor_public_key
         try:
             message = bytes.fromhex(link.chain_hash)
@@ -351,7 +335,6 @@ def verify_chain(
                 )
             )
 
-        # 8: duplicate event ids would make provenance ambiguous (§42).
         if event.event_id in seen_event_ids:
             failures.append(
                 VerificationFailure(
@@ -365,8 +348,6 @@ def verify_chain(
         else:
             seen_event_ids[event.event_id] = index
 
-        # Advance using the *recorded* digest so that one corrupted link does
-        # not cascade into a false break at every subsequent record.
         previous_hash = link.chain_hash
 
     anchor_status, unanchored_suffix, anchor_failures = _verify_anchors(chain, anchors)

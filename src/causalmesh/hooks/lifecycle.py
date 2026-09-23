@@ -85,12 +85,10 @@ class ToolCall:
         return self.tool in MUTATING_TOOLS
 
 
-# The subset of the §12 tool API that can change the workspace.
 MUTATING_TOOLS = frozenset(
     {"write_file", "create_file", "modify_file", "delete_file", "rename_file"}
 )
 
-# How each tool is recorded in the event log (§16).
 TOOL_EVENT_TYPES: dict[str, EventType] = {
     "read_file": EventType.READ,
     "write_file": EventType.WRITE,
@@ -114,15 +112,6 @@ class GateDecision:
     reason: str
     holder_agent: str | None = None
     blocked_path: str | None = None
-    # Which rule refused, as a stable identifier: "claim", "ownership",
-    # "allowlist", "ceiling", "budget". The reason says the same thing in a
-    # sentence, but a sentence is written for a person reading a terminal
-    # and changes when the wording improves. Analysis needs a key it can
-    # group by, and parsing prose to recover one is how a measurement
-    # quietly stops counting when someone rewords an error.
-    #
-    # Empty for a gate that does not distinguish rules, which is the
-    # unenforced case and `ClaimGate` before it was given one.
     rule: str = ""
 
     def to_dict(self) -> dict[str, Any]:
@@ -244,8 +233,6 @@ class LifecycleBoundary:
             hook(context)
         hook_overhead = self._clock() - hook_start
 
-        # The gate sees only mutating calls: gating reads would make C3
-        # differ from C2 in more than write enforcement.
         decision = (
             self._gate.check(call, now_us)
             if call.is_mutating
@@ -267,9 +254,6 @@ class LifecycleBoundary:
         try:
             value = executor(call)
         except Exception as exc:
-            # §81: a failure is evidence. The run continues and the failure is
-            # recorded rather than propagating and losing the surrounding
-            # context.
             result = ToolResult(
                 call=call,
                 outcome=ToolOutcome.FAILED,

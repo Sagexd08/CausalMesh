@@ -32,10 +32,6 @@ class EdgeIndex:
 
     def __init__(self, edges: list[CausalEdge]) -> None:
         self._edges = list(edges)
-        # Plain dicts, not defaultdicts: every read below goes through
-        # `.get(..., [])`, and a defaultdict would let a future `[...]` read
-        # silently insert an empty list on every miss, growing the index as
-        # a side effect of querying it.
         self._by_from: dict[str, list[CausalEdge]] = {}
         self._by_to: dict[str, list[CausalEdge]] = {}
         for edge in self._edges:
