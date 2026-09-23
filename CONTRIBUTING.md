@@ -4,6 +4,32 @@ Thank you for looking. This document says how to get the project running,
 what the tests expect, and the few rules that are non-negotiable because the
 project's central claim depends on them.
 
+## Before you open a pull request: open an issue first
+
+Direct pushes to `main` are restricted to the project owner. Everyone else —
+including existing collaborators — merges through a reviewed pull request,
+and every pull request traces back to an issue:
+
+1. **Open an issue** describing the bug or the change you want to make.
+   Use the templates under `.github/ISSUE_TEMPLATE/`.
+2. **Wait for it to be triaged.** A maintainer will accept it (label it and
+   assign it to you) or explain why it does not fit — see "What this project
+   is not looking for" below for the kinds of change that tend not to.
+3. **Open the pull request only once the issue is assigned to you.**
+   Reference the issue number in the PR description (`Fixes #123` or
+   `Refs #123`). A pull request with no linked, accepted issue will be asked
+   to open one before review continues.
+
+This exists so that design disagreements — which arm a change affects,
+whether it touches the signed chain, whether it belongs in the runtime core
+or the analysis extra — surface before code is written, not in review after
+the work is already done. It also keeps two people from independently
+building the same thing, which has happened in this project's own history.
+
+A trivial fix (a typo, a broken link, a stale claim in a doc) does not need
+the full round trip; open the PR and say so, and a maintainer will judge
+whether the issue step actually mattered here.
+
 ## Getting it running
 
 ```bash
