@@ -17,7 +17,14 @@ from __future__ import annotations
 
 from .client import JevClient
 from .questions import Choice, Noul, Score
-from .response import ChoiceAnswer, JevAnswer, JevResponse, NoulAnswer, ScoreAnswer
+from .response import (
+    ChoiceAnswer,
+    JevAnswer,
+    JevResponse,
+    JevResponseError,
+    NoulAnswer,
+    ScoreAnswer,
+)
 
 __all__ = [
     "Choice",
@@ -25,6 +32,7 @@ __all__ = [
     "JevAnswer",
     "JevClient",
     "JevResponse",
+    "JevResponseError",
     "Noul",
     "NoulAnswer",
     "Score",
