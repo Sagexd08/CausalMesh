@@ -85,6 +85,8 @@ class TestInit:
 
         not a parallel implementation that could drift from it.
         """
+        (tmp_path / "a").mkdir()
+        (tmp_path / "b").mkdir()
         top_level = invoke("init", "--root", str(tmp_path / "a"))
         nested = invoke("policy", "init", "--root", str(tmp_path / "b"))
         assert top_level.exit_code == nested.exit_code == 0
@@ -103,7 +105,6 @@ class TestQuickstartEndToEnd:
 
     def test_a_full_cycle_against_this_repository(self) -> None:
         experiment_id = "quickstart_cli_test"
-        raw_dir = REPO / "data" / "raw" / experiment_id
         try:
             result = invoke(
                 "quickstart", "--root", str(REPO), "--profile", "smoke", "--id", experiment_id
@@ -111,12 +112,7 @@ class TestQuickstartEndToEnd:
             assert result.exit_code == 0, result.stdout
             assert "quickstart complete" in result.stdout
         finally:
-            import shutil
-
-            if raw_dir.is_dir():
-                shutil.rmtree(raw_dir, ignore_errors=True)
-            index_path = REPO / "data" / f"{experiment_id}.index.db"
-            index_path.unlink(missing_ok=True)
+            _cleanup_experiment(experiment_id)
 
     def test_skips_init_when_a_contract_already_exists(self) -> None:
         """This repository's own causalmesh.yaml must survive a quickstart
@@ -127,7 +123,6 @@ class TestQuickstartEndToEnd:
         contract_path = REPO / "causalmesh.yaml"
         before = contract_path.read_text(encoding="utf-8")
         experiment_id = "quickstart_cli_test_2"
-        raw_dir = REPO / "data" / "raw" / experiment_id
         try:
             result = invoke(
                 "quickstart", "--root", str(REPO), "--profile", "smoke", "--id", experiment_id
@@ -136,9 +131,17 @@ class TestQuickstartEndToEnd:
             assert "already exists; skipping init" in result.stdout
             assert contract_path.read_text(encoding="utf-8") == before
         finally:
-            import shutil
+            _cleanup_experiment(experiment_id)
 
-            if raw_dir.is_dir():
-                shutil.rmtree(raw_dir, ignore_errors=True)
-            index_path = REPO / "data" / f"{experiment_id}.index.db"
-            index_path.unlink(missing_ok=True)
+
+def _cleanup_experiment(experiment_id: str) -> None:
+    """Remove everything a real quickstart run against this repository
+
+    leaves on disk: the raw artifacts and the per-run workspaces. `data/`
+    is gitignored, so nothing here is a tracked-file concern -- this is
+    only about not leaving scratch state around after the test.
+    """
+    import shutil
+
+    shutil.rmtree(REPO / "data" / "raw" / experiment_id, ignore_errors=True)
+    shutil.rmtree(REPO / "data" / "work" / experiment_id, ignore_errors=True)
