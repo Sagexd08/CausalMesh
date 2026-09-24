@@ -50,11 +50,15 @@ def _load_or_exit(root_option: Path | None) -> Contract:
 
 
 def _read_stdin_request(*, default_unit: str) -> tuple[str, str, str, str | None, str]:
-    """Parse one JSON object from stdin into the same fields --agent/--kind/
+    """Parse one JSON object from stdin into the same fields --agent/--kind/--name/--amount/--unit already carry.
 
-    --name/--amount/--unit already carry. A malformed payload is a usage
-    error with a hint, not a crash -- the same discipline `_load_or_exit`
-    already applies to a broken `causalmesh.yaml`.
+    A malformed payload is a usage error with a hint, not a crash -- the
+    same discipline `_load_or_exit` already applies to a broken
+    `causalmesh.yaml`. A field present but explicitly `null` is treated the
+    same as an absent field, falling back to its default rather than
+    becoming the literal string `"None"` -- a hook payload built by string
+    templating is exactly the kind of caller that leaves a field `null`
+    instead of omitting it.
     """
     import json
     import sys
@@ -79,10 +83,13 @@ def _read_stdin_request(*, default_unit: str) -> tuple[str, str, str, str | None
     if not isinstance(agent_id, str) or not agent_id:
         fail("stdin JSON is missing a non-empty `agent_id`")
         raise typer.Exit(Exit.USAGE)
-    kind = payload.get("kind", "path")
-    name = payload.get("name", "")
+    kind = payload.get("kind")
+    kind = "path" if kind is None else kind
+    name = payload.get("name")
+    name = "" if name is None else name
     amount = payload.get("amount")
-    unit = payload.get("unit", default_unit)
+    unit = payload.get("unit")
+    unit = default_unit if unit is None else unit
     return agent_id, str(kind), str(name), (str(amount) if amount is not None else None), str(unit)
 
 
@@ -137,7 +144,8 @@ def check_command(
             "--stdin",
             help='Read {"agent_id", "kind", "name", "amount"?, "unit"?} as JSON from stdin '
             "instead of --agent/--kind/--name/--amount. For wiring into an agent harness's "
-            "hook mechanism -- see docs/adoption.md.",
+            "hook mechanism -- see docs/adoption.md. Reads until EOF; do not invoke "
+            "interactively with nothing piped in.",
         ),
     ] = False,
     root_option: Annotated[Path | None, typer.Option("--root")] = None,
