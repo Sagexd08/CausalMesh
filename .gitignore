@@ -153,3 +153,13 @@ frontend/.source/
 
 # Git worktrees for isolated agent workspaces
 .worktrees/
+
+# /brag skill: unlike the design skills above, this bundles ~17MB of music
+# and SFX library assets that are regenerable/re-installable and not
+# specific to how this project was built -- same reasoning as excluding
+# impeccable's platform binaries above.
+.claude/skills/brag/
+
+# /brag rendered output -- generated video artifacts, not source.
+brag-output/
+brag-output-*/
