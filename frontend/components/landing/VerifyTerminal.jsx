@@ -4,18 +4,25 @@ import { useEffect, useRef, useState } from "react";
 import { useInView } from "./Primitives.jsx";
 
 /**
- * A terminal that cycles through three real commands end to end: declare a
- * contract, run a collection, verify the chain it produced.
+ * A terminal that cycles through four real commands end to end: declare a
+ * contract, read it back, run a collection, verify the chain it produced.
  *
  * Every command and every line of output below is a transcript, not
  * scripted copy — each was captured by actually running the command
- * against this checkout on 2026-09-23 (see the STEPS array; the verify
- * step's 28 total is the same real number `causalmesh verify --all`
- * prints against every collection on disk, not the 24-run pilot-only
- * figure quoted elsewhere on this page — two different, both true,
- * numbers, and this component shows the one that matches what it
- * displays). This is the sequence the "Agents" panel below only shows as
- * static text; here it actually plays out.
+ * against this checkout (init/experiment/verify on 2026-09-23; the `policy
+ * show` step added later, same checkout, same discipline — see the STEPS
+ * array). The `show` step's role list is the CLI's boxed table reformatted
+ * as plain lines rather than the literal ASCII box: at hero-terminal width
+ * the box itself truncates path text mid-word, and reproducing that
+ * truncation would look like this component's bug rather than an
+ * illustration of the CLI's real behaviour. Every fact in it (which agent
+ * owns what, the contested paths, the run budget) is unchanged from the
+ * real output. The verify step's 28 total is the same real number
+ * `causalmesh verify --all` prints against every collection on disk, not
+ * the 24-run pilot-only figure quoted elsewhere on this page — two
+ * different, both true, numbers, and this component shows the one that
+ * matches what it displays. This is the sequence the "Agents" panel below
+ * only shows as static text; here it actually plays out.
  *
  * The sequence — type a command, spin while it runs, stream its real
  * output, hold on the summary, advance to the next command, loop — is
@@ -42,6 +49,24 @@ const STEPS = [
       },
     ],
     summary: null,
+  },
+  {
+    id: "show",
+    command: "causalmesh policy show",
+    spinnerLabel: "reading contract…",
+    spinnerFrames: 5,
+    lines: [
+      { text: "contract · arm C3 · 6 roles declared", tone: "dim", header: true },
+      { text: "substrate   owns crypto/, claims/, events/, verifier/", tone: "paper" },
+      { text: "policy      owns policy/, cli/commands_policy.py", tone: "paper" },
+      { text: "interface   owns tui/, cli/", tone: "paper" },
+      { text: "web         owns frontend/", tone: "paper" },
+      { text: "docs        owns docs/, README.md, AGENTS.md", tone: "paper" },
+      { text: "reviewer    checker, owns nothing", tone: "paper" },
+      { text: "contested   ci.yml, package.json, pyproject.toml", tone: "dim" },
+      { text: "run budget  tokens=400000", tone: "dim" },
+    ],
+    summary: "read from causalmesh.yaml",
   },
   {
     id: "experiment",

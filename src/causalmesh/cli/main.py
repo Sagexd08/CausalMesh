@@ -25,6 +25,8 @@ from causalmesh.cli import (
 from causalmesh.cli.commands_analyze import analyze_command
 from causalmesh.cli.commands_audit import audit_command
 from causalmesh.cli.commands_doctor import doctor_command
+from causalmesh.cli.commands_policy import init_command
+from causalmesh.cli.commands_quickstart import quickstart_command
 from causalmesh.cli.commands_watch import watch_command, welcome_command
 
 app = typer.Typer(
@@ -39,6 +41,14 @@ app = typer.Typer(
 )
 
 app.command("doctor")(doctor_command)
+app.command(
+    "init",
+    help="Write a starter causalmesh.yaml, reading AGENTS.md's Layout table if one exists.",
+)(init_command)
+app.command(
+    "quickstart",
+    help="Declare a contract, check the environment, run a smoke collection, verify it. One command.",
+)(quickstart_command)
 app.add_typer(commands_task.app, name="task")
 app.add_typer(commands_experiment.app, name="experiment")
 app.command("verify")(commands_verify.verify_command)

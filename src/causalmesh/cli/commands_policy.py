@@ -153,11 +153,15 @@ def init_command(
 ) -> None:
     """Write a starter `causalmesh.yaml` for this repository.
 
-    Deliberately permissive: it declares structure and leaves the
-    restrictions commented out. A generated contract that refused real work
-    on the first run would teach people to delete it.
+    Reads `AGENTS.md`'s own Layout table when one exists, and generates one
+    role per top-level path it names -- owning exactly that path, nothing
+    contested, no budget. A repository with no AGENTS.md, or no parseable
+    Layout table, gets the same empty `agent_a` template this command
+    always wrote. Either way, deliberately permissive: a generated contract
+    that refused real work on the first run would teach people to delete it.
     """
     from causalmesh.policy.contract import CONTRACT_FILENAME
+    from causalmesh.policy.generate import generate_contract_yaml
 
     root = (root_option or Path.cwd()).resolve()
     target = root / CONTRACT_FILENAME
@@ -165,50 +169,11 @@ def init_command(
         fail(f"{target} already exists", hint="Pass --force to overwrite it.")
         raise typer.Exit(Exit.USAGE)
 
-    target.write_text(_STARTER, encoding="utf-8")
+    contract_yaml = generate_contract_yaml(root)
+    target.write_text(contract_yaml, encoding="utf-8")
     out_console.print(f"wrote {target}")
-    note("edit `owns` to declare ownership, then run `causalmesh policy show`")
+    if (root / "AGENTS.md").is_file():
+        note("roles were read from AGENTS.md's Layout table; edit them where they don't fit")
+    else:
+        note("edit `owns` to declare ownership, then run `causalmesh policy show`")
     raise typer.Exit(Exit.OK)
-
-
-_STARTER = """\
-# causalmesh.yaml - what agents in this repository may do.
-#
-# Sibling to AGENTS.md, not a replacement. AGENTS.md says what agents should
-# do; this says what they are allowed to do, and the gate holds them to it.
-#
-# Absent means unrestricted. Declare the parts you care about; the rest keeps
-# working. Check any rule with:
-#     causalmesh policy check --agent agent_a --kind path --name src/config.py
-version: 1
-
-roles:
-  - agent_id: agent_a
-    archetype: writer
-    # Paths this agent owns. A directory covers everything under it, and a
-    # longer declaration wins, so you can carve one file out of a directory.
-    owns: []
-
-  # An agent that spends money. Uncomment to enforce it.
-  # - agent_id: buyer
-  #   archetype: spender
-  #   allow: [api.example.com]      # hosts it may reach; covers subdomains
-  #   budget:
-  #     usd_total: "5.00"           # quote money, or use an integer
-  #     usd_per_call: "0.10"        # the one catastrophic call, refused
-
-policy:
-  # C0 none - C1 transcripts - C2 metadata - C3 metadata + enforced claims.
-  # Only C3 refuses; the others record what C3 would have done.
-  arm: C3
-
-  # Paths that need an exclusive lease before a write.
-  contested: {}
-
-  # Allowances for the whole run, unless a role declares its own.
-  budgets: {}
-    # tokens: 200000
-
-evidence:
-  sign: true
-"""
