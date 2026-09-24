@@ -81,6 +81,114 @@ class TestDoctor:
         assert payload(result)["verdict"] == "FAIL"
 
 
+class TestCheckStdin:
+    def test_stdin_json_matches_the_equivalent_flags(self, tmp_path: Path) -> None:
+        (tmp_path / "causalmesh.yaml").write_text(
+            "version: 1\nroles:\n  - agent_id: agent_a\n    owns: [src/config.py]\n",
+            encoding="utf-8",
+        )
+        from_flags = invoke(
+            "policy",
+            "check",
+            "--root",
+            str(tmp_path),
+            "--agent",
+            "agent_b",
+            "--kind",
+            "path",
+            "--name",
+            "src/config.py",
+            "--json",
+        )
+        from_stdin = runner.invoke(
+            app,
+            ["policy", "check", "--root", str(tmp_path), "--stdin", "--json"],
+            input='{"agent_id": "agent_b", "kind": "path", "name": "src/config.py"}',
+        )
+        assert from_flags.exit_code == from_stdin.exit_code == 1
+        assert payload(from_flags) == payload(from_stdin)
+
+    def test_stdin_allows_a_permitted_write(self, tmp_path: Path) -> None:
+        (tmp_path / "causalmesh.yaml").write_text(
+            "version: 1\nroles:\n  - agent_id: agent_a\n    owns: [src/config.py]\n",
+            encoding="utf-8",
+        )
+        result = runner.invoke(
+            app,
+            ["policy", "check", "--root", str(tmp_path), "--stdin", "--json"],
+            input='{"agent_id": "agent_a", "kind": "path", "name": "src/config.py"}',
+        )
+        assert result.exit_code == 0, result.stdout
+        assert payload(result)["allowed"] is True
+
+    def test_stdin_supports_spend_with_an_amount(self, tmp_path: Path) -> None:
+        (tmp_path / "causalmesh.yaml").write_text(
+            "version: 1\n"
+            "roles:\n"
+            "  - agent_id: buyer\n"
+            "    archetype: spender\n"
+            "    allow: [api.example.com]\n"
+            '    budget: { usd_total: "5.00" }\n',
+            encoding="utf-8",
+        )
+        result = runner.invoke(
+            app,
+            ["policy", "check", "--root", str(tmp_path), "--stdin", "--json"],
+            input='{"agent_id": "buyer", "kind": "spend", "name": "api.example.com", "amount": "1.00"}',
+        )
+        assert result.exit_code == 0, result.stdout
+        assert payload(result)["allowed"] is True
+
+    def test_malformed_json_on_stdin_is_a_usage_error(self, tmp_path: Path) -> None:
+        (tmp_path / "causalmesh.yaml").write_text("version: 1\n", encoding="utf-8")
+        result = runner.invoke(
+            app,
+            ["policy", "check", "--root", str(tmp_path), "--stdin"],
+            input="not json at all",
+        )
+        assert result.exit_code == 2
+
+    def test_a_json_object_missing_required_fields_is_a_usage_error(self, tmp_path: Path) -> None:
+        (tmp_path / "causalmesh.yaml").write_text("version: 1\n", encoding="utf-8")
+        result = runner.invoke(
+            app,
+            ["policy", "check", "--root", str(tmp_path), "--stdin"],
+            input='{"kind": "path"}',
+        )
+        assert result.exit_code == 2
+
+    def test_stdin_and_flags_together_prefers_flags(self, tmp_path: Path) -> None:
+        """`--stdin` is a mode switch; when both are somehow given, the
+
+        explicit CLI flags are what actually ran, not a silent merge with
+        whatever also arrived on stdin.
+        """
+        (tmp_path / "causalmesh.yaml").write_text(
+            "version: 1\nroles:\n  - agent_id: agent_a\n    owns: [src/config.py]\n",
+            encoding="utf-8",
+        )
+        result = runner.invoke(
+            app,
+            [
+                "policy",
+                "check",
+                "--root",
+                str(tmp_path),
+                "--stdin",
+                "--json",
+                "--agent",
+                "agent_a",
+                "--kind",
+                "path",
+                "--name",
+                "src/config.py",
+            ],
+            input='{"agent_id": "agent_b", "kind": "path", "name": "src/config.py"}',
+        )
+        assert result.exit_code == 0, result.stdout
+        assert payload(result)["allowed"] is True
+
+
 class TestTask:
     def test_the_suite_validates(self) -> None:
         result = invoke("task", "validate", "--root", str(REPO), "--json")

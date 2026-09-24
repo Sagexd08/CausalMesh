@@ -49,6 +49,43 @@ def _load_or_exit(root_option: Path | None) -> Contract:
     return contract
 
 
+def _read_stdin_request(*, default_unit: str) -> tuple[str, str, str, str | None, str]:
+    """Parse one JSON object from stdin into the same fields --agent/--kind/
+
+    --name/--amount/--unit already carry. A malformed payload is a usage
+    error with a hint, not a crash -- the same discipline `_load_or_exit`
+    already applies to a broken `causalmesh.yaml`.
+    """
+    import json
+    import sys
+
+    raw = sys.stdin.read()
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        fail(
+            f"stdin is not valid JSON: {exc}",
+            hint='Expected {"agent_id": "...", "kind": "...", "name": "..."}.',
+        )
+        raise typer.Exit(Exit.USAGE) from None
+    if not isinstance(payload, dict):
+        fail(
+            "stdin JSON must be an object",
+            hint='Expected {"agent_id": "...", "kind": "...", "name": "..."}.',
+        )
+        raise typer.Exit(Exit.USAGE)
+
+    agent_id = payload.get("agent_id")
+    if not isinstance(agent_id, str) or not agent_id:
+        fail("stdin JSON is missing a non-empty `agent_id`")
+        raise typer.Exit(Exit.USAGE)
+    kind = payload.get("kind", "path")
+    name = payload.get("name", "")
+    amount = payload.get("amount")
+    unit = payload.get("unit", default_unit)
+    return agent_id, str(kind), str(name), (str(amount) if amount is not None else None), str(unit)
+
+
 @app.command("show")
 def show_command(
     root_option: Annotated[Path | None, typer.Option("--root")] = None,
@@ -87,13 +124,22 @@ def show_command(
 
 @app.command("check")
 def check_command(
-    agent: Annotated[str, typer.Option("--agent", help="Which agent is asking.")],
+    agent: Annotated[str | None, typer.Option("--agent", help="Which agent is asking.")] = None,
     kind: Annotated[str, typer.Option("--kind", help=f"One of: {', '.join(KINDS)}.")] = "path",
     name: Annotated[str, typer.Option("--name", help="Path, host, or budget name.")] = "",
     amount: Annotated[
         str | None, typer.Option("--amount", help="For spend and budget. Quote it.")
     ] = None,
     unit: Annotated[str, typer.Option("--unit")] = "USD",
+    stdin: Annotated[
+        bool,
+        typer.Option(
+            "--stdin",
+            help='Read {"agent_id", "kind", "name", "amount"?, "unit"?} as JSON from stdin '
+            "instead of --agent/--kind/--name/--amount. For wiring into an agent harness's "
+            "hook mechanism -- see docs/adoption.md.",
+        ),
+    ] = False,
     root_option: Annotated[Path | None, typer.Option("--root")] = None,
     as_json: Annotated[bool, typer.Option("--json")] = False,
 ) -> None:
@@ -106,6 +152,12 @@ def check_command(
 
     contract = _load_or_exit(root_option)
 
+    if stdin and agent is None:
+        agent, kind, name, amount, unit = _read_stdin_request(default_unit=unit)
+
+    if not agent:
+        fail("nothing to check", hint="Pass --agent, or --stdin with agent_id in the JSON.")
+        raise typer.Exit(Exit.USAGE)
     if not name:
         fail("nothing to check", hint="Pass --name with a path, host, or budget name.")
         raise typer.Exit(Exit.USAGE)
