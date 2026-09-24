@@ -1,8 +1,11 @@
 # The policy plane
 
-**Status: built and tested.** 38 tests in `tests/unit/test_policy.py`; the
-full suite passes at 775. What is *not* built is named in "What this does not
-do yet" at the end, rather than left as a silent gap.
+**Status: built and tested.** 88 tests across `tests/unit/test_policy.py`,
+`test_policy_gate.py` and `test_checkpoints.py`; wired into the run loop by
+`ContractGate` (`hooks/policy_gate.py`), installed automatically whenever
+`causalmesh experiment run` or `causalmesh serve` discovers a
+`causalmesh.yaml`. What is *not* built is named in "What this does not do
+yet" at the end, rather than left as a silent gap.
 
 ---
 
@@ -178,14 +181,13 @@ would measure how often the gate was consulted.
 
 ## What this does not do yet
 
-- **Nothing calls the gate during a run.** The plane is built and
-  interrogable; wiring it into the run loop so real writes and payments pass
-  through it is the next step. Until then the measured C3 results come from
-  the original path-only claim gate, which is unchanged and still correct.
-- **No x402 adapter.** `spend` resources are enforced, but nothing yet speaks
-  `HTTP 402` to obtain one.
-- **Verdicts do not enter the signed chain.** `Verdict.to_dict()` is
-  chain-shaped and tested, but the event type is not defined.
+- **A real x402 payment signer.** `adapters/x402.py` parses a real `HTTP 402`
+  challenge into a `Resource.spend` and asks the gate, returning a typed
+  `PaymentDecision` — the gate-and-parse half is built and tested against the
+  reference `x402` schemas. What is missing is the other half: signing and
+  sending the payment. That needs a signer for one of x402's payment schemes
+  and networks, a real runtime dependency this project has never carried
+  (see `docs/backlog.md`, "Spend is enforced, but nothing speaks x402").
 - **A real human-attached checkpoint handler.** `policy.checkpoints` is
   enforced (`policy/checkpoints.py`, `Gate.check`), decided by a
   `CheckpointHandler`, and recorded as `EventType.CHECKPOINT_DECIDED`. The

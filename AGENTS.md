@@ -11,7 +11,7 @@ the guidelines half.
 
 ```bash
 pip install -e ".[dev,analysis]"   # set up
-pytest -q                          # full suite, ~3 minutes
+pytest -q                          # full suite, ~10-15 minutes
 pytest -q --ignore=tests/integration   # faster, skips subprocess tests
 pytest -m unit -q                  # fastest inner loop
 ruff check src tests               # lint, must pass

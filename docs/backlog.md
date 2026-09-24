@@ -98,13 +98,14 @@ is passed explicitly.
 change — the code is finished and `test_the_confirmatory_profile_is_the_1920_run_design`
 confirms the scale.
 
-## The policy plane (built 2026-09-15, not yet wired)
+## The policy plane (built 2026-09-15, wired since)
 
 `docs/policy.md` describes a contract, a gate and a ledger that generalise
 enforcement from file paths to resources of four kinds — paths, spend,
-endpoints and budgets. 38 tests cover it and `causalmesh policy check`
-interrogates it. These are the gaps it has, recorded before anyone has to
-discover them.
+endpoints and budgets. 88 tests cover it (38 at first build; more added as
+checkpoints, identity and x402 landed) and `causalmesh policy check`
+interrogates it. These are the gaps it still has, recorded before anyone has
+to discover them.
 
 ### The gate is installable but not yet installed by default
 
