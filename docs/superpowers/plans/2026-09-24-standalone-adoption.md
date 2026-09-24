@@ -18,7 +18,7 @@
 - Modify: `src/causalmesh/cli/commands_policy.py:89-129` (`check_command`)
 - Test: `tests/integration/test_cli.py` (new `TestCheckStdin` class)
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Add to `tests/integration/test_cli.py`, after the existing imports and fixtures (following the file's own `invoke()`/`payload()` helpers already defined near the top):
 
@@ -112,12 +112,12 @@ class TestCheckStdin:
         assert payload(result)["allowed"] is True
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `python -m pytest tests/integration/test_cli.py::TestCheckStdin -v`
 Expected: FAIL with `No such option: --stdin` (or similar) for every test — `--stdin` does not exist yet.
 
-- [ ] **Step 3: Implement `--stdin` in `check_command`**
+- [x] **Step 3: Implement `--stdin` in `check_command`**
 
 Read the current `check_command` first (`src/causalmesh/cli/commands_policy.py:89-129`) so the replacement below lines up with what is actually there. Replace the whole function:
 
@@ -216,23 +216,23 @@ def _read_stdin_request(*, default_unit: str) -> tuple[str, str, str, str | None
     return agent_id, str(kind), str(name), (str(amount) if amount is not None else None), str(unit)
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `python -m pytest tests/integration/test_cli.py::TestCheckStdin -v`
 Expected: PASS, all 6 tests.
 
-- [ ] **Step 5: Run the full existing policy CLI coverage to check nothing broke**
+- [x] **Step 5: Run the full existing policy CLI coverage to check nothing broke**
 
 Run: `python -m pytest tests/integration/test_cli.py tests/unit/test_policy.py tests/unit/test_policy_gate.py -v`
 Expected: PASS, no regressions (the `--agent` flag became `Optional[str] = None` instead of required -- confirm every existing `policy check` test that relied on `--agent` being required, if any, still passes; if one specifically tested "missing --agent is a Typer usage error before the command body runs," it now needs updating since the option is no longer marked required at the Typer level and the check moved into the function body with the same `Exit.USAGE` result).
 
-- [ ] **Step 6: Lint and format**
+- [x] **Step 6: Lint and format**
 
 Run: `python -m ruff check src/causalmesh/cli/commands_policy.py tests/integration/test_cli.py`
 Run: `python -m ruff format src/causalmesh/cli/commands_policy.py tests/integration/test_cli.py`
 Expected: both clean.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/causalmesh/cli/commands_policy.py tests/integration/test_cli.py
@@ -247,7 +247,7 @@ git commit -m "feat(cli): policy check --stdin, for wiring into an agent harness
 - Create: `docs/adoption.md`
 - Test: `tests/integration/test_adoption_hook.py`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/integration/test_adoption_hook.py`:
 
@@ -322,12 +322,12 @@ class TestClaudeCodeHookAdapter:
         assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `python -m pytest tests/integration/test_adoption_hook.py -v`
 Expected: FAIL — `docs/examples/claude-pretooluse.sh` does not exist yet.
 
-- [ ] **Step 3: Write the hook adapter script**
+- [x] **Step 3: Write the hook adapter script**
 
 Create `docs/examples/claude-pretooluse.sh`:
 
@@ -376,12 +376,12 @@ jq -n --arg reason "$reason" \
 
 Make it executable: `chmod +x docs/examples/claude-pretooluse.sh`
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `python -m pytest tests/integration/test_adoption_hook.py -v`
 Expected: PASS, all 3 tests. (Requires `jq` and `bash` on the test runner; if `jq` is missing, install it first -- `apt-get install -y jq` on Linux CI runners, already present on most macOS/Git-Bash-on-Windows setups. If genuinely unavailable, skip with a clear reason rather than letting the test hang or error unclearly.)
 
-- [ ] **Step 5: Write `docs/adoption.md`**
+- [x] **Step 5: Write `docs/adoption.md`**
 
 Create `docs/adoption.md`:
 
@@ -500,12 +500,12 @@ never baked into the image, so editing `causalmesh.yaml` never requires a
 rebuild, and the same image works for every project that adopts it.
 ```
 
-- [ ] **Step 6: Lint the new script's shell syntax**
+- [x] **Step 6: Lint the new script's shell syntax**
 
 Run: `bash -n docs/examples/claude-pretooluse.sh`
 Expected: no output (syntax is valid).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add docs/adoption.md docs/examples/claude-pretooluse.sh tests/integration/test_adoption_hook.py
@@ -521,7 +521,7 @@ git commit -m "docs(adoption): a real, tested Claude Code hook adapter for polic
 - Create: `docker-compose.yml` (repo root)
 - Create: `docker/.dockerignore`
 
-- [ ] **Step 1: Write `docker/Dockerfile`**
+- [x] **Step 1: Write `docker/Dockerfile`**
 
 ```dockerfile
 # CausalMesh's policy plane, containerized. Generic and project-agnostic:
@@ -546,7 +546,7 @@ EXPOSE 8420
 ENTRYPOINT ["causalmesh", "serve", "--host", "0.0.0.0"]
 ```
 
-- [ ] **Step 2: Write `docker/.dockerignore`**
+- [x] **Step 2: Write `docker/.dockerignore`**
 
 ```
 __pycache__/
@@ -561,7 +561,7 @@ docs/
 .git/
 ```
 
-- [ ] **Step 3: Write the repo-root `docker-compose.yml`**
+- [x] **Step 3: Write the repo-root `docker-compose.yml`**
 
 ```yaml
 # Builds and runs the image against this repository's own causalmesh.yaml
@@ -578,7 +578,7 @@ services:
       - ./causalmesh.yaml:/app/causalmesh.yaml:ro
 ```
 
-- [ ] **Step 4: Build the image and verify it starts**
+- [x] **Step 4: Build the image and verify it starts**
 
 Run: `docker build -t causalmesh-test -f docker/Dockerfile .`
 Expected: build succeeds (no Docker available in this environment means this step is verified by whoever has Docker installed -- state this plainly rather than silently skipping if `docker` is not on PATH here).
@@ -590,7 +590,7 @@ Run: `curl -s -X POST http://localhost:8420/v1/chat/completions -H "content-type
 Expected: a gated response (allowed or refused, per this repo's own `causalmesh.yaml` and the C3 arm it declares) -- not a connection error.
 Run: `docker compose down`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add docker/Dockerfile docker/.dockerignore docker-compose.yml
@@ -601,27 +601,27 @@ git commit -m "feat(docker): a Dockerfile and docker-compose.yml for causalmesh 
 
 ## Task 4: Final verification pass
 
-- [ ] **Step 1: Run the full fast suite**
+- [x] **Step 1: Run the full fast suite**
 
 Run: `python -m pytest -m unit -q`
 Expected: all pass, no new failures.
 
-- [ ] **Step 2: Run the full integration suite (this task's new tests plus everything existing)**
+- [x] **Step 2: Run the full integration suite (this task's new tests plus everything existing)**
 
 Run: `python -m pytest tests/integration -q`
 Expected: all pass, no new failures. (`test_adoption_hook.py` may skip if `jq`/`bash` are unavailable on this runner -- that is an acceptable, clearly-labeled skip, not a silent gap.)
 
-- [ ] **Step 3: Lint and format the whole diff**
+- [x] **Step 3: Lint and format the whole diff**
 
 Run: `python -m ruff check src tests`
 Run: `python -m ruff format --check src tests`
 Expected: both clean.
 
-- [ ] **Step 4: Update `docs/backlog.md`**
+- [x] **Step 4: Update `docs/backlog.md`**
 
 Add an entry (following the file's existing style -- see neighboring "Status: resolved" entries) recording that standalone adoption is now real: `policy check --stdin`, the Claude Code hook example, and the Docker packaging, with a pointer to `docs/adoption.md` and this plan's spec. Name what remains open per the spec's "What does not ship": no published registry image, no persistence of real-world verdicts, no adapters for harnesses other than Claude Code.
 
-- [ ] **Step 5: Final commit**
+- [x] **Step 5: Final commit**
 
 ```bash
 git add docs/backlog.md
