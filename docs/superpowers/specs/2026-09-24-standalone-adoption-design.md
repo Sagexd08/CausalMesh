@@ -1,4 +1,4 @@
-# Standalone adoption: `policy check --stdin` and a real hook example
+# Standalone adoption: `policy check --stdin`, a hook example, and Docker Compose
 
 Status: proposed, not built.
 
@@ -16,7 +16,17 @@ scratch directory with no CausalMesh checkout in sight), and `causalmesh
 policy check` — which calls exactly that — already works the same way.
 `causalmesh init` (this session's earlier addition) writes a working
 `causalmesh.yaml` in any directory too, optionally reading that
-directory's own `AGENTS.md`.
+directory's own `AGENTS.md`. `causalmesh serve` — the OpenAI-compatible
+gate-and-record endpoint — was also confirmed standalone: it uses
+`Contract.find()`, the same discovery `policy check` uses, not `Repo.find()`,
+and starts and answers real requests from a scratch directory with nothing
+but a `causalmesh.yaml`.
+
+That gives two real, already-working onramps for two real shapes of agent
+integration: something that gates individual tool calls one at a time
+(`policy check`, addressed below), and something that speaks the OpenAI
+chat-completions wire protocol for its whole model traffic (`serve`, which
+this adds a Docker Compose packaging for).
 
 So the substrate for standalone adoption already exists. What's missing is
 narrower than it first looked: `policy check` only reads its inputs from
@@ -97,6 +107,66 @@ it always was (see "What ships" §1). Recording real-world enforcement
 history over time is named as real, separate follow-on work, not silently
 implied.
 
+**3. A Dockerfile for `causalmesh serve`, and an example `docker-compose.yml`
+an operator copies into their own project.**
+
+`docker/Dockerfile` (in this repo): a slim Python base, `pip install .` (the
+core package only — four runtime dependencies, no analysis extra), entrypoint
+`causalmesh serve --host 0.0.0.0`. Generic and project-agnostic: nothing
+project-specific is baked in, so one image serves any project that mounts a
+contract into it.
+
+`docker-compose.yml` at the repo root builds and runs the image against
+this repository's own `causalmesh.yaml` — the same bind-mount shape an
+operator's compose file uses, just pointed at this project instead of
+theirs, so `docker compose up` here is how the Dockerfile itself gets
+smoke-tested before anyone outside this repo touches it:
+
+```yaml
+# docker-compose.yml, in THIS repo -- builds and runs the image against
+# this project's own causalmesh.yaml, as a smoke test for the Dockerfile.
+services:
+  causalmesh:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8420:8420"
+    volumes:
+      - ./causalmesh.yaml:/app/causalmesh.yaml:ro
+```
+
+An operator's own compose file, in their own project, is the same shape
+with `context: .` pointed at wherever they got the Dockerfile from:
+
+```yaml
+# docker-compose.yml, in the OPERATOR'S OWN project (not this repo).
+services:
+  causalmesh:
+    build:
+      context: https://github.com/Sagexd08/CausalMesh.git
+      dockerfile: docker/Dockerfile
+    # Once a published image exists, this replaces the build: block:
+    #   image: causalmesh/causalmesh:latest
+    ports:
+      - "8420:8420"
+    volumes:
+      - ./causalmesh.yaml:/app/causalmesh.yaml:ro
+    environment:
+      - CAUSALMESH_UPSTREAM_API_KEY=${CAUSALMESH_UPSTREAM_API_KEY:-}
+    command: ["causalmesh", "serve", "--host", "0.0.0.0", "--upstream", "https://api.openai.com"]
+```
+
+The contract is bind-mounted read-only from the operator's own project
+directory, next to their compose file — never baked into the image, so
+editing `causalmesh.yaml` never requires a rebuild, and the same image is
+reusable across every project that adopts it.
+
+`docs/adoption.md` documents both the `build:` (works today, no registry
+dependency) and the `image:` form (commented out, labelled "once
+published") — publishing to a real registry is separate infrastructure
+(an account, a CI job, a tagging policy) this design does not build.
+
 ## What does not ship
 
 - No new top-level command. `causalmesh gate` was considered and rejected —
@@ -110,6 +180,16 @@ implied.
 - No adapters for harnesses other than Claude Code. The doc's structure
   (adapter script + settings wiring + contract) is meant to be copied, not
   to enumerate every harness CausalMesh has not tested against.
+- No published registry image. The `image:` form is documented as a
+  drop-in replacement for `build:`, not built or pushed here.
+- No TLS, auth, or reverse-proxy configuration for `serve` in the container.
+  It binds `0.0.0.0` inside the container so Compose's port mapping reaches
+  it — the same "gate-and-record, not a hardened public-facing proxy" scope
+  `adapters/serve.py`'s own docstring already states applies without a
+  container in the picture.
+- No multi-service Compose file (a database, a reverse proxy, etc.). One
+  service, `causalmesh serve`, is the whole thing — there is nothing else
+  to compose yet.
 
 ## Testing
 
@@ -124,3 +204,9 @@ implied.
   payload, asserting the JSON it prints matches the documented shape — the
   same "run the real thing, not an import of it" discipline `AGENTS.md`
   already asks for.
+- `docker compose up` against this repo's own `docker-compose.yml` actually
+  builds, actually starts, answers `GET /healthz`, and gates a real request
+  against this repository's own mounted `causalmesh.yaml` — run manually
+  (or in CI, if the runner has Docker) rather than as a `pytest`-collected
+  test, matching how this repository does not currently run its own suite
+  inside containers.
