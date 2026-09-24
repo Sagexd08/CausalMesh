@@ -1,0 +1,12 @@
+# Builds and runs the image against this repository's own causalmesh.yaml
+# -- a smoke test for docker/Dockerfile before anyone outside this repo
+# uses it. See docs/adoption.md for the shape an operator's own project uses.
+services:
+  causalmesh:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8420:8420"
+    volumes:
+      - ./causalmesh.yaml:/app/causalmesh.yaml:ro
