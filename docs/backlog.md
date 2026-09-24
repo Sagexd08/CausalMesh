@@ -553,3 +553,74 @@ plausible and matches nothing is worse than one that errors.
 - *A query-facing surface.* `EdgeIndex` (in-process) exists; a `causalmesh`-CLI-facing
   view (e.g. `causalmesh analyze --edges`, following the existing command's `--json`
   and PILOT/DERIVED labeling conventions) does not.
+
+## Standalone adoption (built 2026-09-24)
+
+`docs/superpowers/specs/2026-09-24-standalone-adoption-design.md` designed three
+concrete surfaces for gating a real coding agent's writes in an operator's own
+project, outside a CausalMesh checkout. All three are now real and tested;
+`docs/adoption.md` is the wiring guide.
+
+**Status: shipped.**
+
+- **`causalmesh policy check --stdin`** (`src/causalmesh/cli/commands_policy.py`).
+  Reads `{"agent_id", "kind", "name", "amount"?, "unit"?}` as one JSON object from
+  stdin and feeds it through the same `_build()`/`Gate.check()` call the existing
+  `--agent`/`--kind`/`--name`/`--amount` flags already use — a second input path,
+  not a second code path. A malformed payload or a missing required field is a
+  usage error (exit 2) with a hint, the same discipline `_load_or_exit` already
+  applies to a broken `causalmesh.yaml`. When both `--stdin` and the flags are
+  given, the explicit flags win — `--stdin` is a mode switch, not a silent merge.
+  6 tests in `tests/integration/test_cli.py::TestCheckStdin`.
+- **The Claude Code hook adapter** (`docs/examples/claude-pretooluse.sh`). Adapts
+  Claude Code's `PreToolUse` hook payload (`{tool_name, tool_input}`) to
+  `policy check --stdin`, and the verdict back to the
+  `{hookSpecificOutput: {permissionDecision, ...}}` shape Claude Code expects.
+  Which tool names count as path writes (`Write`, `Edit`) is a property of the
+  harness, not of CausalMesh, so that mapping lives in the adapter script, not
+  the core CLI — another harness's hook protocol needs its own adapter, following
+  the same pattern. Run for real, not merely documented, by
+  `tests/integration/test_adoption_hook.py` against a synthesized hook payload
+  and a contract with two roles (so a denial is a genuine ownership refusal, not
+  an undeclared-and-therefore-unrefused path). This is purely ephemeral: no
+  chain, no ledger, no run — it answers one question and exits, same as
+  `policy check` always has.
+- **`docker/Dockerfile` and `docker-compose.yml`** package the already-standalone
+  `causalmesh serve` — only the four runtime dependencies (`cryptography`,
+  `PyYAML`, `typer`, `rich`; `serve` itself uses only `http.server` from the
+  stdlib), no `causalmesh.yaml` baked into the image, bind-mounted read-only at
+  run time instead. Verified by hand in this environment (Docker Desktop's
+  daemon was not running by default; started for this check): `docker build`
+  succeeds, `docker compose up` starts the container, `GET /healthz` returns
+  200, and a `POST /v1/chat/completions` against this repository's own
+  `causalmesh.yaml` (no `--upstream`, so a stub reply) returns a gated response
+  rather than a connection error.
+
+**What does not ship:**
+
+- No published registry image (`causalmesh/causalmesh:latest`). The Compose
+  example in `docs/adoption.md` builds from the Git repository until one exists.
+- No persistence of real-world verdicts from either path. `policy check --stdin`
+  (and the hook that wraps it) is stateless by design, matching `policy check`
+  itself; `serve` gates and forwards but this adoption path does not wire its
+  recording to a location outside a CausalMesh checkout.
+- No adapter for any harness other than Claude Code. The `PreToolUse` JSON shape
+  is specific to it; adopting another harness needs its own adapter script.
+
+**A pre-existing test-infrastructure gap found while verifying this, not caused
+by it.** `tests/integration/test_cli_init_quickstart.py::TestQuickstartEndToEnd`
+asserts on `result.stdout` for text that `causalmesh quickstart` actually writes
+through `note()`, which prints to *stderr* (`err_console`, `_output.py`) —
+correct, since these are progress notes, not command output. It passed under
+whatever `click`/`typer` version was pinned when the test was written, when
+`CliRunner`'s default capture mode still merged the two streams into
+`result.stdout`. `click==8.5.0` (current, unpinned upper bound in `pyproject.toml`) replaced the
+older `mix_stderr` constructor flag with separate-by-default capture, so
+`result.stdout` no longer includes what a command wrote to stderr — the
+assertion now fails against real, correct CLI behavior. Confirmed present on
+this branch's `HEAD` before any change in this pass (`git stash` + rerun), not
+a regression this work introduced. Fixing it (either pin `click`, or have the
+two `TestQuickstartEndToEnd` tests assert against `result.output` /
+`result.stderr` instead of `result.stdout`) is real, scoped, unstarted work,
+recorded here rather than patched silently alongside an unrelated feature.
+  and PILOT/DERIVED labeling conventions) does not.
