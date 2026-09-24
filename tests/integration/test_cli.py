@@ -157,6 +157,54 @@ class TestCheckStdin:
         )
         assert result.exit_code == 2
 
+    def test_an_explicit_null_name_is_a_usage_error_not_the_string_none(
+        self, tmp_path: Path
+    ) -> None:
+        """A hook payload built by string templating may leave a field
+
+        `null` instead of omitting it. `null` must fall back to the same
+        default as an absent field (empty string for `name`), which the
+        `if not name` guard then rejects with a clear usage error -- not
+        silently coerce to the literal string "None" and check a resource
+        that doesn't correspond to anything the caller intended.
+        """
+        (tmp_path / "causalmesh.yaml").write_text(
+            "version: 1\nroles:\n  - agent_id: agent_a\n    owns: [src/config.py]\n",
+            encoding="utf-8",
+        )
+        result = runner.invoke(
+            app,
+            ["policy", "check", "--root", str(tmp_path), "--stdin"],
+            input='{"agent_id": "agent_a", "name": null}',
+        )
+        assert result.exit_code == 2
+
+    def test_an_explicit_null_unit_falls_back_to_the_default(self, tmp_path: Path) -> None:
+        """`unit: null` must fall back to `default_unit`, not become the
+
+        literal string "None" passed through to `Resource.spend` as a
+        bogus currency unit.
+        """
+        (tmp_path / "causalmesh.yaml").write_text(
+            "version: 1\n"
+            "roles:\n"
+            "  - agent_id: buyer\n"
+            "    archetype: spender\n"
+            "    allow: [api.example.com]\n"
+            '    budget: { usd_total: "5.00" }\n',
+            encoding="utf-8",
+        )
+        result = runner.invoke(
+            app,
+            ["policy", "check", "--root", str(tmp_path), "--stdin", "--json"],
+            input=(
+                '{"agent_id": "buyer", "kind": "spend", "name": "api.example.com", '
+                '"amount": "1.00", "unit": null}'
+            ),
+        )
+        assert result.exit_code == 0, result.stdout
+        assert payload(result)["resource"]["unit"] == "USD"
+
     def test_stdin_and_flags_together_prefers_flags(self, tmp_path: Path) -> None:
         """`--stdin` is a mode switch; when both are somehow given, the
 
