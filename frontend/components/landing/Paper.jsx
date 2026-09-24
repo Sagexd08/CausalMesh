@@ -316,7 +316,7 @@ export default function Paper() {
               [RESULTS.total_runs, "runs", "2 tasks, 4 arms, 3 repetitions"],
               ["4", "arms", "two factors, one at a time"],
               [`${RESULTS.total_runs}/${RESULTS.total_runs}`, "chains verified", "offline, relay stopped"],
-              ["775", "tests", "unit, property, adversarial"],
+              ["1,148", "tests", "unit, property, adversarial"],
             ].map(([value, label, note]) => (
               <div key={label}>
                 <dt className="sr-only">{label}</dt>
