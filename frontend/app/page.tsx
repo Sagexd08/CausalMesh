@@ -1,57 +1,52 @@
-import AgentBand from '@/components/landing/AgentBand.jsx';
-import Agents from '@/components/landing/Agents.jsx';
-import Calculator from '@/components/landing/Calculator.jsx';
-import Architecture from '@/components/landing/Architecture.jsx';
-import Console from '@/components/landing/Console.jsx';
-import Contrasts from '@/components/landing/Contrasts.jsx';
-import Cost from '@/components/landing/Cost.jsx';
-import FocalChart from '@/components/landing/FocalChart.jsx';
-import Hero from '@/components/landing/Hero.jsx';
-import Integrity from '@/components/landing/Integrity.jsx';
-import Nav from '@/components/landing/Nav.jsx';
-import Problem from '@/components/landing/Problem.jsx';
-import Routing from '@/components/landing/Routing.jsx';
-import Framework from '@/components/landing/Framework.jsx';
-import DecisionLoop from '@/components/landing/DecisionLoop.jsx';
-import Footer from '@/components/landing/Footer.jsx';
+import { SiteFooter } from '@/components/layout/SiteFooter';
+import { Architecture } from '@/components/marketing/Architecture';
+import {
+  CtaSection,
+  DeveloperSection,
+  FaqSection,
+  MeasuredSection,
+  ResearchSection,
+} from '@/components/marketing/ClosingSections';
+import { Hero } from '@/components/marketing/Hero';
+import {
+  ClaimsSection,
+  EntrySection,
+  EvidenceSection,
+  GateSection,
+  ToolsSection,
+} from '@/components/marketing/SystemSections';
 
 export const metadata = {
-  title: 'CausalMesh — Coordination you can prove',
+  title: 'CausalMesh | The Next Layer of Intelligence',
   description:
-    'The accountability substrate for AI agents. Gate every action, sign every action, record every refusal — for agents that write code, spend money, or run unattended.',
+    'The accountability layer underneath AI agents. Every action gated, signed, and recorded, with every refusal kept alongside its reason.',
 };
 
-function ConsoleBand() {
-  return (
-    <div className="border-y border-rule-soft bg-paper-sunk/50 py-16 md:py-20">
-      <div className="mx-auto w-full max-w-[1180px] px-6 sm:px-10 lg:px-16">
-        <Console />
-      </div>
-    </div>
-  );
-}
-
+/**
+ * Pacing, top to bottom: emotion, then understanding, then proof. The hero
+ * is one cinematic composition; the architecture explains it; 01 to 05 show
+ * each part of the machine working on real artifacts; then code, measured
+ * numbers, research, and one action.
+ */
 export default function Page() {
   return (
-    <div className="landing-root min-h-screen bg-paper">
-      <Nav />
-      <main id="main">
-        <Hero />
-        <FocalChart />
-        <AgentBand />
-        <ConsoleBand />
-        <Problem />
-        <Framework />
-        <DecisionLoop />
-        <Routing />
-        <Cost />
-        <Contrasts />
-        <Calculator />
-        <Agents />
+    <div className="site-root min-h-screen">
+      <link rel="preload" as="image" href="/hero-poster.jpg" />
+      <Hero />
+      <main id="main-content">
         <Architecture />
-        <Integrity />
+        <GateSection />
+        <ToolsSection />
+        <ClaimsSection />
+        <EntrySection />
+        <EvidenceSection />
+        <DeveloperSection />
+        <MeasuredSection />
+        <ResearchSection />
+        <FaqSection />
+        <CtaSection />
       </main>
-      <Footer />
+      <SiteFooter />
     </div>
   );
 }

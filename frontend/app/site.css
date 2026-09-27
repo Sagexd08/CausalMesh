@@ -1,0 +1,606 @@
+/**
+ * The site design system: a black cinematic stage with a precise technical
+ * layer over it.
+ *
+ * The rule the whole file serves: the video is the only organic thing on
+ * the page. Everything else is a rule, a label, a number or a line of code,
+ * and it stays black, white, silver and gray. One muted warm tone marks a
+ * refusal, because a refusal is the one state this product exists to make
+ * visible, and it has to read as different from an allow at a glance.
+ */
+
+@theme {
+  --color-stage: #050505;
+  --color-stage-raised: #0a0a0a;
+  --color-stage-panel: #0c0c0c;
+  --color-fg: #fafafa;
+  --color-fg-2: #d6d5d5;
+  --color-muted: #a7a6a6;
+  --color-navc: #b6b5b5;
+  --color-strip: #8b8a8a;
+  --color-dim: #6b6a6a;
+  --color-faint: #4a4949;
+  --color-line: rgb(255 255 255 / 0.09);
+  --color-line-strong: rgb(255 255 255 / 0.16);
+  --color-pill: #ffffff;
+  --color-pill-ink: #050505;
+  --color-deny: #d2a676;
+  --color-deny-wash: rgb(210 166 118 / 0.08);
+
+  --font-site: var(--font-manrope), system-ui, -apple-system, "Segoe UI",
+    sans-serif;
+  --font-code: var(--font-mono-face), ui-monospace, SFMono-Regular, Menlo,
+    monospace;
+
+  --ease-out-site: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-out-soft: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@layer base {
+  /* The canvas behind the page, the overscroll and the scrollbar gutter
+     all belong to the stage, not to the docs' light default. */
+  html:has(.site-root) {
+    background: var(--color-stage);
+    color-scheme: dark;
+  }
+  .site-root {
+    background: var(--color-stage);
+    color: var(--color-fg);
+    font-family: var(--font-site);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: "ss01", "cv11";
+  }
+  .site-root ::selection {
+    background: rgb(255 255 255 / 0.9);
+    color: var(--color-stage);
+  }
+  .site-root :focus-visible {
+    outline: 1px solid var(--color-fg);
+    outline-offset: 3px;
+    border-radius: 2px;
+  }
+}
+
+@layer components {
+  /* ------------------------------------------------------------------
+     Hero. Reference canvas 1487 x 1058.
+
+     --u  is one reference pixel of height, --uw one of width, and --h the
+     smaller of the two, so type and controls scale with whichever axis
+     is tighter and the composition never overflows either one.
+     ------------------------------------------------------------------ */
+  .hero {
+    --u: calc(100vh / 1058);
+    --uw: calc(100vw / 1487);
+    --h: min(var(--u), var(--uw));
+    --gutter: max(24px, calc(64 * var(--uw)));
+
+    position: relative;
+    /* Above later sections, whose reveal transforms would otherwise paint
+       over the fixed mobile menu that lives inside this context. */
+    z-index: 1;
+    isolation: isolate;
+    height: 100vh;
+    height: 100svh;
+    min-height: 620px;
+    overflow: hidden;
+    background: var(--color-stage);
+  }
+
+  /* The photo plate. 4:3, full height, centred on 62% of the width so the
+     portal sits right of centre and the headline owns the left column. */
+  .hero-plate {
+    --plate-w: calc(100svh * 1664 / 1248);
+    position: absolute;
+    z-index: -1;
+    top: 0;
+    height: 100%;
+    width: var(--plate-w);
+    left: calc(62vw - var(--plate-w) / 2);
+  }
+  .hero-plate video,
+  .hero-plate img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: 50% 50%;
+  }
+  /* Side letterbox and bottom fade. Only these two: they exist to set the
+     plate into the black stage, not to tint it. */
+  .hero-plate::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+      linear-gradient(
+        to right,
+        var(--color-stage) 0%,
+        rgb(5 5 5 / 0.72) 9%,
+        rgb(5 5 5 / 0) 24%,
+        rgb(5 5 5 / 0) 80%,
+        rgb(5 5 5 / 0.7) 92%,
+        var(--color-stage) 100%
+      ),
+      linear-gradient(
+        to top,
+        var(--color-stage) 0%,
+        rgb(5 5 5 / 0.78) 8%,
+        rgb(5 5 5 / 0) 22%
+      );
+  }
+
+  .hero-nav {
+    position: absolute;
+    z-index: 20;
+    top: max(20px, calc(34 * var(--u)));
+    left: var(--gutter);
+    right: var(--gutter);
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+  }
+  .hero-brand {
+    width: max(30px, calc(40 * var(--h)));
+    height: max(30px, calc(40 * var(--h)));
+    color: var(--color-fg);
+  }
+  .hero-links {
+    display: flex;
+    gap: max(24px, calc(44 * var(--h)));
+    font-size: max(13.5px, calc(15 * var(--h)));
+    color: var(--color-navc);
+    letter-spacing: -0.005em;
+  }
+  .hero-links a {
+    transition: color 0.3s var(--ease-out-site);
+  }
+  .hero-links a:hover {
+    color: var(--color-fg);
+  }
+
+  .hero-copy {
+    position: absolute;
+    z-index: 10;
+    left: var(--gutter);
+    top: calc(392 * var(--u));
+    width: min(92vw, calc(640 * var(--h)));
+  }
+  .hero-title {
+    font-size: max(40px, calc(94 * var(--h)));
+    font-weight: 300;
+    line-height: 0.98;
+    letter-spacing: -0.045em;
+    color: var(--color-fg);
+  }
+  .hero-sub {
+    margin-top: max(18px, calc(28 * var(--h)));
+    max-width: max(300px, calc(430 * var(--h)));
+    font-size: max(15px, calc(17.5 * var(--h)));
+    line-height: 1.55;
+    color: var(--color-muted);
+    letter-spacing: -0.005em;
+  }
+  .hero-ctas {
+    margin-top: max(26px, calc(40 * var(--h)));
+    display: flex;
+    align-items: center;
+    gap: max(22px, calc(30 * var(--h)));
+  }
+
+  .hero-strip {
+    position: absolute;
+    z-index: 10;
+    left: var(--gutter);
+    right: var(--gutter);
+    bottom: max(20px, calc(40 * var(--u)));
+    padding-top: max(16px, calc(22 * var(--u)));
+    border-top: 1px solid var(--color-line);
+    display: grid;
+    grid-template-columns: auto repeat(4, 1fr);
+    align-items: center;
+    gap: calc(24 * var(--h));
+  }
+  .hero-strip-label {
+    font-family: var(--font-code);
+    font-size: max(10.5px, calc(11 * var(--h)));
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--color-dim);
+    padding-right: calc(24 * var(--h));
+  }
+  .hero-strip-mark {
+    justify-self: center;
+    font-size: max(15px, calc(19 * var(--h)));
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    color: var(--color-strip);
+    transition: color 0.4s var(--ease-out-site);
+  }
+  .hero-strip-mark:hover {
+    color: var(--color-fg);
+  }
+
+  /* Pills. The primary CTA is the one filled shape on the stage. */
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: max(44px, calc(50 * var(--h, 1px)));
+    padding-inline: max(22px, calc(28 * var(--h, 1px)));
+    border-radius: 999px;
+    background: var(--color-pill);
+    color: var(--color-pill-ink);
+    font-weight: 600;
+    font-size: max(14px, calc(15 * var(--h, 1px)));
+    letter-spacing: -0.01em;
+    transition:
+      background-color 0.3s var(--ease-out-site),
+      transform 0.3s var(--ease-out-site);
+  }
+  .pill:hover {
+    background: #e7e7e7;
+  }
+  .pill:active {
+    transform: translateY(1px);
+  }
+  .pill-sm {
+    height: 40px;
+    padding-inline: 20px;
+    font-size: 14px;
+  }
+  .ghost {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5em;
+    color: var(--color-fg);
+    font-weight: 500;
+    font-size: max(14px, calc(15 * var(--h, 1px)));
+    letter-spacing: -0.01em;
+  }
+  .ghost span[aria-hidden] {
+    transition: transform 0.35s var(--ease-out-site);
+  }
+  .ghost:hover span[aria-hidden] {
+    transform: translateX(3px);
+  }
+
+  /* Burger: two asymmetric bars that close into an X. */
+  .burger {
+    position: relative;
+    display: inline-flex;
+    width: 44px;
+    height: 44px;
+    border-radius: 999px;
+    background: rgb(255 255 255 / 0.08);
+    border: 1px solid rgb(255 255 255 / 0.12);
+    -webkit-backdrop-filter: blur(14px) saturate(140%);
+    backdrop-filter: blur(14px) saturate(140%);
+  }
+  .burger i {
+    position: absolute;
+    left: 13px;
+    height: 1.5px;
+    border-radius: 2px;
+    background: var(--color-fg);
+    transition:
+      transform 0.45s var(--ease-out-site),
+      width 0.45s var(--ease-out-site),
+      top 0.45s var(--ease-out-site);
+  }
+  .burger i:nth-child(1) {
+    top: 17px;
+    width: 18px;
+  }
+  .burger i:nth-child(2) {
+    top: 25px;
+    width: 11px;
+  }
+  .burger[aria-expanded="true"] i:nth-child(1) {
+    top: 21px;
+    width: 18px;
+    transform: rotate(45deg);
+  }
+  .burger[aria-expanded="true"] i:nth-child(2) {
+    top: 21px;
+    width: 18px;
+    transform: rotate(-45deg);
+  }
+
+  .menu {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    display: flex;
+    flex-direction: column;
+    padding: calc(env(safe-area-inset-top) + 20px)
+      calc(env(safe-area-inset-right) + 24px)
+      calc(env(safe-area-inset-bottom) + 28px)
+      calc(env(safe-area-inset-left) + 24px);
+    background: rgb(5 5 5 / 0.86);
+    -webkit-backdrop-filter: blur(24px) saturate(120%);
+    backdrop-filter: blur(24px) saturate(120%);
+    opacity: 0;
+    visibility: hidden;
+    transition:
+      opacity 0.45s var(--ease-out-site),
+      visibility 0s linear 0.45s;
+  }
+  .menu[data-open="true"] {
+    opacity: 1;
+    visibility: visible;
+    transition:
+      opacity 0.45s var(--ease-out-site),
+      visibility 0s;
+  }
+  .menu [data-stagger] {
+    opacity: 0;
+    transform: translateY(14px);
+    transition:
+      opacity 0.6s var(--ease-out-site),
+      transform 0.6s var(--ease-out-site);
+  }
+  .menu[data-open="true"] [data-stagger] {
+    opacity: 1;
+    transform: none;
+    transition-delay: calc(80ms + var(--i, 0) * 60ms);
+  }
+
+  /* Entrance: opacity and a short rise, nothing else. */
+  .enter {
+    animation: site-enter 1s var(--ease-out-site) both;
+    animation-delay: calc(180ms + var(--i, 0) * 110ms);
+  }
+  .enter-video {
+    animation: site-fade 1.6s var(--ease-out-soft) both;
+  }
+
+  /* Section reveal. Gated on scripting so a visitor without JavaScript
+     sees every section rather than a page of invisible ones. */
+  @media (scripting: enabled) and (prefers-reduced-motion: no-preference) {
+    .reveal:not([data-in]) {
+      opacity: 0;
+      transform: translateY(18px);
+    }
+  }
+  .reveal {
+    transition:
+      opacity 0.9s var(--ease-out-site),
+      transform 0.9s var(--ease-out-site);
+    transition-delay: calc(var(--i, 0) * 90ms);
+  }
+
+  /* The technical surfaces. Square-ish, hairline, no shadow. */
+  .panel {
+    background: var(--color-stage-panel);
+    border: 1px solid var(--color-line);
+    border-radius: 6px;
+  }
+  .panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 11px 14px;
+    border-bottom: 1px solid var(--color-line);
+    font-family: var(--font-code);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-dim);
+  }
+  .label {
+    font-family: var(--font-code);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--color-dim);
+  }
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* A route drawn along an SVG path. The dash offset animates, so the
+     line reads as something travelling, not something glowing. */
+  .route {
+    stroke-dasharray: 3 7;
+    animation: site-route 1.4s linear infinite;
+  }
+
+  .caret::after {
+    content: "";
+    display: inline-block;
+    width: 0.55em;
+    height: 1.05em;
+    margin-left: 2px;
+    vertical-align: -0.18em;
+    background: var(--color-fg-2);
+    animation: site-caret 1.05s steps(1) infinite;
+  }
+}
+
+/* Tablet and down: the centre links give way to the burger. */
+@media (max-width: 1023px) {
+  .hero-links {
+    display: none;
+  }
+  .hero-nav {
+    grid-template-columns: 1fr auto;
+  }
+}
+
+/* Phone and portrait: the plate becomes the whole viewport, and the copy
+   joins normal flow at the bottom of it. */
+@media (max-width: 767px), (orientation: portrait) and (max-width: 1023px) {
+  .hero {
+    height: auto;
+    min-height: 100svh;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    padding: calc(env(safe-area-inset-top) + 96px)
+      calc(env(safe-area-inset-right) + 24px)
+      calc(env(safe-area-inset-bottom) + 24px)
+      calc(env(safe-area-inset-left) + 24px);
+  }
+  .hero-plate {
+    left: 0;
+    width: 100%;
+    /* Lift the portal clear of the headline block. */
+    top: -9%;
+  }
+  .hero-plate video,
+  .hero-plate img {
+    object-position: 50% 58%;
+  }
+  .hero-plate::after {
+    background:
+      linear-gradient(
+        to top,
+        var(--color-stage) 0%,
+        rgb(5 5 5 / 0.9) 30%,
+        rgb(5 5 5 / 0.2) 58%,
+        rgb(5 5 5 / 0) 70%
+      ),
+      linear-gradient(to bottom, rgb(5 5 5 / 0.55) 0%, rgb(5 5 5 / 0) 18%);
+  }
+  .hero-nav {
+    top: calc(env(safe-area-inset-top) + 16px);
+    left: calc(env(safe-area-inset-left) + 20px);
+    right: calc(env(safe-area-inset-right) + 20px);
+  }
+  .hero-copy {
+    position: relative;
+    left: auto;
+    top: auto;
+    width: 100%;
+  }
+  .hero-title {
+    font-size: clamp(40px, 11.5vw, 64px);
+  }
+  .hero-strip {
+    position: relative;
+    left: auto;
+    right: auto;
+    bottom: auto;
+    margin-top: 44px;
+    grid-template-columns: 1fr 1fr;
+    row-gap: 18px;
+  }
+  .hero-strip-label {
+    grid-column: 1 / -1;
+    padding: 0;
+  }
+  .hero-strip-mark {
+    justify-self: start;
+  }
+}
+
+@keyframes site-enter {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes site-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes site-route {
+  to {
+    stroke-dashoffset: -20;
+  }
+}
+@keyframes site-caret {
+  50% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .enter,
+  .enter-video {
+    animation: none;
+  }
+  .reveal,
+  .menu,
+  .menu [data-stagger] {
+    transition-duration: 0.01ms !important;
+    transition-delay: 0s !important;
+  }
+  .route,
+  .caret::after {
+    animation: none;
+  }
+}
+
+/* ---------------------------------------------------------------------
+   Inner pages. The hero nav, set in a plain bar instead of on the stage:
+   the reference units collapse to 1px so every calc() in the nav resolves
+   to its minimum size.
+   --------------------------------------------------------------------- */
+.site-page-nav {
+  --u: 1px;
+  --uw: 1px;
+  --h: 1px;
+  --gutter: max(24px, 4.3vw);
+  position: relative;
+  z-index: 1;
+  height: 92px;
+  border-bottom: 1px solid var(--color-line);
+}
+.site-page-nav .hero-nav {
+  top: 26px;
+}
+
+/* The whitepaper, re-toned for the stage. Paper.jsx is written entirely
+   against the landing palette tokens, so redefining those tokens inside
+   this scope restyles it without touching the component. Unlayered on
+   purpose: these must win over the utilities they redefine. */
+.paper-dark {
+  --color-paper: #050505;
+  --color-paper-raised: #0c0c0c;
+  --color-paper-sunk: #0a0a0a;
+  --color-ink-900: #fafafa;
+  --color-ink-800: #e4e4e4;
+  --color-ink-700: #cbcaca;
+  --color-ink-600: #a7a6a6;
+  --color-ink-500: #8b8a8a;
+  --color-ink-400: #6b6a6a;
+  --color-ink-300: #3a3a3a;
+  --color-ink-200: #1f1f1f;
+  --color-rule: rgb(255 255 255 / 0.4);
+  --color-rule-soft: rgb(255 255 255 / 0.09);
+  --color-rule-dot: rgb(255 255 255 / 0.07);
+  --color-marker: #fafafa;
+  --color-marker-deep: #fafafa;
+  --color-marker-wash: rgb(255 255 255 / 0.05);
+  --color-arm-c0: #d2a676;
+  --color-arm-c1: #6b6a6a;
+  --color-arm-c2: #fafafa;
+  --color-arm-c3: #a7a6a6;
+  --font-sans: var(--font-site);
+  --font-display: var(--font-site);
+  background: var(--color-stage);
+  color: var(--color-ink-800);
+}
+.paper-dark h1,
+.paper-dark h2 {
+  font-weight: 300;
+  letter-spacing: -0.04em;
+}
+/* Text set on a marker fill would invert to white on white. */
+.paper-dark .bg-marker {
+  color: var(--color-stage);
+}
