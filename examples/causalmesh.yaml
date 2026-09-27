@@ -1,0 +1,34 @@
+version: 1
+
+# Who the agent is
+agent:
+  id: coding-agent
+
+# What the agent owns
+roles:
+  - agent_id: coding-agent
+    archetype: writer
+    owns:
+      - "src/"
+      - "tests/"
+
+  # A second role that owns "production/" — coding-agent cannot write there.
+  - agent_id: dba-agent
+    archetype: writer
+    owns:
+      - "production/"
+
+policy:
+  # C3 enforces; C2 records what it *would* have refused without acting.
+  arm: C3
+
+# Declare which tools your agent exposes (optional but recommended).
+tools:
+  read_file:
+    mode: auto
+  write_file:
+    mode: auto
+
+evidence:
+  sign: true
+  verify_on_exit: true

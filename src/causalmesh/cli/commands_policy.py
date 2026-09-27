@@ -237,3 +237,69 @@ def init_command(
     else:
         note("edit `owns` to declare ownership, then run `causalmesh policy show`")
     raise typer.Exit(Exit.OK)
+
+
+@app.command("validate")
+def validate_command(
+    config_path: Annotated[
+        Path | None,
+        typer.Argument(
+            help="Path to causalmesh.yaml. Defaults to searching upward from cwd.",
+            show_default=False,
+        ),
+    ] = None,
+    as_json: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Validate a causalmesh.yaml including Phase 1 SDK extension fields.
+
+    Checks both the core contract schema and the Phase 1 ``agent`` /
+    ``tools`` sections.  Exits 0 when valid, 1 when there are errors.
+
+    Example::
+
+        causalmesh policy validate
+        causalmesh policy validate path/to/causalmesh.yaml
+    """
+    from causalmesh.sdk.config import load_sdk_config
+    from causalmesh.sdk.errors import ConfigurationError
+
+    if config_path is None:
+        # Search upward
+        from causalmesh.policy.contract import Contract, CONTRACT_FILENAME
+
+        found = Contract.find()
+        if found is None:
+            fail(
+                "no causalmesh.yaml found",
+                hint="Run `causalmesh init` to create one, or pass a path.",
+            )
+            raise typer.Exit(Exit.USAGE)
+        assert found.source is not None
+        config_path = found.source
+
+    try:
+        contract, sdk_config = load_sdk_config(config_path)
+    except ConfigurationError as exc:
+        if emit({"valid": False, "error": str(exc)}, as_json=as_json):
+            raise typer.Exit(Exit.FAILED) from None
+        fail(str(exc), hint="Fix causalmesh.yaml, then run this again.")
+        raise typer.Exit(Exit.FAILED) from None
+
+    payload: dict = {
+        "valid": True,
+        "arm": contract.arm,
+        "roles": len(contract.roles),
+        "sdk_agent_id": sdk_config.agent_id,
+        "sdk_tools": list(sdk_config.tool_names),
+        "source": str(config_path),
+    }
+    if emit(payload, as_json=as_json):
+        raise typer.Exit(Exit.OK)
+
+    out_console.print(f"[green]VALID[/green]  {config_path}")
+    out_console.print(f"  arm: {contract.arm}  roles: {len(contract.roles)}")
+    if sdk_config.agent_id:
+        out_console.print(f"  agent.id: {sdk_config.agent_id}")
+    if sdk_config.tool_names:
+        out_console.print(f"  tools: {', '.join(sdk_config.tool_names)}")
+    raise typer.Exit(Exit.OK)
