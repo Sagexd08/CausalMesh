@@ -70,7 +70,6 @@ def _multi_role_mesh(tmp_path: Path) -> CausalMesh:
 class TestRegisteredToolExecutes:
     def test_basic_end_to_end(self, tmp_path: Path) -> None:
         mesh = _multi_role_mesh(tmp_path)
-        results: list[str] = []
         mesh.register_tool(
             Tool(
                 name="read_file",

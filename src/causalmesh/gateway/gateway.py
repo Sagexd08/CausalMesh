@@ -28,18 +28,16 @@ event-emission logic by delegating to the relay directly.
 
 from __future__ import annotations
 
-import time
 from typing import Any
 
 from causalmesh.events.schema import EventIdentity, EventType, utc_now_micros
 from causalmesh.hooks.lifecycle import (
-    GateDecision,
     LifecycleBoundary,
     ToolCall,
     ToolOutcome,
     ToolResult as InternalToolResult,
 )
-from causalmesh.relay import NullDelivery, Relay
+from causalmesh.relay import Relay
 
 from .result import GatewayResult
 from .tool import Tool
@@ -163,7 +161,6 @@ class ToolGateway:
         # to honour the Tool.mutating flag instead.
         # We wrap the tool call to teach the boundary about mutability.
         _mutating_override = tool.mutating
-        original_is_mutating = type(call).is_mutating
 
         # Temporarily patch via a subclass so the boundary respects
         # the Tool's own mutating declaration.
@@ -268,7 +265,7 @@ class _MutatingAwareCall:
     the same interface ``LifecycleBoundary.invoke`` needs without inheriting.
     """
 
-    __slots__ = ("tool", "agent_id", "paths", "arguments", "_mutating")
+    __slots__ = ("_mutating", "agent_id", "arguments", "paths", "tool")
 
     def __init__(
         self,

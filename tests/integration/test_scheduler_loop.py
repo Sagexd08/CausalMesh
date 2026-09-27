@@ -236,7 +236,7 @@ class TestResume:
         RUNNING here exactly as a kill would leave it, and a fresh runner
         — a new process, in effect — must pick it up.
         """
-        runner, plan, environment = build_runner(task, tmp_path, experiment_id="exp_crash")
+        runner, _plan, _environment = build_runner(task, tmp_path, experiment_id="exp_crash")
         runner.prepare()
         await runner.run(limit=2)
         stranded = runner.index.claim_next("exp_crash", now_us=1)
@@ -288,7 +288,7 @@ class TestFailureHandling:
         async def explode(*args, **kwargs):
             raise RuntimeError("injected harness failure")
 
-        runner, _, environment = build_runner(task, tmp_path, experiment_id="exp_boom")
+        runner, _, _environment = build_runner(task, tmp_path, experiment_id="exp_boom")
         monkeypatch.setattr(loop_module, "execute_task", explode)
         runner.prepare()
         report = await runner.run()

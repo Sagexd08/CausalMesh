@@ -265,7 +265,7 @@ def validate_command(
 
     if config_path is None:
         # Search upward
-        from causalmesh.policy.contract import Contract, CONTRACT_FILENAME
+        from causalmesh.policy.contract import Contract
 
         found = Contract.find()
         if found is None:

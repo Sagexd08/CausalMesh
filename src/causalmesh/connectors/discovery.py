@@ -25,13 +25,13 @@ import shutil
 import subprocess
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 PROBE_TIMEOUT_S = 10
 
 
-class Availability(str, Enum):
+class Availability(StrEnum):
     AVAILABLE = "available"
     DEGRADED = "degraded"
     ABSENT = "absent"

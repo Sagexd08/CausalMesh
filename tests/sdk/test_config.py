@@ -11,7 +11,7 @@ from textwrap import dedent
 
 import pytest
 
-from causalmesh.sdk.config import SDKConfig, load_sdk_config
+from causalmesh.sdk.config import load_sdk_config
 from causalmesh.sdk.errors import ConfigurationError
 
 pytestmark = pytest.mark.unit
@@ -80,7 +80,7 @@ class TestSDKExtensionFields:
             policy:
               arm: C3
         """)
-        contract, sdk_config = load_sdk_config(yaml_path)
+        _contract, sdk_config = load_sdk_config(yaml_path)
         assert sdk_config.agent_id == "coding-agent"
 
     def test_tools_section_parsed(self, tmp_path: Path) -> None:
@@ -96,7 +96,7 @@ class TestSDKExtensionFields:
               write_file:
                 mode: auto
         """)
-        contract, sdk_config = load_sdk_config(yaml_path)
+        _contract, sdk_config = load_sdk_config(yaml_path)
         assert set(sdk_config.tool_names) == {"read_file", "write_file"}
 
     def test_tools_section_null_entry(self, tmp_path: Path) -> None:
@@ -125,7 +125,7 @@ class TestSDKExtensionFields:
               do_thing:
                 mode: auto
         """)
-        contract, sdk_config = load_sdk_config(yaml_path)
+        _contract, sdk_config = load_sdk_config(yaml_path)
         assert sdk_config.agent_id == "my-agent"
         assert "do_thing" in sdk_config.tool_names
 

@@ -12,16 +12,15 @@ Each boundary is checked in a *subprocess* with a clean interpreter, because
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 
 pytestmark = pytest.mark.integration
 
-
-import os
-from pathlib import Path
 
 def modules_loaded_by(import_target: str) -> set[str]:
     """Return the causalmesh modules pulled in by importing one module."""

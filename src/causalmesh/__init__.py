@@ -20,7 +20,7 @@ from __future__ import annotations
 
 __version__ = "0.1.0"
 
-__all__ = ["__version__", "CausalMesh", "Tool"]
+__all__ = ["CausalMesh", "Tool", "__version__"]
 
 def __getattr__(name: str):
     if name == "CausalMesh":

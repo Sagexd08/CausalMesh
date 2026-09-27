@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+from textwrap import dedent
+
 import pytest
 
 from causalmesh import CausalMesh, Tool
-from pathlib import Path
-from textwrap import dedent
 
 pytestmark = pytest.mark.unit
 
@@ -60,7 +61,6 @@ class TestAllowedCalls:
 
     def test_default_agent_id_used(self, tmp_path: Path) -> None:
         mesh = _mesh(tmp_path)
-        received_agent: list[str] = []
         # Register a tool that doesn't need agent_id but verify via boundary
         mesh.register_tool(Tool(name="noop", handler=lambda: None, mutating=False))
         result = mesh.execute(tool="noop", arguments={})  # no explicit agent_id
