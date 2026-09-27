@@ -110,6 +110,7 @@ class TestQuickstartEndToEnd:
                 "quickstart", "--root", str(REPO), "--profile", "smoke", "--id", experiment_id
             )
             assert result.exit_code == 0, result.stdout
+            assert "quickstart complete" in result.output
         finally:
             _cleanup_experiment(experiment_id)
 
@@ -127,6 +128,7 @@ class TestQuickstartEndToEnd:
                 "quickstart", "--root", str(REPO), "--profile", "smoke", "--id", experiment_id
             )
             assert result.exit_code == 0, result.stdout
+            assert "already exists; skipping init" in result.output
             assert contract_path.read_text(encoding="utf-8") == before
         finally:
             _cleanup_experiment(experiment_id)

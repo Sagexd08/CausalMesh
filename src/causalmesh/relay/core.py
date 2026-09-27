@@ -185,6 +185,19 @@ class Relay:
         with self._lock:
             return self._sequence
 
+    @property
+    def actors(self) -> tuple[str, ...]:
+        """Every actor this relay can attribute events to, sorted."""
+        return tuple(sorted(self._keypairs))
+
+    def has_key(self, agent_id: str) -> bool:
+        """Whether an event from `agent_id` could be signed and ingested.
+
+        A question asked before acting, so a caller can refuse to run a call
+        whose evidence the relay would then have to reject.
+        """
+        return agent_id in self._keypairs
+
     def key_ring(self) -> PublicKeyRing:
         """The public keys an offline verifier needs (§26)."""
         return PublicKeyRing.from_keypairs(self._keypairs)

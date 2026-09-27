@@ -14,6 +14,7 @@ __all__ = [
     "PolicyError",
     "ToolExecutionError",
     "ToolNotFoundError",
+    "UnknownAgentError",
 ]
 
 
@@ -34,6 +35,17 @@ class ToolNotFoundError(CausalMeshError):
 
     Raised by ``CausalMesh.execute`` (or ``ToolGateway.execute``) when the
     requested tool name is not in the registry.
+    """
+
+
+class UnknownAgentError(CausalMeshError):
+    """A call was made for an agent that has no signing key in this session.
+
+    Raised by ``CausalMesh.execute`` *before* the gate or the handler runs.
+    The relay cannot attribute an event to an actor without a key, so
+    running the call would produce an action with no evidence behind it.
+    Declare the agent under ``roles`` (or as ``agent.id``), or pass it in
+    ``agents=`` when constructing the session.
     """
 
 
