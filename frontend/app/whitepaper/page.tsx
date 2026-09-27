@@ -1,5 +1,5 @@
-import Footer from '@/components/landing/Footer.jsx';
-import Nav from '@/components/landing/Nav.jsx';
+import { SiteFooter } from '@/components/layout/SiteFooter';
+import { SiteNav } from '@/components/layout/SiteNav';
 import Paper from '@/components/landing/Paper.jsx';
 
 export const metadata = {
@@ -16,12 +16,14 @@ export const metadata = {
 
 export default function WhitepaperPage() {
   return (
-    <div className="landing-root min-h-screen bg-paper">
-      <Nav />
-      <main id="main">
+    <div className="site-root min-h-screen">
+      <div className="site-page-nav">
+        <SiteNav base="/" />
+      </div>
+      <main id="main-content" className="paper-dark">
         <Paper />
       </main>
-      <Footer />
+      <SiteFooter />
     </div>
   );
 }
