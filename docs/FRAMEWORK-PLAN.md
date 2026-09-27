@@ -1,8 +1,24 @@
 # CausalMesh — the agentic framework
 
-**Status: proposed, not built.** Written 2026-09-15. Nothing here is implemented.
-`docs/PLAN.md` remains authoritative for what exists; this is the plan for what comes
-next, kept separate so the two are never confused.
+**Status: proposed, not built**, except where a section is marked *(built)* below.
+Written 2026-09-15, revised 2026-09-27. `docs/PLAN.md` remains authoritative for what
+exists; this is the plan for what comes next, kept separate so the two are never
+confused.
+
+> **Revision note, 2026-09-27.** Twelve days on, three things changed enough to write
+> down. First, a correction: this document called the accountability gap "regulated" —
+> it isn't, not yet; the EU AI Act's Digital Omnibus reschedule pushed full
+> high-risk enforcement to Dec 2027 / Aug 2028, and that's worth saying plainly rather
+> than leaving the original claim to be caught by someone else (§1, "The gap is real").
+> Second, something arrived that didn't need waiting for: insurers stopped waiting on
+> regulators and started excluding and re-pricing AI-agent risk in Jan 2026, off
+> **trace-level logs** — the exact artifact this project already produces (§1, §5). Third,
+> a live IETF draft (`draft-sharif-agent-audit-trail`) revised five days before this
+> note independently converged on our own hash-chain rule, which turns "nobody has
+> standardized this" into "we can be the first working exporter for the standard that
+> is about to exist" (§1, §5). None of this changes the four planes. It changes who
+> pays for them first, and it gives the Jev adapter — built in `src/causalmesh/jev/`
+> and unwired since — an actual decision to answer (§2).
 
 ---
 
@@ -46,7 +62,7 @@ It does not say *the work was allowed*, and it cannot prove afterwards *what hap
 A better framework does not out-abstract LangChain. It makes different decisions for
 you, and it can prove the decisions were kept.
 
-### The gap is real, and now it is regulated
+### The gap is real, and three different markets are now pricing it
 
 Six independent 2026 sources describe the same hole from six directions:
 
@@ -64,6 +80,27 @@ is read by Claude Code, Codex, Cursor, Aider, Devin, Copilot, Gemini CLI and Win
 is stewarded at the Linux Foundation, and sits in 60,000+ repositories. It expresses
 guidelines and **enforces nothing**. A convention every agent reads and no agent is
 held to is exactly a convention without a substrate.
+
+**Since 2026-09-15, three more sources — and a correction:**
+
+| Source | Finding | Implication |
+|---|---|---|
+| [IETF: Agent Audit Trail, `draft-sharif-agent-audit-trail-05`](https://datatracker.ietf.org/doc/draft-sharif-agent-audit-trail/) (revised 2026-09-25, five days before this note) | A JSONL log format whose chain rule is `prev_hash = SHA-256(canonical(previous record))`, with optional ECDSA-P256 or post-quantum ML-DSA-65 signatures and an explicit `trust_level`, mapped to EU AI Act Article 12, SOC 2, ISO/IEC 42001 and PCI DSS | Independently converges on our own chain rule, unendorsed and unimplemented anywhere we could find — a compatibility target, not a competitor |
+| [ISO CG 40 47 / 40 48 / 35 08 exclusion endorsements](https://www.theinsurer.com/program-manager/news/standalone-ai-liability-market-takes-shape-with-underwriting-discipline-key-to-2026-04-24/), effective 2026-01-01, pulling AI-caused harm out of ~82% of US commercial general-liability policies | Six specialist insurers (Klaimee, Testudo, Corgi, Mayflower Specialty/Hadron, HSB, Agent Insured) launched in H1 2026 to fill the gap, pricing on **trace-level logs** rather than agent reputation — [one study reports pricing mean-absolute-error falling from ~17.7K to 569 once trace-level data replaced flat-rate pricing](https://zylos.ai/research/2026-07-10-ai-agent-liability-insurance-underwriting/) | The evidence plane is already shaped like the trace format underwriters ask for. This market pays *before* any regulator enforces anything — see §5, "Underwriting export." |
+| [China's T/ISC 0107-2026 agent trust standard](https://dev.to/agentrisk/china-published-its-first-ai-agent-trust-standard-we-mapped-it-to-23-million-real-agents-9i4), already scoring 2.34 million real agents on technical, behavioural and outcome trust, hash-anchored | A centralized, national reputation registry for agents, live at fleet scale today, not a proposal | Proof the "portable agent trust score" vertical is real and wanted right now — the opening is a verifiable, offline alternative nobody has to trust a central registry to check (see §2, "A fifth decision type: `trust`") |
+
+**The correction.** The original heading here called this gap "regulated." That
+overstated it: the [EU AI Act's Digital Omnibus reschedule](https://www.mintmcp.com/blog/ai-agent-governance-act-deadline)
+pushed full high-risk enforcement to 2026-12-02 (standalone systems, Annex III) and
+2028-08-02 (systems embedded in regulated products, Annex I). Article 12's
+record-keeping requirement — traceability, integrity, per-user attribution, six-month
+minimum retention — hasn't softened, only the clock has, and penalties still run up to
+€15M or 3% of global revenue once it lands. But regulation was never the only clock
+running, and it was not the fastest one: insurers stopped waiting in January 2026 and
+started pricing this risk with real premiums, today, off exactly the kind of evidence
+this project produces. **The urgency is real. It just arrived through underwriting, not
+Brussels — which is a better argument, because it doesn't expire if a deadline slips
+again.**
 
 ### Why us
 
@@ -228,10 +265,66 @@ evaluation, which is correct for what it decides today — ownership, allowlists
 budgets, and leases all have a single correct answer given the contract, and a
 probabilistic call would add latency and a new failure mode without resolving any real
 uncertainty. `select_agent` and `recover` have no home yet: the scheduler runs exactly
-one agent per run, with no state for "switch to a different agent mid-run." Recovery
-producing a signed handoff package — the task, repo state, diff, test results, and
-prior decisions, so a second agent inherits execution state rather than starting cold
-— is designed here but not built; see `docs/backlog.md`.
+one agent per run, with no state for "switch to a different agent mid-run." `docs/backlog.md`
+is right to refuse Jev a seat at `classify` or `accept` for exactly this reason — both
+already have one correct deterministic answer given the contract, and wiring a
+probabilistic call in there would be adding a new failure mode to a decision that
+didn't have one. That refusal is correct and this plan keeps it. It leaves two real
+candidates, both genuinely uncertain given available state, specified concretely below
+rather than left as an open question.
+
+**A fifth decision type: `trust`.** Not one of the original four — a question they
+never needed to ask, because each of those four applies to a single run in progress.
+`trust` asks about an *agent*, across every run it has ever appeared in: given this
+agent's own signed history of claims, refusals and acceptance verdicts on this chain,
+what is the calibrated probability that its next unsupervised write is safe to grant
+without a human checkpoint? This has to be a `Noul` question, not a threshold on a
+metric — the honest answer shifts as the history grows, and no fixed cutoff on refusal
+count, acceptance rate or tenure captures that the way a calibrated model can. Inputs
+are the agent's *own* events only, so a `trust` score can never be laundered across
+identities, summarized as the counts and rates `metrics/` and the `AcceptanceDecision`
+log already persist — no new instrumentation required, only a read path over what
+Step 11 of `docs/PLAN.md` already built. The output is itself a signed chain event, so
+the score that decided to skip a human checkpoint is auditable after the fact — the
+same loop this whole document is about, one level up. This is not a new feature
+invented to give Jev something to do: it is, unmodified, the input shape both the
+underwriting export and the portable-reputation vertical in §5 need, so building it
+once answers a design question and ships two verticals.
+
+**`recover`, with the handoff package this plan previously named and did not specify:**
+
+```
+HandoffPackage:
+  from_agent_id: str                       # signed by the outgoing agent's key
+  to_agent_id: str | None                  # None until the scheduler assigns one
+  task_id: str
+  repo_state_hash: str                     # sha256 of the tree at handoff, so the
+                                            # second agent can assert it inherited
+                                            # what the first left, not a stale or
+                                            # partially applied state
+  diff_so_far: str                         # unified diff against the task baseline
+  test_results: list[TestResult]           # whatever the first agent ran, pass or fail
+  prior_decisions: list[AcceptanceDecision] # every ACCEPT/REJECT/HUMAN_REVIEW this run
+                                            # has already produced, so the second agent
+                                            # does not re-litigate a settled question
+  reason: RecoverReason                    # RETRY_SAME | SWITCH_AGENT | ESCALATE_HUMAN
+  decided_by: Literal["gate", "jev"]       # "gate" for the trivial cases (agent
+                                            # crashed, budget exhausted — no real
+                                            # ambiguity); "jev" for the ones that are
+                                            # actually uncertain
+```
+
+`recover` becomes a `Choice` among `RETRY_SAME` / `SWITCH_AGENT` / `ESCALATE_HUMAN`
+exactly where the gate's own rules run out. A hung process past its wall-clock budget
+is deterministic — kill it, per the budget enforcement in §5. An agent that is behind
+schedule but still producing valid, signed progress is the genuinely ambiguous case
+Jev exists for: retry, or is a different agent's baseline success rate on this task
+type high enough to justify a handoff mid-run? Specifying `HandoffPackage` as a plain
+dataclass now — before any scheduler transition calls it — lets the format be reviewed
+and tested independently of the real remaining blocker, which `docs/backlog.md` names
+correctly: a new `RunState` for "this run continues under a different agent." Building
+the package first means that state, once added, has a tested shape waiting for it
+instead of a design decision bundled into the same change.
 
 ---
 
@@ -247,10 +340,19 @@ be short; the fix is more entries with accurate labels, not optimistic ones.
 ### Payment agents — the highest-stakes extension
 
 [x402](https://www.allium.so/blog/x402-explained-the-internet-native-payments-standard-for-apis-data-and-agent-commerce/)
-went Coinbase → Linux Foundation (Apr 2026), with a 40-member foundation (Jul 2026);
-Stripe/Tempo's MPP covers recurring and multi-agent settlement. Real volume is still
-thin — ~$28k/day, much of it testing — which means **this is early enough to enter and
-the conventions are not yet set.**
+went Coinbase → Linux Foundation (Apr 2026), with a 40-member foundation (Jul 2026)
+that by mid-2026 had grown past 20 institutional backers including Coinbase, Stripe,
+AWS, Google, Visa, Circle and the Solana and Stellar foundations; Stripe/Tempo's MPP
+covers recurring and multi-agent settlement. Cumulative settled transactions passed
+[100M by Q1 2026](https://www.chainalysis.com/blog/x402-agentic-payments-adoption/) and
+[~167M by May 2026](https://presenc.ai/research/x402-protocol-adoption-tracker-2026),
+~85% on Base — but real commercial volume is still thin, ~$28k/day, with roughly half
+of all activity classified as gamified testing rather than genuine commerce.
+Transaction size did shift meaningfully toward real usage, though: payments of $1+ went
+from 49% of volume in early 2025 to 95% by early 2026. Coinbase's Agent.market, an
+x402-native agent app store, is the first real consumer surface for it. Net read:
+**the standard is adopted faster than the commerce is real, which means this is early
+enough to enter and the conventions are not yet set.**
 
 An x402 flow is: agent requests → server answers `HTTP 402` with payment instructions →
 agent pays → server verifies on-chain → access granted. The gate sits at "agent pays."
@@ -335,6 +437,20 @@ interface before building against it. *(His README's clone URL is stale —
 **Step F — SDK.** `@causalmesh/sdk` and `causalmesh` on PyPI, so people build *on* it.
 Not before A–E: an SDK over an unstable substrate is a migration you owe everyone later.
 
+**Step G — `causalmesh-action`, the CI gate.** No new runtime code — packaging and a
+workflow file wrapping commands that already exist (`verify`, `policy check`). Ships
+independently of the SDK, and arguably before it: it is the distribution channel that
+puts the project in front of maintainers who will never run the CLI themselves, and it
+compounds while every other step is still in progress.
+
+**Step H — `causalmesh registry`, `causalmesh trust`, and the export triad
+(`aat` / `underwrite` / `otel`).** The template index needs nothing new. `trust` needs
+the metrics `docs/PLAN.md` Step 11 already built plus the `HandoffPackage` design in
+§2. The three exports are each a formatter over the chain that already exists. All four
+are additive to a stable substrate, which is why they come last — and why none of them
+block on each other, so whichever a real conversation (an insurer, a registry
+contributor, a maintainer wanting the badge) asks for first can go first.
+
 ---
 
 ## 5. Complementary features
@@ -368,6 +484,53 @@ Not before A–E: an SDK over an unstable substrate is a migration you owe every
   naming what exists plus a variance report.
 - **Budget enforcement with refusal.** The AutoGen 5–10× token blowup, refused and
   recorded rather than discovered on an invoice.
+- **AAT export — `causalmesh export --format aat`.** Emits our own chain in the shape
+  of [`draft-sharif-agent-audit-trail`](https://datatracker.ietf.org/doc/draft-sharif-agent-audit-trail/):
+  JSONL, canonical `prev_hash`, our Ed25519 signatures re-encoded per the draft's key-ID
+  convention, our three-property table (integrity/provenance/completeness, above) mapped
+  onto its `trust_level`. The draft is days old and, as far as this research found,
+  unimplemented anywhere. Being the first working exporter for a spec that regulators
+  and auditors are already citing is a translation, not a rebuild, and it is cheap
+  precisely because we already produce a stricter record than the one it asks for.
+- **Underwriting export — `causalmesh underwrite`.** The same evidence, shaped as the
+  trace-level loss-run [insurers are now pricing against](https://zylos.ai/research/2026-07-10-ai-agent-liability-insurance-underwriting/):
+  the exact tool-call and decision sequence per interaction, documented human-oversight
+  checkpoints, authority scoping actually enforced (spend caps, host allowlists,
+  confirmation thresholds) rather than merely declared, and repeatable artifacts for the
+  quarterly re-testing AIUC-1-style certification already asks for. This is not a sales
+  pitch to a named insurer — it is a format built to the shape the public underwriting
+  research above already says the market wants, so the first real conversation starts
+  from a working export instead of a slide. Should report against the same
+  integrity/provenance/completeness triad above, unsummarized: an underwriter is the one
+  reader of this project's output who will actually go check.
+- **`causalmesh trust`.** The Jev-backed calibrated agent score designed in §2, exported
+  the same way as the two items above. Doubles as the input `underwrite` wants and as a
+  read a second CausalMesh-fronted project can rely on without importing the first
+  project's history — only the score and its signed derivation travel, never the
+  underlying code, task content, or repo.
+- **A CI gate — `causalmesh-action`.** A GitHub Action that runs `causalmesh verify`
+  (and `policy check`, if a contract exists) on every pull request opened or updated by
+  a bot account, failing the check on an unsigned or unverifiable chain and posting the
+  refusal as a PR comment. Against [a 27.67% empirical conflict rate on agent-authored
+  PRs across 59k+ repos](https://codex.danielvaughan.com/2026/07/28/agent-pr-merge-conflicts-concurrent-coding-agents-codex-cli-worktree-isolation-coordination-defence/),
+  this is the distribution channel that costs a maintainer one YAML file to add and
+  needs no CausalMesh install to read the result — the badge on the PR is the marketing,
+  and it reaches maintainers who will never run `causalmesh init` on their own initiative.
+- **A live ownership overlay — VS Code first, JetBrains after.** The claims registry
+  already exists (`claims/`, SQLite, `BEGIN IMMEDIATE` leases); a thin extension polling
+  it paints a gutter marker on any line inside a path another agent currently holds a
+  lease on. Cheap because the hard part — the lease registry — is already built and
+  tested; this is a read-only client. Probably the single cheapest "holy shit" moment
+  for a human pairing next to agents: you see the lock *before* you collide with it,
+  not after, in the tool you're already looking at.
+- **`causalmesh registry`.** A community index of `causalmesh.yaml` templates by stack
+  (Next.js, Django, Rails, FastAPI monorepo, Turborepo), the same shape as the Terraform
+  or shadcn registries. `causalmesh init` becomes "fetch and adjust the template for
+  what this repo already looks like" instead of "generate from a blank contract" —
+  cheaper to build than it sounds, because `init`'s own repo-detection logic (Step D)
+  already has to identify the stack to propose a sane contract in the first place. Also
+  the clearest open-source growth loop available: every contributed template is a repo
+  owner who already adopted the project.
 
 **Right idea, defer:**
 
@@ -375,6 +538,12 @@ Not before A–E: an SDK over an unstable substrate is a migration you owe every
   Long-term we want to be the governance layer *under* both — but the governance-gaps
   paper says these protocols cannot express what we enforce, so there is no clean hook
   yet. Watch, don't build.
+- **IETF Agent Payment Trust** ([`draft-sharif-agent-payment-trust`](https://datatracker.ietf.org/doc/draft-sharif-agent-payment-trust/)),
+  a sibling draft from the same author scoring trust specifically for
+  payment-authorizing agents, following the same convergence pattern as AAT above.
+  Watch alongside it; export to it once it clears a couple more revisions — building
+  against a `-00` draft twice in one plan is a coincidence worth noticing, not a
+  reason to chase both at once.
 - **Context budgets and loop detection.** Named as must-have primitives; real, but they
   belong to the harness layer more than the substrate. After Step D.
 
@@ -402,10 +571,15 @@ Not one feature — a ninety-second sequence:
    each other and the fourth not.
 5. `causalmesh prove --latest > proof.html` — hand it to someone with no CausalMesh
    install. It verifies itself in their browser.
+6. `causalmesh underwrite --latest` — the same evidence again, this time shaped as the
+   loss-run an underwriter already told the public market they want. The moat plane
+   just became a line an insurance broker will read, not a research artifact only this
+   team can interpret.
 
 Steps 4 and 5 are what people repeat to other people. 4 is possible only because of the
 chain; 5 only because the chain is signed — so the moat and the demo are the same
-artifact.
+artifact. Step 6 is what turns the person repeating it into someone who has a reason to
+pay for it before anyone asks them to.
 
 ---
 
@@ -424,6 +598,13 @@ artifact.
    app also calls? Leaning standalone — testable, scriptable, and the app stays a view.
 6. **Naming.** "Arms" and "collections" are experiment vocabulary; a framework has
    "profiles" and "runs". Cheap to change now, expensive after adoption.
+7. **AAT depth.** Export-only, or accept AAT as an ingest format too, so a chain
+   produced by someone else's tooling can be checked against our verifier? Export-only
+   is smaller, ships first, and doesn't commit to supporting a `-05` draft's stability.
+8. **Underwriting scope.** Build `causalmesh underwrite` now, speculatively, against
+   public underwriting research, or wait for a named insurer conversation to shape it?
+   Building the format now costs little, and it means that conversation — whenever it
+   happens — starts from a working export instead of a slide deck.
 
 ---
 
@@ -444,3 +625,14 @@ artifact.
 - [The State of Agentic AI Standards in 2026](https://dev.to/alexmercedcoder/the-state-of-agentic-ai-standards-in-2026-mcp-a2a-webmcp-osi-and-the-protocol-stack-taking-3o2l)
 - [Why Open Policy Agent is the Missing Guardrail](https://codilime.com/blog/why-use-open-policy-agent-for-your-ai-agents/)
 - [AgentEscape](https://github.com/arpankernel/agent-escape) — Arpan
+
+**Added in the 2026-09-27 revision:**
+
+- [Agent Audit Trail: A Standard Logging Format for Autonomous AI Systems (IETF `draft-sharif-agent-audit-trail-05`)](https://datatracker.ietf.org/doc/draft-sharif-agent-audit-trail/)
+- [Trust Scoring and Identity Verification for Autonomous AI Agent Payment Transactions (IETF `draft-sharif-agent-payment-trust`)](https://datatracker.ietf.org/doc/draft-sharif-agent-payment-trust/)
+- [Who Pays When an Agent Gets It Wrong: The 2026 AI Agent Liability and Insurance Stack](https://zylos.ai/research/2026-07-10-ai-agent-liability-insurance-underwriting/)
+- [Standalone AI liability market takes shape with underwriting discipline key to MGA success](https://www.theinsurer.com/program-manager/news/standalone-ai-liability-market-takes-shape-with-underwriting-discipline-key-to-2026-04-24/)
+- [x402 Protocol Adoption Tracker 2026](https://presenc.ai/research/x402-protocol-adoption-tracker-2026)
+- [Inside x402: 100M Agentic Payments on Base](https://www.chainalysis.com/blog/x402-agentic-payments-adoption/)
+- [China Published Its First AI Agent Trust Standard — Mapped to 2.3 Million Real Agents](https://dev.to/agentrisk/china-published-its-first-ai-agent-trust-standard-we-mapped-it-to-23-million-real-agents-9i4)
+- [AI Agent Governance Before the EU AI Act Deadline](https://www.mintmcp.com/blog/ai-agent-governance-act-deadline)
