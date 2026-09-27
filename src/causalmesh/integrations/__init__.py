@@ -22,5 +22,6 @@ Example future usage (not yet implemented)::
 from __future__ import annotations
 
 from .generic import AgentAdapter, GenericAdapter
+from .langchain import LangChainAdapter
 
-__all__ = ["AgentAdapter", "GenericAdapter"]
+__all__ = ["AgentAdapter", "GenericAdapter", "LangChainAdapter"]

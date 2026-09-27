@@ -21,9 +21,12 @@ These are tracked in docs/backlog.md per the project convention.
 
 from __future__ import annotations
 
-from typing import Any, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 from causalmesh.gateway.result import GatewayResult
+
+if TYPE_CHECKING:
+    from causalmesh.sdk.mesh import CausalMesh
 
 __all__ = ["AgentAdapter", "GenericAdapter"]
 
@@ -80,7 +83,7 @@ class GenericAdapter:
             print(result.describe())
     """
 
-    def __init__(self, mesh: Any, *, agent_id: str | None = None) -> None:
+    def __init__(self, mesh: "CausalMesh", *, agent_id: str | None = None) -> None:
         """
         Args:
             mesh:     A ``CausalMesh`` instance.
