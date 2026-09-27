@@ -180,24 +180,38 @@ It covers the architecture, the honest security model, the 17-step build sequenc
 
 ## Usage
 
-The Python API is what exists today; the CLI is Step 15 and not yet built.
+To integrate CausalMesh into an existing AI coding agent, use the SDK to register your tools and route executions through the policy gateway.
 
 ```python
-from causalmesh.experiments import plan_experiment, profile
-from causalmesh.scheduler import ExperimentRunner, RunEnvironment
-from causalmesh.tasks import TaskDefinition
+from causalmesh import CausalMesh, Tool
 
-task = TaskDefinition.from_yaml("tasks/schema_handler_widen.yaml")
-plan = plan_experiment(
-    experiment_id="my_run", profile=profile("smoke"),
-    task_ids=[task.task_id], master_seed=b"a-recorded-seed",
+# 1. Load the policy contract and initialize the mesh
+mesh = CausalMesh.from_config("causalmesh.yaml")
+
+# 2. Register your agent's tools
+mesh.register_tool(
+    Tool(
+        name="write_file",
+        handler=my_agent.write_file_handler,
+        kind="filesystem",
+        mutating=True,
+    )
 )
-env = RunEnvironment.under(".", experiment_id="my_run")
-with ExperimentRunner(plan=plan, tasks={task.task_id: task},
-                      environment=env, master_seed=b"a-recorded-seed") as r:
-    r.prepare()
-    report = await r.run()
+
+# 3. Route actions through the Mesh
+result = mesh.execute(
+    agent_id="coding-agent",
+    tool="write_file",
+    arguments={"path": "src/main.py", "content": "print('hello')"}
+)
+
+if result.allowed:
+    print(f"Action succeeded! Return value: {result.value}")
+else:
+    print(f"Action denied: {result.describe()}")
 ```
+
+See [`examples/phase1_basic_agent.py`](examples/phase1_basic_agent.py) for a complete working example.
 
 Run the suite with `pytest`. The slow integration tests execute real
 subprocesses; `pytest -m "not slow"` skips them.
