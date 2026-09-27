@@ -171,9 +171,7 @@ class GatewayResult:
 
     def __repr__(self) -> str:
         status = "executed" if self.executed else ("denied" if self.denied else "failed")
-        return (
-            f"<GatewayResult tool={self.tool!r} agent={self.agent_id!r} status={status!r}>"
-        )
+        return f"<GatewayResult tool={self.tool!r} agent={self.agent_id!r} status={status!r}>"
 
     def to_dict(self) -> dict[str, Any]:
         return {

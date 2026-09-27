@@ -245,6 +245,7 @@ class CausalMesh:
 # Internal assembly                                                    #
 # ------------------------------------------------------------------ #
 
+
 def _build_runtime(
     *,
     contract: Contract,

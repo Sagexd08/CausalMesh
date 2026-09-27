@@ -31,6 +31,7 @@ pytestmark = pytest.mark.integration
 # Fixtures                                                            #
 # ------------------------------------------------------------------ #
 
+
 def _write_contract(tmp_path: Path, content: str) -> Path:
     p = tmp_path / "causalmesh.yaml"
     p.write_text(textwrap.dedent(content), encoding="utf-8")
@@ -38,7 +39,9 @@ def _write_contract(tmp_path: Path, content: str) -> Path:
 
 
 def _multi_role_mesh(tmp_path: Path) -> CausalMesh:
-    contract_path = _write_contract(tmp_path, """\
+    contract_path = _write_contract(
+        tmp_path,
+        """\
         version: 1
         agent:
           id: coding-agent
@@ -59,13 +62,15 @@ def _multi_role_mesh(tmp_path: Path) -> CausalMesh:
             mode: auto
           write_file:
             mode: auto
-    """)
+    """,
+    )
     return CausalMesh.from_config(contract_path)
 
 
 # ------------------------------------------------------------------ #
 # Acceptance criterion 1: registered tool executes                    #
 # ------------------------------------------------------------------ #
+
 
 class TestRegisteredToolExecutes:
     def test_basic_end_to_end(self, tmp_path: Path) -> None:
@@ -90,6 +95,7 @@ class TestRegisteredToolExecutes:
 # ------------------------------------------------------------------ #
 # Acceptance criterion 2+3: allowed reaches handler, denied does not  #
 # ------------------------------------------------------------------ #
+
 
 class TestAllowDenyInvariant:
     def test_allowed_path_executes(self, tmp_path: Path) -> None:
@@ -168,6 +174,7 @@ class TestAllowDenyInvariant:
 # Acceptance criterion 4: denial reason is useful                     #
 # ------------------------------------------------------------------ #
 
+
 class TestDenialReason:
     def test_denial_has_reason(self, tmp_path: Path) -> None:
         mesh = _multi_role_mesh(tmp_path)
@@ -201,6 +208,7 @@ class TestDenialReason:
 # ------------------------------------------------------------------ #
 # Acceptance criterion 5: denial recorded in evidence                 #
 # ------------------------------------------------------------------ #
+
 
 class TestDenialEvidence:
     def test_denied_call_produces_audit_event(self, tmp_path: Path) -> None:
@@ -236,13 +244,12 @@ class TestDenialEvidence:
 # Acceptance criterion 8: sequential calls                            #
 # ------------------------------------------------------------------ #
 
+
 class TestSequentialCalls:
     def test_ten_sequential_calls(self, tmp_path: Path) -> None:
         mesh = _multi_role_mesh(tmp_path)
         log: list[int] = []
-        mesh.register_tool(
-            Tool(name="log", handler=lambda n: log.append(n), mutating=False)
-        )
+        mesh.register_tool(Tool(name="log", handler=lambda n: log.append(n), mutating=False))
         for i in range(10):
             r = mesh.execute(agent_id="coding-agent", tool="log", arguments={"n": i})
             assert r.executed, f"call {i} failed"
@@ -283,6 +290,7 @@ class TestSequentialCalls:
 # Acceptance criterion 9: unknown tool fails safely                   #
 # ------------------------------------------------------------------ #
 
+
 class TestUnknownTool:
     def test_raises_tool_not_found(self, tmp_path: Path) -> None:
         mesh = _multi_role_mesh(tmp_path)
@@ -302,13 +310,17 @@ class TestUnknownTool:
 # Acceptance criterion 10: invalid policy fails with useful error     #
 # ------------------------------------------------------------------ #
 
+
 class TestInvalidPolicy:
     def test_bad_arm_raises_configuration_error(self, tmp_path: Path) -> None:
-        p = _write_contract(tmp_path, """\
+        p = _write_contract(
+            tmp_path,
+            """\
             version: 1
             policy:
               arm: NOTANARM
-        """)
+        """,
+        )
         with pytest.raises(ConfigurationError, match="unknown arm"):
             CausalMesh.from_config(p)
 
@@ -317,11 +329,14 @@ class TestInvalidPolicy:
             CausalMesh.from_config(tmp_path / "does_not_exist.yaml")
 
     def test_unknown_top_level_key_raises(self, tmp_path: Path) -> None:
-        p = _write_contract(tmp_path, """\
+        p = _write_contract(
+            tmp_path,
+            """\
             version: 1
             totally_bad_key: something
             policy:
               arm: C3
-        """)
+        """,
+        )
         with pytest.raises(ConfigurationError, match="unknown key"):
             CausalMesh.from_config(p)

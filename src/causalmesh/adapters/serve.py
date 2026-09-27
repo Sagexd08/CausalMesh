@@ -201,7 +201,7 @@ class _Handler(BaseHTTPRequestHandler):
             url, data=json.dumps(body).encode("utf-8"), headers=headers, method="POST"
         )
         try:
-            with urllib.request.urlopen(req, timeout=60) as resp:  # noqa: S310
+            with urllib.request.urlopen(req, timeout=60) as resp:  # nosec B310 # noqa: S310
                 payload: dict[str, Any] = json.loads(resp.read())
         except urllib.error.URLError as exc:
             return {

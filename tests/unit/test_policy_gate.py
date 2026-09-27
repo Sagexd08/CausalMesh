@@ -241,7 +241,9 @@ class TestCheckpoints:
                 "policy": {"checkpoints": [{"on": "path", "require": "human"}]},
             }
         )
-        gate = ContractGate.build(contract, run_id="r1", checkpoint_handler=ScriptedHandler([False]))
+        gate = ContractGate.build(
+            contract, run_id="r1", checkpoint_handler=ScriptedHandler([False])
+        )
         decision = gate.check(write("agent_a", "src/schema.py"), NOW)
         assert decision.allowed is False
         assert decision.rule == "checkpoint"

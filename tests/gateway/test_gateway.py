@@ -67,9 +67,7 @@ class TestExecuteBasics:
     def test_handler_receives_arguments(self) -> None:
         gw = _make_gateway()
         received: list = []
-        gw.register(
-            Tool(name="echo", handler=lambda x, y: received.append((x, y)), mutating=False)
-        )
+        gw.register(Tool(name="echo", handler=lambda x, y: received.append((x, y)), mutating=False))
         gw.execute(_AGENT, "echo", {"x": 1, "y": 2})
         assert received == [(1, 2)]
 

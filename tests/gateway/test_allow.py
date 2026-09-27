@@ -14,10 +14,9 @@ pytestmark = pytest.mark.unit
 
 def _mesh(tmp_path: Path, owns: list[str] | None = None) -> CausalMesh:
     p = tmp_path / "causalmesh.yaml"
-    owns_lines = "\n".join(
-        f"              - \"{o}\"" for o in (owns or ["src/", "tests/"])
-    )
-    p.write_text(dedent(f"""\
+    owns_lines = "\n".join(f'              - "{o}"' for o in (owns or ["src/", "tests/"]))
+    p.write_text(
+        dedent(f"""\
         version: 1
         agent:
           id: coding-agent
@@ -28,7 +27,9 @@ def _mesh(tmp_path: Path, owns: list[str] | None = None) -> CausalMesh:
 {owns_lines}
         policy:
           arm: C3
-    """), encoding="utf-8")
+    """),
+        encoding="utf-8",
+    )
     return CausalMesh.from_config(p)
 
 
@@ -70,9 +71,7 @@ class TestAllowedCalls:
     def test_returns_handler_value(self, tmp_path: Path) -> None:
         mesh = _mesh(tmp_path)
         mesh.register_tool(Tool(name="add", handler=lambda a, b: a + b, mutating=False))
-        result = mesh.execute(
-            agent_id="coding-agent", tool="add", arguments={"a": 3, "b": 4}
-        )
+        result = mesh.execute(agent_id="coding-agent", tool="add", arguments={"a": 3, "b": 4})
         assert result.value == 7
 
     def test_handler_exception_gives_failed_result(self, tmp_path: Path) -> None:

@@ -47,18 +47,14 @@ class TestAuditTrail:
     def test_allowed_call_produces_event(self, tmp_path: Path) -> None:
         mesh = _mesh(tmp_path)
         mesh.register_tool(Tool(name="read", handler=lambda path: "data", mutating=False))
-        result = mesh.execute(
-            agent_id="coding-agent", tool="read", arguments={"path": "src/x.py"}
-        )
+        result = mesh.execute(agent_id="coding-agent", tool="read", arguments={"path": "src/x.py"})
         assert result.executed
         events = mesh.audit_events()
         assert len(events) >= 1
 
     def test_denied_call_produces_event(self, tmp_path: Path) -> None:
         mesh = _mesh(tmp_path)
-        mesh.register_tool(
-            Tool(name="write", handler=lambda path, content: None, mutating=True)
-        )
+        mesh.register_tool(Tool(name="write", handler=lambda path, content: None, mutating=True))
         result = mesh.execute(
             agent_id="coding-agent",
             tool="write",
@@ -78,9 +74,7 @@ class TestAuditTrail:
 
     def test_denied_event_id_present(self, tmp_path: Path) -> None:
         mesh = _mesh(tmp_path)
-        mesh.register_tool(
-            Tool(name="write", handler=lambda path, content: None, mutating=True)
-        )
+        mesh.register_tool(Tool(name="write", handler=lambda path, content: None, mutating=True))
         result = mesh.execute(
             agent_id="coding-agent",
             tool="write",

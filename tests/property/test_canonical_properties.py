@@ -20,8 +20,9 @@ pytestmark = pytest.mark.property
 # Values the canonicalizer accepts: no floats, no bytes, string keys only.
 canonical_values = st.recursive(
     st.none() | st.booleans() | st.integers() | st.text(),
-    lambda children: st.lists(children, max_size=6)
-    | st.dictionaries(st.text(min_size=1), children, max_size=6),
+    lambda children: (
+        st.lists(children, max_size=6) | st.dictionaries(st.text(min_size=1), children, max_size=6)
+    ),
     max_leaves=25,
 )
 

@@ -27,6 +27,7 @@ pytestmark = pytest.mark.unit
 # Fixtures                                                            #
 # ------------------------------------------------------------------ #
 
+
 def _simple_contract(tmp_path: Path, *, arm: str = "C3", owns: list[str] | None = None) -> Path:
     p = tmp_path / "causalmesh.yaml"
     coding_owns = owns or ["src/"]
@@ -106,7 +107,9 @@ class TestAllowedExecution:
 
     def test_non_mutating_call_always_allowed(self, tmp_path: Path) -> None:
         mesh = CausalMesh.from_config(_simple_contract(tmp_path))
-        mesh.register_tool(Tool(name="read", handler=lambda path: f"contents of {path}", mutating=False))
+        mesh.register_tool(
+            Tool(name="read", handler=lambda path: f"contents of {path}", mutating=False)
+        )
         result = mesh.execute(agent_id="coding-agent", tool="read", arguments={"path": "README.md"})
         assert result.allowed
         assert result.executed
@@ -117,7 +120,9 @@ class TestAllowedExecution:
         mesh = CausalMesh.from_config(_simple_contract(tmp_path, owns=["src/"]))
         written: list[str] = []
         mesh.register_tool(
-            Tool(name="write_file", handler=lambda path, content: written.append(path), mutating=True)
+            Tool(
+                name="write_file", handler=lambda path, content: written.append(path), mutating=True
+            )
         )
         result = mesh.execute(
             agent_id="coding-agent",
