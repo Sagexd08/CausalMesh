@@ -1,0 +1,26 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "gradient-text",
+        "value": "*",
+        "files": [
+          "videos/causalmesh-motion/index.html"
+        ],
+        "createdAt": "2026-09-27T23:28:34.679Z",
+        "reason": "Claude: text-shimmer registry primitive; solid #fafafa at rest, specular band only during one timed sweep"
+      },
+      {
+        "rule": "clipped-overflow-container",
+        "value": "*",
+        "files": [
+          "videos/causalmesh-motion/index.html"
+        ],
+        "createdAt": "2026-09-27T23:28:34.922Z",
+        "reason": "Claude: Hyperframes render canvas; html/body/#root are a fixed 1080x1920 frame that must clip"
+      }
+    ]
+  }
+}

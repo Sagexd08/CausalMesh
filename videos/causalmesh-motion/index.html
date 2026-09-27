@@ -2,9 +2,38 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=1920, height=1080" />
-    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <meta name="viewport" content="width=1080, height=1920" />
+    <title>CausalMesh — Motion Reel</title>
+    <script src="assets/vendor/gsap.min.js"></script>
+    <script src="assets/audio-data.js"></script>
     <style>
+      @font-face {
+        font-family: "Manrope";
+        src: url("assets/fonts/Manrope.woff2") format("woff2");
+        font-weight: 200 800;
+        font-display: block;
+      }
+      @font-face {
+        font-family: "JetBrains Mono";
+        src: url("assets/fonts/JetBrainsMono.woff2") format("woff2");
+        font-weight: 400 600;
+        font-display: block;
+      }
+      /* Palette: the site's tokens. Sand is the refusal colour and nothing else. */
+      :root {
+        --stage: #050505;
+        --panel: #0c0c0c;
+        --fg: #fafafa;
+        --fg2: #d6d5d5;
+        --muted: #a7a6a6;
+        --dim: #8b8a8a;
+        --faint: #7c7b7b;
+        --line: rgba(255, 255, 255, 0.09);
+        --line-strong: rgba(255, 255, 255, 0.22);
+        --deny: #d2a676;
+        --deny-wash: rgba(210, 166, 118, 0.14);
+        --silver: rgba(250, 250, 250, 0.55);
+      }
       * {
         margin: 0;
         padding: 0;
@@ -12,44 +41,1105 @@
       }
       html,
       body {
-        margin: 0;
-        width: 1920px;
-        height: 1080px;
+        width: 1080px;
+        height: 1920px;
         overflow: hidden;
-        background: #0a0a0a;
+        background: var(--stage);
       }
       #root {
+        position: relative;
         width: 100%;
         height: 100%;
+        overflow: hidden;
+        background: var(--stage);
+        color: var(--fg);
+        font-family: "Manrope", system-ui, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      .clip {
+        position: absolute;
+        inset: 0;
+      }
+      .fill {
+        position: absolute;
+        inset: 0;
+      }
+      .label {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 22px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--dim);
+      }
+      .mask {
+        display: block;
+        overflow: hidden;
+        padding-bottom: 0.14em;
+        margin-bottom: -0.14em;
+      }
+      .mask > span {
+        display: block;
+        white-space: nowrap;
+      }
+      .display {
+        font-weight: 300;
+        letter-spacing: -0.045em;
+        line-height: 1.02;
+      }
+      .muted {
+        color: var(--muted);
+      }
+      .head {
+        position: absolute;
+        left: 72px;
+        top: 196px;
+        width: 936px;
+      }
+      .head .display {
+        margin-top: 28px;
+        font-size: 104px;
+      }
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+      }
+      .panel-head {
+        display: flex;
+        justify-content: space-between;
+        padding: 22px 32px;
+        border-bottom: 1px solid var(--line);
+        font-family: "JetBrains Mono", monospace;
+        font-size: 19px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--dim);
+      }
+
+      /* Moving hairline grid: the stage is never dead-still. */
+      #bg-grid {
+        background-image:
+          linear-gradient(to right, rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+        background-size: 90px 90px;
+      }
+
+      /* ---------- Act 1: strip carrying the refusal and the slams ---------- */
+      #strip {
+        position: absolute;
+        inset: 0;
+        filter: url("#whip-blur");
+      }
+      .pane {
+        position: absolute;
+        top: 0;
+        width: 1080px;
+        height: 1920px;
+      }
+      #p1 {
+        left: 0;
+        perspective: 1600px;
+      }
+      #p2 {
+        left: 1080px;
+      }
+      #seam {
+        position: absolute;
+        top: 0;
+        left: 1080px;
+        width: 4px;
+        height: 1920px;
+        background: var(--fg);
+        opacity: 0;
+      }
+      #p1-label {
+        position: absolute;
+        left: 72px;
+        top: 196px;
+      }
+      #term-shake {
+        position: absolute;
+        left: 60px;
+        top: 290px;
+        width: 960px;
+        height: 760px;
+      }
+      #term {
+        position: absolute;
+        inset: 0;
+      }
+      #term-body {
+        padding: 40px 40px 0;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 27px;
+        line-height: 1.7;
+        color: var(--fg2);
+      }
+      #cmd {
+        min-height: 138px;
+        overflow-wrap: anywhere;
+      }
+      #cmd .p {
+        color: var(--dim);
+      }
+      #caret {
+        display: inline-block;
+        width: 15px;
+        height: 30px;
+        margin-left: 3px;
+        vertical-align: -5px;
+        background: var(--fg2);
+      }
+      #verdict {
+        margin-top: 40px;
+      }
+      #stamp-row {
         display: flex;
         align-items: center;
-        justify-content: center;
-        font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+        gap: 22px;
       }
-      #title {
-        color: #f4f4f5;
-        font-size: 72px;
-        font-weight: 600;
+      .glitch {
+        position: relative;
+        display: inline-block;
+        --gr: 0px;
+        --gb: 0px;
+      }
+      .glitch .g {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+      }
+      .glitch .g1 {
+        color: var(--deny);
+        transform: translateX(var(--gr, 0px));
+      }
+      .glitch .g2 {
+        color: var(--silver);
+        transform: translateX(var(--gb, 0px));
+      }
+      .glitch .g0 {
+        position: relative;
+      }
+      #stamp {
+        padding: 8px 18px;
+        border-radius: 5px;
+        background: var(--deny-wash);
+        color: var(--deny);
+        font-size: 26px;
+        letter-spacing: 0.14em;
+      }
+      #stamp .g {
+        padding: 8px 18px;
+      }
+      #stamp-res {
+        color: var(--muted);
+        font-size: 22px;
+      }
+      #vdl {
+        margin-top: 30px;
+        display: grid;
+        grid-template-columns: 130px 1fr;
+        row-gap: 8px;
+        font-size: 25px;
+      }
+      #vdl .k {
+        color: var(--dim);
+      }
+      #vdl .v {
+        color: var(--fg2);
+      }
+      #vdl .deny {
+        color: var(--deny);
+      }
+      #wall {
+        position: absolute;
+        left: 60px;
+        top: 1190px;
+        font-size: 196px;
+        font-weight: 800;
+        letter-spacing: -0.055em;
+        line-height: 1;
+        color: var(--deny);
+      }
+      #wall .ch {
+        display: inline-block;
+      }
+      #wall-mask {
+        display: block;
+        overflow: hidden;
+        padding: 0 0 0.08em;
+      }
+      #wall-sub {
+        position: absolute;
+        left: 72px;
+        top: 1440px;
+        font-size: 36px;
+        font-weight: 300;
+        letter-spacing: -0.015em;
+        color: var(--muted);
+      }
+      #flash {
+        background: var(--deny);
+        opacity: 0;
+        mix-blend-mode: screen;
+      }
+
+      /* Slams */
+      .slam {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 760px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+      .slam .w {
+        font-weight: 800;
+        letter-spacing: -0.05em;
+        line-height: 1;
+        text-transform: uppercase;
+        white-space: nowrap;
+      }
+      .slam .bar {
+        margin-top: 26px;
+        width: 520px;
+        height: 4px;
+        background: var(--fg);
+        transform-origin: 0% 50%;
+      }
+      .slam .sub {
+        margin-top: 30px;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 26px;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+      #slam-idx {
+        position: absolute;
+        left: 72px;
+        top: 196px;
+      }
+
+      /* ---------- Act 2: architecture ---------- */
+      #a2-cam {
+        position: absolute;
+        inset: 0;
+        background: var(--stage);
+      }
+      #dia-3d {
+        position: absolute;
+        left: 40px;
+        top: 560px;
+        width: 1000px;
+        height: 942px;
+        perspective: 1800px;
+      }
+      #dia-rot {
+        position: absolute;
+        inset: 0;
+      }
+      #diagram {
+        position: absolute;
+        inset: 0;
+        width: 1000px;
+        height: 942px;
+        overflow: visible;
+      }
+      #a2-caption {
+        position: absolute;
+        left: 72px;
+        top: 1590px;
+      }
+      #a2-caption .big {
+        margin-top: 16px;
+        font-size: 44px;
+        font-weight: 300;
         letter-spacing: -0.03em;
+      }
+
+      /* ---------- Act 3: chain ---------- */
+      #a3 {
+        position: absolute;
+        inset: 0;
+      }
+      #cards {
+        position: absolute;
+        left: 60px;
+        top: 590px;
+        width: 960px;
+        perspective: 1400px;
+      }
+      .card {
+        position: relative;
+        height: 178px;
+        margin-bottom: 30px;
+        padding: 26px 34px;
+        font-family: "JetBrains Mono", monospace;
+      }
+      .card .r1 {
+        display: flex;
+        align-items: baseline;
+        gap: 22px;
+      }
+      .card .seq {
+        font-size: 22px;
+        color: var(--faint);
+      }
+      .card .ty {
+        font-size: 32px;
+        letter-spacing: 0.04em;
+      }
+      .card .ag {
+        font-size: 26px;
+        color: var(--fg2);
+      }
+      .card .t {
+        margin-left: auto;
+        font-size: 22px;
+        color: var(--dim);
+      }
+      .card .r2 {
+        margin-top: 14px;
+        font-size: 24px;
+        color: var(--muted);
+      }
+      .card .h {
+        position: absolute;
+        right: 34px;
+        bottom: 24px;
+        font-size: 22px;
+        color: var(--dim);
+      }
+      .card.deny .ty,
+      .card.deny .r2 {
+        color: var(--deny);
+      }
+      .card-edge {
+        position: absolute;
+        inset: -1px;
+        border-radius: 10px;
+        border: 1.5px solid var(--fg);
+        opacity: 0;
+      }
+      .card.deny .card-edge {
+        border-color: var(--deny);
+      }
+      .link {
+        position: absolute;
+        right: 120px;
+        bottom: -31px;
+        width: 2px;
+        height: 32px;
+        background: rgba(255, 255, 255, 0.55);
+        transform-origin: 50% 0%;
+      }
+      #signal {
+        position: absolute;
+        right: 116px;
+        top: 0;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: #ffffff;
+        box-shadow: 0 0 18px 4px rgba(255, 255, 255, 0.7);
+        opacity: 0;
+      }
+      #verify {
+        position: absolute;
+        left: 72px;
+        top: 1470px;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 30px;
+      }
+      #verify-word {
+        background: linear-gradient(100deg, #d6d5d5 0%, #d6d5d5 40%, #ffffff 50%, #d6d5d5 60%, #d6d5d5 100%);
+        background-size: 300% 100%;
+        background-position: 100% 50%;
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+      }
+      #verify .dim {
+        color: var(--dim);
+      }
+      #run-id {
+        position: absolute;
+        left: 72px;
+        top: 1530px;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 19px;
+        color: var(--faint);
+      }
+      #slit {
+        position: absolute;
+        inset: auto;
+        left: 372px;
+        top: 618px;
+        width: 336px;
+        height: 804px;
+        background: #ffffff;
+        box-shadow: 0 0 70px rgba(255, 255, 255, 0.6);
+        opacity: 0;
+      }
+
+      /* ---------- Act 4: portal ---------- */
+      #plate-wrap {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+      }
+      #portal {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+      #bloom {
+        position: absolute;
+        left: 290px;
+        top: 460px;
+        width: 500px;
+        height: 1140px;
+        border-radius: 50%;
+        background: radial-gradient(closest-side, rgba(255, 250, 240, 0.3), rgba(255, 250, 240, 0));
+        mix-blend-mode: screen;
+        opacity: 0;
+      }
+      #plate-fade {
+        position: absolute;
+        inset: 0;
+        background:
+          linear-gradient(to top, var(--stage) 0%, rgba(5, 5, 5, 0.92) 17%, rgba(5, 5, 5, 0) 31%),
+          linear-gradient(to bottom, rgba(5, 5, 5, 0.88) 0%, rgba(5, 5, 5, 0) 22%);
+      }
+      #a4-title {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 196px;
+        text-align: center;
+        font-size: 104px;
+        line-height: 1.14;
+      }
+      #a4-title .ln {
+        display: block;
+        white-space: nowrap;
+      }
+      #a4-title .wd {
+        display: inline-block;
+      }
+      #lockup {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 1540px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+      #lockup-row {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 28px;
+      }
+      #mark-glow {
+        position: absolute;
+        left: -70px;
+        top: -80px;
+        width: 260px;
+        height: 260px;
+        border-radius: 50%;
+        background: radial-gradient(closest-side, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0));
+        opacity: 0;
+      }
+      #mark {
+        position: relative;
+        width: 96px;
+        height: 96px;
+        overflow: visible;
+      }
+      #wordmark {
+        font-size: 92px;
+        font-weight: 400;
+        letter-spacing: -0.045em;
+        line-height: 1.1;
+        background: linear-gradient(100deg, #fafafa 0%, #fafafa 42%, #ffffff 48%, #9f9e9e 52%, #fafafa 58%, #fafafa 100%);
+        background-size: 300% 100%;
+        background-position: 100% 50%;
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+      }
+      #tagline {
+        margin-top: 20px;
+        font-size: 34px;
+        font-weight: 300;
+        letter-spacing: -0.02em;
+        color: var(--fg2);
+      }
+      #tagline .wd {
+        display: inline-block;
+      }
+      #stat {
+        margin-top: 26px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+      #stat i {
+        display: block;
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: var(--fg);
+      }
+
+      /* ---------- Finish: grain + vignette + HUD ---------- */
+      #grain-tex {
+        position: absolute;
+        left: -50%;
+        top: -50%;
+        width: 200%;
+        height: 200%;
+        background: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+        opacity: 0.07;
+      }
+      #grain {
+        overflow: hidden;
+        pointer-events: none;
+      }
+      #vignette {
+        pointer-events: none;
+        background: radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, 0.55) 100%);
+      }
+      .corner {
+        position: absolute;
+        width: 26px;
+        height: 26px;
+        border-color: rgba(255, 255, 255, 0.3);
+        border-style: solid;
+        border-width: 0;
+      }
+      .c-tl { left: 40px; top: 40px; border-left-width: 1px; border-top-width: 1px; }
+      .c-tr { right: 40px; top: 40px; border-right-width: 1px; border-top-width: 1px; }
+      .c-bl { left: 40px; bottom: 40px; border-left-width: 1px; border-bottom-width: 1px; }
+      .c-br { right: 40px; bottom: 40px; border-right-width: 1px; border-bottom-width: 1px; }
+      .hud-t {
+        position: absolute;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 17px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--dim);
+      }
+      #hud-name { left: 84px; top: 52px; }
+      #hud-tc { right: 84px; top: 52px; color: var(--fg2); font-variant-numeric: tabular-nums; }
+      #hud-scene { left: 84px; bottom: 52px; }
+      #hud-fmt { right: 84px; bottom: 52px; }
+      #hud-bar {
+        position: absolute;
+        left: 84px;
+        right: 84px;
+        bottom: 96px;
+        height: 2px;
+        background: rgba(255, 255, 255, 0.08);
+      }
+      #hud-bar i {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 2px;
+        background: var(--fg2);
+        transform-origin: 0% 50%;
       }
     </style>
   </head>
   <body>
-    <div
-      id="root"
-      data-composition-id="main"
-      data-start="0"
-      data-duration="10"
-      data-width="1920"
-      data-height="1080"
-    >
-      <h1 id="title" class="clip" data-start="0" data-duration="10" data-track-index="0">Title</h1>
+    <!-- Directional blur for the whip: horizontal axis only (whip-pan-cut recipe). -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <filter id="whip-blur" x="-20%" y="0" width="140%" height="100%">
+        <feGaussianBlur id="whip-blur-node" stdDeviation="0 0" />
+      </filter>
+    </svg>
+
+    <div id="root" data-composition-id="main" data-start="0" data-width="1080" data-height="1920" data-duration="15" data-fps="30">
+      <div id="bg-grid" class="clip" data-start="0" data-duration="11.6" data-track-index="0"></div>
+
+      <!-- Act 4 plate sits under everything; untimed wrapper, timed video. -->
+      <div id="plate-wrap">
+        <video id="portal" class="clip" src="assets/video/portal.mp4" data-start="11.5" data-duration="3.5" data-track-index="1" muted playsinline></video>
+        <div id="bloom"></div>
+        <div id="plate-fade"></div>
+      </div>
+
+      <!-- Act 1: refusal, whip, slams -->
+      <section id="act1" class="clip" data-start="0" data-duration="5.2" data-track-index="2">
+        <div id="strip">
+          <div id="p1" class="pane">
+            <div id="p1-label" class="label">01 / The gate</div>
+            <div id="term-shake">
+              <div id="term" class="panel">
+                <div class="panel-head"><span>Gate</span><span>causalmesh.yaml &middot; arm C3</span></div>
+                <div id="term-body">
+                  <div id="cmd"><span class="p">$ </span><span id="cmd-text"></span><span id="caret"></span></div>
+                  <div id="verdict">
+                    <div id="stamp-row">
+                      <span id="stamp" class="glitch" data-layout-allow-overlap><span class="g g1">REFUSE</span><span class="g g2">REFUSE</span><span class="g0">REFUSE</span></span>
+                      <span id="stamp-res">path:src/causalmesh/crypto/chain.py</span>
+                    </div>
+                    <div id="vdl">
+                      <span class="k vr">rule</span><span class="v vr">ownership</span>
+                      <span class="k vr">holder</span><span class="v vr">substrate</span>
+                      <span class="k vr">reason</span><span class="v vr">'src/causalmesh/crypto/chain.py' is owned by 'substrate', not 'docs'</span>
+                      <span class="k vr">exit</span><span class="deny vr">1</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div id="wall" data-layout-allow-overflow>
+              <span id="wall-mask" data-layout-allow-overflow><span id="wall-glitch" class="glitch" data-layout-allow-overlap><span class="g g1">REFUSED.</span><span class="g g2">REFUSED.</span><span class="g0" id="wall-chars"></span></span></span>
+            </div>
+            <div id="wall-sub">Kept, with its reason.</div>
+          </div>
+
+          <div id="p2" class="pane">
+            <div id="slam-idx" class="label">Every action</div>
+            <div class="slam" id="s-1"><div class="w" style="font-size: 236px">Gated.</div><div class="bar"></div><div class="sub">01 &middot; one gate, one contract</div></div>
+            <div class="slam" id="s-2"><div class="w" style="font-size: 214px">Signed.</div><div class="bar"></div><div class="sub">02 &middot; Ed25519, hash-linked</div></div>
+            <div class="slam" id="s-3"><div class="w" style="font-size: 168px">Recorded.</div><div class="bar"></div><div class="sub">03 &middot; refusals included</div></div>
+          </div>
+          <div id="seam"></div>
+        </div>
+      </section>
+
+      <div id="flash" class="clip" data-start="1.0" data-duration="0.6" data-track-index="5"></div>
+
+      <!-- Act 2: architecture -->
+      <section id="act2" class="clip" data-start="4.23" data-duration="3.72" data-track-index="3">
+        <div id="a2-cam">
+          <div class="head">
+            <div id="a2-label" class="label">02 / Architecture</div>
+            <div class="display">
+              <span class="mask" data-layout-allow-overflow><span id="a2a">One gate.</span></span>
+              <span class="mask" data-layout-allow-overflow><span id="a2b" class="muted">Every surface.</span></span>
+            </div>
+          </div>
+          <div id="dia-3d">
+            <div id="dia-rot">
+              <svg id="diagram" viewBox="40 10 690 650"></svg>
+            </div>
+          </div>
+          <div id="a2-caption">
+            <div class="label">SDK &middot; serve &middot; hook</div>
+            <div class="big">Same gate. Same signed chain.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Act 3: signed chain -->
+      <section id="act3" class="clip" data-start="7.75" data-duration="3.9" data-track-index="4">
+        <div id="a3">
+          <div class="head">
+            <div id="a3-label" class="label">03 / Evidence</div>
+            <div class="display">
+              <span class="mask" data-layout-allow-overflow><span id="a3a">Signed. Linked.</span></span>
+              <span class="mask" data-layout-allow-overflow><span id="a3b" class="muted">Verified offline.</span></span>
+            </div>
+          </div>
+          <div id="cards">
+            <div class="card panel" id="c0"><i class="card-edge"></i><div class="r1"><span class="seq">0</span><span class="ty">READ</span><span class="ag">agent_a</span><span class="t">+0.000s</span></div><div class="r2">src/config.py &middot; read_file</div><div class="h" id="h0">0c75065597</div><i class="link" id="l0"></i></div>
+            <div class="card panel" id="c1"><i class="card-edge"></i><div class="r1"><span class="seq">1</span><span class="ty">READ</span><span class="ag">agent_b</span><span class="t">+0.000s</span></div><div class="r2">src/config.py &middot; read_file</div><div class="h" id="h1">1f1c3ea9dd</div><i class="link" id="l1"></i></div>
+            <div class="card panel" id="c2"><i class="card-edge"></i><div class="r1"><span class="seq">2</span><span class="ty">WRITE</span><span class="ag">agent_a</span><span class="t">+1.000s</span></div><div class="r2">src/config.py &middot; write_file 301 B</div><div class="h" id="h2">c7a0cfc7c6</div><i class="link" id="l2"></i></div>
+            <div class="card panel deny" id="c3"><i class="card-edge"></i><div class="r1"><span class="seq">3</span><span id="fail-ty" class="ty glitch" data-layout-allow-overlap><span class="g g1">FAILURE</span><span class="g g2">FAILURE</span><span class="g0">FAILURE</span></span><span class="ag">agent_b</span><span class="t">+2.000s</span></div><div class="r2">write_file refused: held by 'agent_a'</div><div class="h" id="h3">e3c6c935a1</div></div>
+            <i id="signal"></i>
+          </div>
+          <div id="verify"><span id="verify-word">chain verified</span> <span class="dim">&middot; <span id="vcount">0</span>/4 &middot; head e3c6c935a1da9f74</span></div>
+          <div id="run-id">run pilot_landing__concurrent_edit_collision__C3__r0000</div>
+        </div>
+      </section>
+
+      <div id="slit" class="clip" data-start="11.0" data-duration="1.3" data-track-index="6"></div>
+
+      <!-- Act 4: portal lockup -->
+      <section id="act4" class="clip" data-start="11.5" data-duration="3.5" data-track-index="4">
+        <div id="a4-title" class="display">
+          <span class="ln"><span class="wd">The</span> <span class="wd">Next</span> <span class="wd">Layer</span></span>
+          <span class="ln"><span class="wd">of</span> <span class="wd">Intelligence</span></span>
+        </div>
+        <div id="lockup">
+          <div id="lockup-row">
+            <div id="mark-glow"></div>
+            <svg id="mark" viewBox="0 0 40 40" aria-hidden="true">
+              <g id="bar-a"><polygon points="15,2 38,2 27,19 4,19" fill="#fafafa" /></g>
+              <g id="bar-b"><polygon points="13,21 36,21 25,38 2,38" fill="#fafafa" opacity="0.55" /></g>
+            </svg>
+            <span class="mask" data-layout-allow-overflow><span id="wordmark">CausalMesh</span></span>
+          </div>
+          <div id="tagline"><span class="wd">Every</span> <span class="wd">action</span> <span class="wd">gated,</span> <span class="wd">signed,</span> <span class="wd">and</span> <span class="wd">recorded.</span></div>
+          <div id="stat" class="label"><i></i><span>24 / 24 chains verified</span></div>
+        </div>
+      </section>
+
+      <div id="grain" class="clip" data-start="0" data-duration="15" data-track-index="7"><div id="grain-tex"></div></div>
+      <div id="vignette" class="clip" data-start="0" data-duration="15" data-track-index="8"></div>
+
+      <div id="hud" class="clip" data-start="0" data-duration="15" data-track-index="9">
+        <i class="corner c-tl"></i><i class="corner c-tr"></i><i class="corner c-bl"></i><i class="corner c-br"></i>
+        <div id="hud-name" class="hud-t">CausalMesh &mdash; Motion Reel</div>
+        <div id="hud-tc" class="hud-t">00:00:00:00</div>
+        <div id="hud-scene" class="hud-t">01 / 05 &nbsp;The gate</div>
+        <div id="hud-fmt" class="hud-t">1080 &times; 1920 &middot; 30 fps</div>
+        <div id="hud-bar"><i id="hud-prog"></i></div>
+      </div>
+
+      <!-- Audio: bed on a volume lane; SFX on the frames they sound with. -->
+      <audio id="music" src="assets/music/happy-beats-business-moves-vol-9-by-ende-dot-app.mp3" data-start="0" data-duration="15" data-track-index="10" data-volume="0.55"
+        data-automation='{"version":1,"lanes":[{"target":"volume","points":[{"t":0,"v":0},{"t":0.4,"v":1},{"t":13.9,"v":1},{"t":15,"v":0}]}]}'></audio>
+      <audio id="sfx-k1" src="assets/sfx/keypress-003.wav" data-start="0.28" data-duration="0.25" data-track-index="20" data-volume="0.45"></audio>
+      <audio id="sfx-k2" src="assets/sfx/keypress-007.wav" data-start="0.4" data-duration="0.25" data-track-index="21" data-volume="0.45"></audio>
+      <audio id="sfx-k3" src="assets/sfx/keypress-011.wav" data-start="0.52" data-duration="0.25" data-track-index="22" data-volume="0.45"></audio>
+      <audio id="sfx-k4" src="assets/sfx/keypress-014.wav" data-start="0.64" data-duration="0.25" data-track-index="23" data-volume="0.45"></audio>
+      <audio id="sfx-k5" src="assets/sfx/keypress-019.wav" data-start="0.76" data-duration="0.25" data-track-index="24" data-volume="0.45"></audio>
+      <audio id="sfx-k6" src="assets/sfx/keypress-023.wav" data-start="0.88" data-duration="0.25" data-track-index="25" data-volume="0.45"></audio>
+      <audio id="sfx-refuse" src="assets/sfx/impactSoft_heavy_002.ogg" data-start="1.07" data-duration="0.58" data-track-index="11" data-volume="0.9"></audio>
+      <audio id="sfx-wall" src="assets/sfx/impactSoft_medium_000.ogg" data-start="1.59" data-duration="0.12" data-track-index="12" data-volume="0.5"></audio>
+      <audio id="sfx-whip" src="assets/sfx/card-slide-1.ogg" data-start="2.2" data-duration="0.60" data-track-index="13" data-volume="0.8"></audio>
+      <audio id="sfx-slam1" src="assets/sfx/impactSoft_medium_001.ogg" data-start="2.65" data-duration="0.19" data-track-index="14" data-volume="0.75"></audio>
+      <audio id="sfx-slam2" src="assets/sfx/impactSoft_medium_002.ogg" data-start="3.18" data-duration="0.14" data-track-index="15" data-volume="0.75"></audio>
+      <audio id="sfx-slam3" src="assets/sfx/impactSoft_heavy_002.ogg" data-start="3.7" data-duration="0.58" data-track-index="16" data-volume="0.8"></audio>
+      <audio id="sfx-push" src="assets/sfx/card-slide-4.ogg" data-start="4.25" data-duration="0.46" data-track-index="17" data-volume="0.7"></audio>
+      <audio id="sfx-gate" src="assets/sfx/rollover2.ogg" data-start="6.34" data-duration="0.06" data-track-index="18" data-volume="0.7"></audio>
+      <audio id="sfx-dive" src="assets/sfx/card-slide-6.ogg" data-start="7.45" data-duration="0.60" data-track-index="19" data-volume="0.75"></audio>
+      <audio id="sfx-card0" src="assets/sfx/drop_002.ogg" data-start="8.05" data-duration="0.19" data-track-index="26" data-volume="0.55"></audio>
+      <audio id="sfx-card2" src="assets/sfx/drop_002.ogg" data-start="8.44" data-duration="0.19" data-track-index="27" data-volume="0.55"></audio>
+      <audio id="sfx-card3" src="assets/sfx/impactSoft_heavy_002.ogg" data-start="8.96" data-duration="0.58" data-track-index="28" data-volume="0.7"></audio>
+      <audio id="sfx-verify" src="assets/sfx/impactGlass_light_002.ogg" data-start="10.54" data-duration="0.21" data-track-index="29" data-volume="0.65"></audio>
+      <audio id="sfx-slit" src="assets/sfx/rollover2.ogg" data-start="11.1" data-duration="0.06" data-track-index="30" data-volume="0.6"></audio>
+      <audio id="sfx-bell" src="assets/sfx/impactBell_heavy_004.ogg" data-start="12.65" data-duration="0.30" data-track-index="31" data-volume="0.85"></audio>
     </div>
+
     <script>
-      const tl = gsap.timeline({ paused: true });
-      // Example: tl.fromTo("#title", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.6 }, 0);
-      window.__timelines["main"] = tl;
-      tl.seek(0);
+      (function () {
+        var FPS = 30;
+        var DURATION = 15;
+        var TOTAL = Math.round(DURATION * FPS);
+        var EASE = "power4.out";
+        var SOFT = "expo.out";
+
+        function mulberry32(seed) {
+          return function () {
+            seed |= 0;
+            seed = (seed + 0x6d2b79f5) | 0;
+            var t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+            t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+            return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+          };
+        }
+
+        /* ---- Setup: letters of the refusal wall ---- */
+        var wallChars = document.getElementById("wall-chars");
+        "REFUSED.".split("").forEach(function (c, i) {
+          var s = document.createElement("span");
+          s.className = "ch";
+          s.id = "wc-" + i;
+          s.textContent = c;
+          wallChars.appendChild(s);
+        });
+
+        /* ---- Setup: architecture diagram (site geometry) ---- */
+        var NODES = [
+          { id: "agent", x: 360, y: 40, label: "AGENT", sub: "any agent loop", tier: 0 },
+          { id: "sdk", x: 150, y: 140, label: "SDK", sub: "mesh.execute()", tier: 1 },
+          { id: "serve", x: 360, y: 140, label: "SERVE", sub: "OpenAI-compatible", tier: 1 },
+          { id: "hook", x: 570, y: 140, label: "HOOK", sub: "policy check", tier: 1 },
+          { id: "boundary", x: 360, y: 240, label: "BOUNDARY", sub: "one control point", tier: 2 },
+          { id: "gate", x: 330, y: 340, label: "GATE", sub: "returns a Verdict", tier: 3 },
+          { id: "contract", x: 600, y: 296, label: "CONTRACT", sub: "causalmesh.yaml", w: 140, tier: 3 },
+          { id: "claims", x: 600, y: 340, label: "CLAIMS", sub: "exclusive leases", w: 140, tier: 3 },
+          { id: "ledger", x: 600, y: 384, label: "LEDGER", sub: "Decimal, shared", w: 140, tier: 3 },
+          { id: "handler", x: 200, y: 450, label: "HANDLER", sub: "runs if allowed", tier: 4 },
+          { id: "refusal", x: 460, y: 450, label: "REFUSAL", sub: "kept with reason", tier: 4 },
+          { id: "relay", x: 330, y: 540, label: "RELAY", sub: "ingests either way", tier: 4 },
+          { id: "chain", x: 200, y: 630, label: "SIGNED CHAIN", sub: "Ed25519", tier: 4 },
+          { id: "verify", x: 460, y: 630, label: "VERIFY", sub: "offline", tier: 4 }
+        ];
+        var EDGES = [
+          ["M360 62 V100 H150 V118", 1], ["M360 62 V118", 1], ["M360 62 V100 H570 V118", 1],
+          ["M150 162 V200 H360 V218", 2], ["M360 162 V218", 2], ["M570 162 V200 H360 V218", 2],
+          ["M360 262 V290 H330 V318", 3],
+          ["M415 340 H530", 3], ["M490 340 V296 H530", 3], ["M490 340 V384 H530", 3],
+          ["M330 362 V400 H200 V428", 4], ["M330 362 V400 H460 V428", 4],
+          ["M200 472 V505 H330 V518", 4], ["M460 472 V505 H330 V518", 4],
+          ["M330 562 V595 H200 V608", 4], ["M285 630 H375", 4]
+        ];
+        var ROUTE = [
+          [360, 40, "agent"], [360, 100], [150, 100], [150, 140, "sdk"], [150, 200], [360, 200],
+          [360, 240, "boundary"], [360, 290], [330, 290], [330, 340, "gate"], [330, 400], [200, 400],
+          [200, 450, "handler"], [200, 505], [330, 505], [330, 540, "relay"], [330, 595], [200, 595],
+          [200, 630, "chain"], [460, 630, "verify"]
+        ];
+        var NS = "http://www.w3.org/2000/svg";
+        var svg = document.getElementById("diagram");
+        function el(tag, attrs, parent) {
+          var n = document.createElementNS(NS, tag);
+          for (var k in attrs) n.setAttribute(k, attrs[k]);
+          (parent || svg).appendChild(n);
+          return n;
+        }
+        var edgeEls = EDGES.map(function (e, i) {
+          var p = el("path", { d: e[0], fill: "none", stroke: "rgba(255,255,255,0.26)", "stroke-width": "1", id: "edge-" + i });
+          return { el: p, tier: e[1], len: p.getTotalLength() };
+        });
+        var routeD = "M" + ROUTE.map(function (p) { return p[0] + " " + p[1]; }).join(" L");
+        var routeLen = 0, stops = {};
+        for (var i = 0; i < ROUTE.length; i++) {
+          if (i > 0) routeLen += Math.abs(ROUTE[i][0] - ROUTE[i - 1][0]) + Math.abs(ROUTE[i][1] - ROUTE[i - 1][1]);
+          if (ROUTE[i][2]) stops[ROUTE[i][2]] = routeLen;
+        }
+        var COMET = 80;
+        var pulse = el("path", {
+          id: "pulse", d: routeD, fill: "none", stroke: "#ffffff", "stroke-width": "3.2", "stroke-linecap": "round",
+          filter: "drop-shadow(0 0 6px rgba(255,255,255,0.8))",
+          "stroke-dasharray": COMET + " " + (routeLen + COMET * 2), "stroke-dashoffset": COMET
+        });
+        var nodeEls = {};
+        NODES.forEach(function (n) {
+          var w = n.w || 170, h = n.w ? 38 : 46;
+          var g = el("g", { id: "node-" + n.id });
+          var inner = el("g", { transform: "translate(" + (n.x - w / 2) + " " + (n.y - h / 2) + ")" }, g);
+          var rect = el("rect", { width: w, height: h, rx: 3, fill: "#0c0c0c", stroke: "rgba(255,255,255,0.2)", "stroke-width": "1" }, inner);
+          var t1 = el("text", { x: 11, y: n.w ? 16 : 19, "font-family": "JetBrains Mono", "font-size": "12", "letter-spacing": "1", fill: "#d6d5d5" }, inner);
+          t1.textContent = n.label;
+          var t2 = el("text", { x: 11, y: n.w ? 31 : 36, "font-family": "Manrope", "font-size": "12.5", fill: "#a7a6a6" }, inner);
+          t2.textContent = n.sub;
+          nodeEls[n.id] = { g: g, rect: rect, label: t1 };
+        });
+        var gateNode = NODES.filter(function (n) { return n.id === "gate"; })[0];
+        var halos = [0, 1].map(function () {
+          return el("rect", { x: gateNode.x - 85, y: gateNode.y - 23, width: 170, height: 46, rx: 3, fill: "none", stroke: "#ffffff", "stroke-width": "1.3", opacity: "0" });
+        });
+        // Gate's screen position, for the camera dive: diagram at (40,560), viewBox scale 1000/690.
+        var S = 1000 / 690;
+        var GATE_X = 40 + (gateNode.x - 40) * S;
+        var GATE_Y = 560 + (gateNode.y - 10) * S;
+
+        var tl = gsap.timeline({ paused: true });
+
+        /* ===================== ACT 1 — the refusal (0 – 2.65) ===================== */
+        tl.fromTo("#bg-grid", { backgroundPosition: "0px 0px" }, { backgroundPosition: "0px -540px", duration: 11.6, ease: "none" }, 0);
+        tl.fromTo("#p1-label", { opacity: 0, x: -20 }, { opacity: 1, x: 0, duration: 0.5, ease: EASE }, 0.08);
+        // 3D swing-in: the terminal falls forward into the frame.
+        tl.fromTo("#term", { rotationX: 34, y: 150, scale: 0.84, opacity: 0, transformOrigin: "50% 100%" },
+          { rotationX: 0, y: 0, scale: 1, opacity: 1, duration: 0.7, ease: EASE }, 0);
+        var CMD = "causalmesh policy check --agent docs --kind path --name src/causalmesh/crypto/chain.py";
+        var cmdEl = document.getElementById("cmd-text");
+        var typing = { n: 0 };
+        tl.fromTo(typing, { n: 0 }, { n: CMD.length, duration: 0.7, ease: "none",
+          onUpdate: function () { cmdEl.textContent = CMD.slice(0, Math.round(typing.n)); } }, 0.22);
+        tl.fromTo("#verdict", { opacity: 0 }, { opacity: 1, duration: 0.01 }, 1.05);
+        // beat-locked 1.07: REFUSE slams, the frame takes the hit.
+        tl.fromTo("#stamp", { scale: 1.8, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.28, ease: EASE }, 1.07);
+        tl.fromTo("#stamp .g", { opacity: 0 }, { opacity: 0.85, duration: 0.01 }, 1.12);
+        tl.to("#stamp", { "--gr": "-10px", "--gb": "10px", duration: 0.05, repeat: 5, yoyo: true, ease: "steps(1)" }, 1.12);
+        tl.to("#stamp .g", { opacity: 0, duration: 0.01 }, 1.42);
+        tl.fromTo("#term-shake", { x: 0, y: 0 }, { keyframes: [{ x: -18, y: 6 }, { x: 15, y: -4 }, { x: -8, y: 3 }, { x: 4, y: -1 }, { x: 0, y: 0 }], duration: 0.3, ease: "none" }, 1.07);
+        tl.fromTo("#flash", { opacity: 0.26 }, { opacity: 0, duration: 0.45, ease: "power2.out" }, 1.07);
+        tl.fromTo("#stamp-res", { opacity: 0, x: -14 }, { opacity: 1, x: 0, duration: 0.35, ease: EASE }, 1.14);
+        tl.fromTo("#vdl .vr", { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.3, ease: EASE, stagger: 0.03 }, 1.2);
+        // beat 1.59: the wall of letters.
+        tl.fromTo("#wall-chars .ch", { yPercent: 115, skewY: 8 }, { yPercent: 0, skewY: 0, duration: 0.55, ease: EASE, stagger: 0.035 }, 1.59);
+        tl.fromTo("#wall-glitch .g", { opacity: 0 }, { opacity: 1, duration: 0.01 }, 1.9);
+        tl.to("#wall-glitch", { "--gr": "-14px", "--gb": "12px", duration: 0.04, repeat: 5, yoyo: true, ease: "steps(1)" }, 1.92);
+        tl.to("#wall-glitch .g", { opacity: 0, duration: 0.01 }, 2.16);
+        tl.fromTo("#wall-sub", { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.4, ease: EASE }, 1.72);
+
+        /* ---- Whip pan 2.10 – 2.65 (whip-pan-cut recipe) ---- */
+        var WHIP_AT = 2.1, WHIP = 0.55, PEAK_BLUR = 16;
+        var blurNode = document.getElementById("whip-blur-node");
+        var blur = { v: 0 };
+        function writeBlur() { blurNode.setAttribute("stdDeviation", blur.v + " 0"); }
+        writeBlur();
+        tl.fromTo("#strip", { x: 0 }, { x: -1080, duration: WHIP, ease: "power3.inOut" }, WHIP_AT);
+        tl.fromTo(blur, { v: 0 }, { v: PEAK_BLUR, duration: WHIP / 2, ease: "power3.in", onUpdate: writeBlur }, WHIP_AT);
+        tl.to(blur, { v: 0, duration: WHIP / 2, ease: "power3.out", onUpdate: writeBlur }, WHIP_AT + WHIP / 2);
+        tl.fromTo("#seam", { opacity: 0 }, { opacity: 1, duration: 0.08, immediateRender: false }, WHIP_AT);
+        tl.to("#seam", { opacity: 0, duration: 0.12 }, WHIP_AT + WHIP - 0.12);
+
+        /* ---- Kinetic slams on the beat (caption-kinetic-slam entrances) ---- */
+        tl.fromTo("#slam-idx", { opacity: 0 }, { opacity: 1, duration: 0.3 }, 2.6);
+        var SLAMS = [
+          { id: "#s-1", at: 2.65, end: 3.16, mode: 0 },
+          { id: "#s-2", at: 3.18, end: 3.68, mode: 1 },
+          { id: "#s-3", at: 3.7, end: 99, mode: 3 }
+        ];
+        SLAMS.forEach(function (s) {
+          var w = s.id + " .w", bar = s.id + " .bar", sub = s.id + " .sub";
+          tl.fromTo(s.id, { opacity: 0 }, { opacity: 1, duration: 0.01 }, s.at);
+          if (s.mode === 0) tl.fromTo(w, { y: -140, opacity: 0 }, { y: 0, opacity: 1, duration: 0.24, ease: "back.out(1.7)" }, s.at);
+          else if (s.mode === 1) tl.fromTo(w, { x: -320, opacity: 0 }, { x: 0, opacity: 1, duration: 0.22, ease: "expo.out" }, s.at);
+          else tl.fromTo(w, { scale: 0.4, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.26, ease: "back.out(2.2)" }, s.at);
+          tl.fromTo(bar, { scaleX: 0 }, { scaleX: 1, duration: 0.32, ease: "power3.out" }, s.at + 0.06);
+          tl.fromTo(sub, { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.25, ease: EASE }, s.at + 0.1);
+          if (s.end < 99) tl.to(s.id, { opacity: 0, duration: 0.08, ease: "power2.in" }, s.end - 0.06);
+        });
+        // The last slam breathes on the strong 3.70 cue before the push.
+        tl.to("#s-3 .w", { scale: 1.045, duration: 0.5, ease: "sine.out" }, 3.96);
+
+        /* ---- Zoom-through push 4.23 (zoom-through-transition recipe) ---- */
+        tl.fromTo("#p2", { x: 0, scale: 1, filter: "blur(0px)" }, { x: -70, scale: 0.96, filter: "blur(5px)", duration: 0.9, ease: "power3.inOut" }, 4.23);
+        tl.fromTo("#a2-cam", { clipPath: "inset(0% 0% 0% 100%)", x: 60, scale: 1.04 },
+          { clipPath: "inset(0% 0% 0% 0%)", x: 0, scale: 1, duration: 0.9, ease: "power3.inOut" }, 4.23);
+
+        /* ===================== ACT 2 — architecture (4.23 – 7.92) ===================== */
+        tl.fromTo("#a2-label", { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.5, ease: EASE }, 4.5);
+        tl.fromTo("#a2a", { yPercent: 115 }, { yPercent: 0, duration: 0.8, ease: EASE }, 4.55);
+        tl.fromTo("#a2b", { yPercent: 115 }, { yPercent: 0, duration: 0.8, ease: EASE }, 4.68);
+        // 3D tilt-up while it draws: the plan view swings up to face the camera.
+        tl.fromTo("#dia-rot", { rotationX: 42, y: 90, scale: 0.9, transformOrigin: "50% 0%" }, { rotationX: 0, y: 0, scale: 1, duration: 1.6, ease: "power3.out" }, 4.35);
+        var TIER_T = [4.5, 4.75, 5.02, 5.28, 5.55]; // beat-grid 4.75 / 5.28
+        NODES.forEach(function (n) {
+          tl.fromTo(nodeEls[n.id].g, { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.45, ease: EASE }, TIER_T[n.tier]);
+        });
+        edgeEls.forEach(function (e) {
+          tl.fromTo(e.el, { opacity: 0, attr: { "stroke-dasharray": e.len, "stroke-dashoffset": e.len } },
+            { opacity: 1, attr: { "stroke-dashoffset": 0 }, duration: 0.4, ease: "power2.out" }, TIER_T[e.tier] + 0.1);
+        });
+        tl.fromTo("#a2-caption", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.55, ease: EASE }, 5.85);
+        var PULSE_D = 1.1;
+        var PULSE_T0 = 6.34 - PULSE_D * (stops.gate / routeLen);
+        tl.fromTo(pulse, { attr: { "stroke-dashoffset": COMET } }, { attr: { "stroke-dashoffset": -routeLen }, duration: PULSE_D, ease: "none" }, PULSE_T0);
+        Object.keys(stops).forEach(function (id) {
+          var at = PULSE_T0 + PULSE_D * (stops[id] / routeLen);
+          tl.to(nodeEls[id].rect, { attr: { stroke: "rgba(255,255,255,0.88)" }, duration: 0.16 }, at);
+          tl.to(nodeEls[id].label, { attr: { fill: "#ffffff" }, duration: 0.16 }, at);
+        });
+        // beat-locked 6.34: GATE detonates — two halo rings, fill flash, camera punch.
+        halos.forEach(function (h, k) {
+          tl.fromTo(h, { opacity: 0.9, scale: 1, transformOrigin: "50% 50%" }, { opacity: 0, scale: 1.35 + k * 0.4, duration: 0.7 + k * 0.15, ease: SOFT, immediateRender: false }, 6.34 + k * 0.08);
+        });
+        tl.to(nodeEls.gate.rect, { attr: { fill: "#1c1c1c" }, duration: 0.15 }, 6.34);
+        tl.to("#a2-cam", { scale: 1.045, duration: 0.14, ease: "power2.out", transformOrigin: GATE_X + "px " + GATE_Y + "px" }, 6.34);
+        tl.to("#a2-cam", { scale: 1, duration: 0.6, ease: "power2.inOut" }, 6.48);
+        // Camera dive into GATE 7.40 – 7.92.
+        tl.to("#a2-cam", { scale: 7, filter: "blur(6px)", duration: 0.52, ease: "power3.in", transformOrigin: GATE_X + "px " + GATE_Y + "px" }, 7.4);
+        tl.to("#a2-cam", { opacity: 0, duration: 0.14, ease: "power1.in" }, 7.78);
+
+        /* ===================== ACT 3 — signed chain (7.92 – 11.6) ===================== */
+        // Surfacing from the dive.
+        tl.fromTo("#a3", { scale: 1.28, opacity: 0, filter: "blur(10px)" }, { scale: 1, opacity: 1, filter: "blur(0px)", duration: 0.55, ease: "power3.out" }, 7.8);
+        tl.fromTo("#a3-label", { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.5, ease: EASE }, 7.95);
+        tl.fromTo("#a3a", { yPercent: 115 }, { yPercent: 0, duration: 0.8, ease: EASE }, 7.98);
+        tl.fromTo("#a3b", { yPercent: 115 }, { yPercent: 0, duration: 0.8, ease: EASE }, 8.12);
+        var CARD_T = [8.05, 8.25, 8.44, 8.96]; // 8.44 and 8.96 beat-locked
+        CARD_T.forEach(function (t, k) {
+          tl.fromTo("#c" + k, { rotationX: -78, y: 80, opacity: 0, transformOrigin: "50% 0%" }, { rotationX: 0, y: 0, opacity: 1, duration: 0.55, ease: EASE }, t);
+          if (k < 3) tl.fromTo("#l" + k, { scaleY: 0 }, { scaleY: 1, duration: 0.25, ease: "power2.out" }, t + 0.32);
+        });
+        // The refused event lands hard: sand edge flash and a tear on FAILURE.
+        tl.fromTo("#c3 .card-edge", { opacity: 0 }, { opacity: 1, duration: 0.1 }, 8.96);
+        tl.to("#c3 .card-edge", { opacity: 0.35, duration: 0.6, ease: "power2.out" }, 9.1);
+        tl.fromTo("#fail-ty .g", { opacity: 0 }, { opacity: 0.85, duration: 0.01 }, 9.0);
+        tl.to("#fail-ty", { "--gr": "-8px", "--gb": "8px", duration: 0.05, repeat: 5, yoyo: true, ease: "steps(1)" }, 9.0);
+        tl.to("#fail-ty .g", { opacity: 0, duration: 0.01 }, 9.3);
+        // A single signal runs the links, lighting each event as it passes.
+        tl.fromTo("#signal", { opacity: 0, y: 84 }, { opacity: 1, duration: 0.1, immediateRender: false }, 9.45);
+        tl.fromTo("#signal", { y: 84 }, { y: 84 + 3 * 208, duration: 0.9, ease: "power1.inOut", immediateRender: false }, 9.5);
+        tl.to("#signal", { opacity: 0, duration: 0.15 }, 10.4);
+        [0, 1, 2].forEach(function (k) {
+          var at = 9.5 + 0.9 * (k / 3);
+          tl.fromTo("#c" + k + " .card-edge", { opacity: 0 }, { opacity: 0.8, duration: 0.08, immediateRender: false }, at);
+          tl.to("#c" + k + " .card-edge", { opacity: 0, duration: 0.45 }, at + 0.1);
+        });
+        // beat-locked 10.54: verified, with a count and a shimmer pass.
+        tl.fromTo("#verify", { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.4, ease: EASE }, 10.54);
+        var vc = { n: 0 }, vcEl = document.getElementById("vcount");
+        tl.fromTo(vc, { n: 0 }, { n: 4, duration: 0.35, ease: "power1.out", onUpdate: function () { vcEl.textContent = String(Math.round(vc.n)); } }, 10.56);
+        tl.to("#verify-word", { backgroundPosition: "0% 50%", duration: 0.7, ease: "sine.inOut" }, 10.62);
+        tl.fromTo("#run-id", { opacity: 0 }, { opacity: 1, duration: 0.35 }, 10.64);
+        // Collapse toward the doorway 11.06 – 11.36.
+        tl.to("#a3", { opacity: 0, scale: 0.88, duration: 0.3, ease: "power3.in", transformOrigin: "50% 53.2%" }, 11.06);
+
+        /* ---- Slit match cut into the portal ---- */
+        tl.fromTo("#slit", { opacity: 0, scaleX: 0.012, scaleY: 0 }, { opacity: 1, scaleY: 1, duration: 0.3, ease: "power3.out" }, 11.1);
+        tl.to("#slit", { scaleX: 1.04, scaleY: 1.03, duration: 0.38, ease: "power3.inOut" }, 11.42);
+        tl.to("#slit", { opacity: 0, duration: 0.5, ease: "power1.out" }, 11.78);
+
+        /* ===================== ACT 4 — portal lockup (11.5 – 15) ===================== */
+        tl.fromTo("#plate-wrap", { opacity: 0, scale: 1.04, transformOrigin: "50% 53%" }, { opacity: 1, scale: 1, duration: 1.1, ease: SOFT }, 11.55);
+        tl.to("#plate-wrap", { scale: 1.035, duration: 2.35, ease: "none" }, 12.65);
+        tl.fromTo("#a4-title .wd", { opacity: 0, y: 26, filter: "blur(14px)" }, { opacity: 1, y: 0, filter: "blur(0px)", duration: 0.7, ease: EASE, stagger: 0.08 }, 11.85);
+        tl.fromTo("#bar-a", { x: 40, opacity: 0 }, { x: 0, opacity: 1, duration: 0.25, ease: "power3.in" }, 12.4);
+        tl.fromTo("#bar-b", { x: -40, opacity: 0 }, { x: 0, opacity: 1, duration: 0.25, ease: "power3.in" }, 12.4);
+        // beat-locked 12.65: the mark locks with a glow bloom (logo-outro language).
+        tl.fromTo("#mark", { scale: 1.12 }, { scale: 1, duration: 0.5, ease: EASE }, 12.65);
+        tl.fromTo("#mark-glow", { opacity: 0.9, scale: 0.5 }, { opacity: 0, scale: 1.7, duration: 0.9, ease: SOFT }, 12.65);
+        tl.fromTo("#wordmark", { yPercent: 115 }, { yPercent: 0, duration: 0.85, ease: EASE }, 12.7);
+        tl.fromTo("#tagline .wd", { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.5, ease: EASE, stagger: 0.06 }, 12.95);
+        tl.fromTo("#stat", { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.6, ease: EASE }, 13.3);
+        // One specular pass across the wordmark (text-shimmer recipe), then clean.
+        tl.to("#wordmark", { backgroundPosition: "0% 50%", duration: 0.9, ease: "sine.inOut" }, 13.55);
+
+        /* ---- HUD progress ---- */
+        tl.fromTo("#hud-prog", { scaleX: 0 }, { scaleX: 1, duration: DURATION, ease: "none" }, 0);
+
+        /* ---- Per frame: timecode, caret, hash decode, grain, audio-reactive glow ---- */
+        var AUDIO = window.AUDIO_DATA || null;
+        var tc = document.getElementById("hud-tc");
+        var sceneEl = document.getElementById("hud-scene");
+        var caret = document.getElementById("caret");
+        var bloom = document.getElementById("bloom");
+        var grain = document.getElementById("grain-tex");
+        var SCENES = [[0, "01 / 05  The gate"], [2.4, "02 / 05  The claim"], [4.23, "03 / 05  Architecture"], [7.92, "04 / 05  Evidence"], [11.5, "05 / 05  CausalMesh"]];
+        var HASHES = ["0c75065597", "1f1c3ea9dd", "c7a0cfc7c6", "e3c6c935a1"];
+        var hashEls = HASHES.map(function (_, k) { return document.getElementById("h" + k); });
+        var HEX = "0123456789abcdef";
+        var GRAIN_POS = [[0, 0], [-5, -5], [-10, 5], [5, -10], [-5, 15], [-10, 5], [15, 0], [0, 10], [-15, 0], [10, 5]];
+        function pad(n) { return (n < 10 ? "0" : "") + n; }
+        function energy(frame) {
+          if (!AUDIO || !AUDIO.frames || !AUDIO.frames.length) return 0;
+          var b = AUDIO.frames[Math.min(AUDIO.frames.length - 1, frame)].bands;
+          return (b[0] + b[1] + b[2]) / 3;
+        }
+        function draw(frame) {
+          var t = frame / FPS;
+          tc.textContent = "00:00:" + pad(Math.floor(t)) + ":" + pad(frame % FPS);
+          var label = SCENES[0][1];
+          for (var k = 0; k < SCENES.length; k++) if (t >= SCENES[k][0]) label = SCENES[k][1];
+          sceneEl.textContent = label;
+          caret.style.opacity = t < 1.05 && frame % 14 < 8 ? "1" : "0";
+          // Hashes decode for 0.45s after each card lands, then resolve to the real value.
+          for (var h = 0; h < 4; h++) {
+            var since = t - (CARD_T[h] + 0.1);
+            if (since >= 0 && since < 0.45) {
+              var rnd = mulberry32(frame * 97 + h * 13);
+              var keep = Math.floor((since / 0.45) * 10);
+              var s = HASHES[h].slice(0, keep);
+              for (var c = keep; c < 10; c++) s += HEX[Math.floor(rnd() * 16)];
+              hashEls[h].textContent = s;
+            } else {
+              hashEls[h].textContent = HASHES[h];
+            }
+          }
+          var gp = GRAIN_POS[Math.floor(frame / 2) % GRAIN_POS.length];
+          grain.style.transform = "translate(" + gp[0] + "%," + gp[1] + "%)";
+          var e = energy(frame);
+          bloom.style.opacity = t >= 11.9 ? String(0.3 + 0.45 * e) : "0";
+          pulse.setAttribute("stroke-opacity", String(0.72 + 0.28 * e));
+        }
+        for (var fr = 0; fr < TOTAL; fr++) {
+          tl.call((function (f) { return function () { draw(f); }; })(fr), [], fr / FPS);
+        }
+        draw(0);
+
+        window.__timelines["main"] = tl;
+        tl.seek(0);
+      })();
     </script>
   </body>
 </html>
