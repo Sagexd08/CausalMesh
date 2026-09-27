@@ -1,0 +1,13 @@
+
+version: 1
+agent:
+  id: "coding-agent"
+roles:
+  - agent_id: "coding-agent"
+    archetype: "writer"
+    owns: ["src/"]
+  - agent_id: "dba"
+    archetype: "writer"
+    owns: ["production/"]
+policy:
+  arm: "C3"
