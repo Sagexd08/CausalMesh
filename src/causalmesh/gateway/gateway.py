@@ -98,6 +98,21 @@ class ToolGateway:
         """Names of all registered tools, sorted."""
         return sorted(self._tools)
 
+    def get_tool(self, name: str) -> Tool:
+        """Fetch a registered tool by name.
+
+        Raises:
+            ToolNotFoundError: When the tool is not registered.
+        """
+        from causalmesh.sdk.errors import ToolNotFoundError
+
+        if name not in self._tools:
+            raise ToolNotFoundError(
+                f"tool {name!r} is not registered. "
+                f"Known tools: {self.registered_tools() or ['(none)']}"
+            )
+        return self._tools[name]
+
     # ------------------------------------------------------------------ #
     # Execution                                                           #
     # ------------------------------------------------------------------ #
