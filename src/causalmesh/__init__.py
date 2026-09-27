@@ -22,11 +22,14 @@ __version__ = "0.1.0"
 
 __all__ = ["CausalMesh", "Tool", "__version__"]
 
+
 def __getattr__(name: str):
     if name == "CausalMesh":
         from causalmesh.sdk.mesh import CausalMesh
+
         return CausalMesh
     if name == "Tool":
         from causalmesh.gateway.tool import Tool
+
         return Tool
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

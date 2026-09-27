@@ -37,7 +37,9 @@ def _free_port() -> int:
         return int(s.getsockname()[1])
 
 
-def _post(base_url: str, path: str, body: dict[str, Any]) -> tuple[int, dict[str, Any], dict[str, str]]:
+def _post(
+    base_url: str, path: str, body: dict[str, Any]
+) -> tuple[int, dict[str, Any], dict[str, str]]:
     data = json.dumps(body).encode("utf-8")
     req = urllib.request.Request(  # noqa: S310
         base_url + path, data=data, headers={"Content-Type": "application/json"}, method="POST"
@@ -150,7 +152,9 @@ def allowlisted_contract(*, allow: frozenset[str], arm: str = "C3") -> Contract:
 
 class TestHealthAndProtocol:
     def test_healthz_reports_the_run_id(self) -> None:
-        config = ServeConfig(contract=unrestricted_contract(), run_id="run_health", port=_free_port())
+        config = ServeConfig(
+            contract=unrestricted_contract(), run_id="run_health", port=_free_port()
+        )
         s = Serving(config)
         try:
             status, payload = _get(s.base_url, "/healthz")
@@ -248,7 +252,9 @@ class TestGateAndRecord:
             s = Serving(config)
             try:
                 status, payload, headers = _post(
-                    s.base_url, "/v1/chat/completions", {"model": "fake-model", "causalmesh_agent": "agent"}
+                    s.base_url,
+                    "/v1/chat/completions",
+                    {"model": "fake-model", "causalmesh_agent": "agent"},
                 )
                 assert status == 402
                 assert headers.get("X-CausalMesh-Verdict") == "refused"
@@ -273,7 +279,9 @@ class TestGateAndRecord:
             s = Serving(config)
             try:
                 status, _, headers = _post(
-                    s.base_url, "/v1/chat/completions", {"model": "fake-model", "causalmesh_agent": "agent"}
+                    s.base_url,
+                    "/v1/chat/completions",
+                    {"model": "fake-model", "causalmesh_agent": "agent"},
                 )
                 assert status == 200
                 assert headers.get("X-CausalMesh-Verdict") == "allowed"
@@ -285,7 +293,10 @@ class TestGateAndRecord:
 
     def test_default_agent_is_used_when_the_body_names_none(self) -> None:
         config = ServeConfig(
-            contract=unrestricted_contract(), run_id="run_default", port=_free_port(), default_agent="agent"
+            contract=unrestricted_contract(),
+            run_id="run_default",
+            port=_free_port(),
+            default_agent="agent",
         )
         s = Serving(config)
         try:

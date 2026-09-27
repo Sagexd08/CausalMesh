@@ -139,9 +139,7 @@ def _parse_sdk_fields(raw: dict[str, Any]) -> SDKConfig:
                 raise ConfigurationError("`tools` keys must be non-empty strings")
             if tool_conf is not None:
                 if not isinstance(tool_conf, dict):
-                    raise ConfigurationError(
-                        f"`tools.{tool_name}` must be a mapping or null"
-                    )
+                    raise ConfigurationError(f"`tools.{tool_name}` must be a mapping or null")
                 unknown = set(tool_conf) - _TOOL_ENTRY_KEYS
                 if unknown:
                     raise ConfigurationError(

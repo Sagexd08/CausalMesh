@@ -26,14 +26,22 @@ NOW = 1_000_000
 class TestNoMatchingCheckpoint:
     def test_none_when_the_contract_has_no_checkpoints(self) -> None:
         decision = evaluate_checkpoints(
-            (), agent_id="buyer", resource=Resource.path("src/a.py"), handler=AutoDenyHandler(), now_us=NOW
+            (),
+            agent_id="buyer",
+            resource=Resource.path("src/a.py"),
+            handler=AutoDenyHandler(),
+            now_us=NOW,
         )
         assert decision is None
 
     def test_none_when_on_does_not_match_the_resource_kind(self) -> None:
         checkpoints = (Checkpoint(on="spend", require="human"),)
         decision = evaluate_checkpoints(
-            checkpoints, agent_id="buyer", resource=Resource.path("src/a.py"), handler=AutoDenyHandler(), now_us=NOW
+            checkpoints,
+            agent_id="buyer",
+            resource=Resource.path("src/a.py"),
+            handler=AutoDenyHandler(),
+            now_us=NOW,
         )
         assert decision is None
 
@@ -119,7 +127,11 @@ class TestWhenMatching:
         resource = Resource.spend(to="api.example.com", amount="1.00")
         with pytest.raises(ValueError, match="usd"):
             evaluate_checkpoints(
-                checkpoints, agent_id="buyer", resource=resource, handler=AutoDenyHandler(), now_us=NOW
+                checkpoints,
+                agent_id="buyer",
+                resource=resource,
+                handler=AutoDenyHandler(),
+                now_us=NOW,
             )
 
 

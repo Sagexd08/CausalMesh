@@ -188,9 +188,7 @@ class TestContract:
         `tasks/runner.py`. See `docs/backlog.md`, "Checkpoints and identity
         are parsed and ignored" -- this is the "identity" half becoming real.
         """
-        contract = Contract.from_dict(
-            {"version": 1, "identity": {"keys": ".causalmesh/keys/"}}
-        )
+        contract = Contract.from_dict({"version": 1, "identity": {"keys": ".causalmesh/keys/"}})
         assert contract.identity_keys_dir == Path(".causalmesh/keys/")
 
     def test_identity_without_keys_has_no_dir(self) -> None:
@@ -233,9 +231,7 @@ class TestContract:
 
     def test_a_checkpoint_without_on_is_refused(self) -> None:
         with pytest.raises(ContractError, match="`on`"):
-            Contract.from_dict(
-                {"version": 1, "policy": {"checkpoints": [{"require": "human"}]}}
-            )
+            Contract.from_dict({"version": 1, "policy": {"checkpoints": [{"require": "human"}]}})
 
     def test_a_checkpoint_typo_is_an_error_not_a_shrug(self) -> None:
         with pytest.raises(ContractError, match="unknown key"):
@@ -532,9 +528,7 @@ class TestCheckpointsInTheGate:
                 ],
                 "policy": {
                     "arm": "C3",
-                    "checkpoints": [
-                        {"on": "spend", "when": {"usd": ">0.50"}, "require": "human"}
-                    ],
+                    "checkpoints": [{"on": "spend", "when": {"usd": ">0.50"}, "require": "human"}],
                 },
             }
         )
@@ -542,7 +536,9 @@ class TestCheckpointsInTheGate:
     def test_a_matched_checkpoint_with_no_handler_refuses_by_default(self) -> None:
         gate = gate_for(self._checkpointed_contract())
         verdict = gate.check(
-            agent_id="buyer", resource=Resource.spend(to="api.example.com", amount="1.00"), now_us=NOW
+            agent_id="buyer",
+            resource=Resource.spend(to="api.example.com", amount="1.00"),
+            now_us=NOW,
         )
         assert verdict.refused
         assert verdict.rule == "checkpoint"
@@ -550,14 +546,18 @@ class TestCheckpointsInTheGate:
     def test_an_unmatched_checkpoint_does_not_refuse(self) -> None:
         gate = gate_for(self._checkpointed_contract())
         verdict = gate.check(
-            agent_id="buyer", resource=Resource.spend(to="api.example.com", amount="0.10"), now_us=NOW
+            agent_id="buyer",
+            resource=Resource.spend(to="api.example.com", amount="0.10"),
+            now_us=NOW,
         )
         assert verdict.allowed
 
     def test_a_scripted_approval_allows_the_call(self) -> None:
         gate = gate_for(self._checkpointed_contract(), checkpoint_handler=ScriptedHandler([True]))
         verdict = gate.check(
-            agent_id="buyer", resource=Resource.spend(to="api.example.com", amount="1.00"), now_us=NOW
+            agent_id="buyer",
+            resource=Resource.spend(to="api.example.com", amount="1.00"),
+            now_us=NOW,
         )
         assert verdict.allowed
 
@@ -582,7 +582,9 @@ class TestCheckpointsInTheGate:
         )
         gate = gate_for(contract, checkpoint_handler=ScriptedHandler([True]))
         verdict = gate.check(
-            agent_id="buyer", resource=Resource.spend(to="api.example.com", amount="1.00"), now_us=NOW
+            agent_id="buyer",
+            resource=Resource.spend(to="api.example.com", amount="1.00"),
+            now_us=NOW,
         )
         assert verdict.refused
         assert verdict.rule == "ceiling"
@@ -590,7 +592,9 @@ class TestCheckpointsInTheGate:
     def test_an_unenforced_gate_reports_the_checkpoint_as_a_shadow_refusal(self) -> None:
         gate = gate_for(self._checkpointed_contract(), enforcing=False)
         verdict = gate.check(
-            agent_id="buyer", resource=Resource.spend(to="api.example.com", amount="1.00"), now_us=NOW
+            agent_id="buyer",
+            resource=Resource.spend(to="api.example.com", amount="1.00"),
+            now_us=NOW,
         )
         assert verdict.allowed
         assert verdict.detail["would_refuse"] is True

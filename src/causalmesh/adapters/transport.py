@@ -159,7 +159,7 @@ class HttpTransport:
 
         started = time.monotonic()
         try:
-            with urllib.request.urlopen(request, timeout=self.timeout_s) as response:
+            with urllib.request.urlopen(request, timeout=self.timeout_s) as response:  # nosec B310
                 body_bytes = response.read()
                 status = response.status
         except urllib.error.HTTPError as exc:

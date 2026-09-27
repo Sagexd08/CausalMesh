@@ -94,9 +94,7 @@ class TestHandlerNeverCalled:
 class TestDenialProperties:
     def test_denied_result_properties(self, tmp_path: Path) -> None:
         mesh = _mesh(tmp_path)
-        mesh.register_tool(
-            Tool(name="write", handler=lambda path, content: None, mutating=True)
-        )
+        mesh.register_tool(Tool(name="write", handler=lambda path, content: None, mutating=True))
         result = mesh.execute(
             agent_id="coding-agent",
             tool="write",
@@ -110,9 +108,7 @@ class TestDenialProperties:
 
     def test_denied_result_has_nonempty_reason(self, tmp_path: Path) -> None:
         mesh = _mesh(tmp_path)
-        mesh.register_tool(
-            Tool(name="write", handler=lambda path, content: None, mutating=True)
-        )
+        mesh.register_tool(Tool(name="write", handler=lambda path, content: None, mutating=True))
         result = mesh.execute(
             agent_id="coding-agent",
             tool="write",
@@ -122,9 +118,7 @@ class TestDenialProperties:
 
     def test_denied_result_rule_is_ownership(self, tmp_path: Path) -> None:
         mesh = _mesh(tmp_path)
-        mesh.register_tool(
-            Tool(name="write", handler=lambda path, content: None, mutating=True)
-        )
+        mesh.register_tool(Tool(name="write", handler=lambda path, content: None, mutating=True))
         result = mesh.execute(
             agent_id="coding-agent",
             tool="write",
@@ -134,9 +128,7 @@ class TestDenialProperties:
 
     def test_describe_produces_useful_output(self, tmp_path: Path) -> None:
         mesh = _mesh(tmp_path)
-        mesh.register_tool(
-            Tool(name="write", handler=lambda path, content: None, mutating=True)
-        )
+        mesh.register_tool(Tool(name="write", handler=lambda path, content: None, mutating=True))
         result = mesh.execute(
             agent_id="coding-agent",
             tool="write",

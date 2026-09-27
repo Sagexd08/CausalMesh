@@ -200,9 +200,7 @@ class ToolGateway:
             arm="C3",
         )
 
-    def _emit_event(
-        self, result: InternalToolResult, *, agent_id: str, ts: int
-    ) -> str | None:
+    def _emit_event(self, result: InternalToolResult, *, agent_id: str, ts: int) -> str | None:
         """Emit one event to the relay for this result.
 
         Mirrors the pattern in ``tools/executor.py:ToolExecutor._emit``.
@@ -213,9 +211,7 @@ class ToolGateway:
         identity = self._identity_for(agent_id)
 
         if result.outcome == ToolOutcome.EXECUTED:
-            event_type = (
-                _MUTATING_EVENT_TYPE if result.call.paths else _READ_EVENT_TYPE
-            )
+            event_type = _MUTATING_EVENT_TYPE if result.call.paths else _READ_EVENT_TYPE
             payload: dict[str, Any] = {
                 "tool": result.call.tool,
                 "outcome": "executed",
