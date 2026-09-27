@@ -72,9 +72,10 @@ class TestFromConfig:
         with pytest.raises(ConfigurationError):
             CausalMesh.from_config(bad)
 
-    def test_run_id_auto_generated(self, tmp_path: Path) -> None:
-        mesh = CausalMesh.from_config(_simple_contract(tmp_path))
-        assert mesh.run_id.startswith("sdk-")
+    def test_default_run_id_is_stable_across_sessions(self, tmp_path: Path) -> None:
+        """The run id is signed into every event, so it must not be random."""
+        p = _simple_contract(tmp_path)
+        assert CausalMesh.from_config(p).run_id == CausalMesh.from_config(p).run_id
 
     def test_run_id_explicit(self, tmp_path: Path) -> None:
         mesh = CausalMesh.from_config(_simple_contract(tmp_path), run_id="test-run-001")

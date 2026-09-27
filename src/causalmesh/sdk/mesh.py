@@ -49,11 +49,11 @@ Architecture::
 
 from __future__ import annotations
 
-import uuid
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
-from causalmesh.crypto.keys import KeyPair
+from causalmesh.crypto.keys import KeyPair, SignatureError, load_identity_keys
 from causalmesh.events.schema import EventIdentity
 from causalmesh.hooks.lifecycle import LifecycleBoundary
 from causalmesh.hooks.policy_gate import ContractGate
@@ -69,7 +69,10 @@ from .identity import make_identity
 
 __all__ = ["CausalMesh"]
 
-_SDK_SEED = b"causalmesh-sdk-phase1"
+# The run id is part of every event's signed identity, so a random default
+# would make two identical sessions produce different chains.  A caller that
+# keeps several chains side by side passes its own stable run_id.
+_DEFAULT_RUN_ID = "sdk"
 
 
 class CausalMesh:
@@ -82,13 +85,29 @@ class CausalMesh:
     - a ``LifecycleBoundary`` wired to the ``ContractGate``
     - a ``Relay`` for evidence recording
 
+    Every agent that may call ``execute()`` needs a signing key, or its
+    calls could not be recorded.  Keys are issued to the default agent,
+    every ``agent_id`` under ``roles``, and anything passed in ``agents``.
+    A call for any other agent raises ``UnknownAgentError`` before it runs.
+
+    Where the keys come from, in order:
+
+    1. ``identity.keys`` in the contract: one seed file per agent.
+    2. ``seed``: derived per agent, so the signed chain is reproducible.
+    3. Neither: a fresh random key per agent, as ``causalmesh serve`` does.
+       Signatures then differ between sessions; the payloads do not.
+
     Args:
         agent_id:   Default agent id used when ``execute()`` is called
                     without an explicit ``agent_id``.
         contract:   A pre-loaded ``Contract`` object.  Use
                     ``CausalMesh.from_config()`` to load from a file.
-        run_id:     Stable identifier for this session's evidence chain.
-                    Auto-generated when omitted.
+        run_id:     Identifier for this session's evidence chain.  It is
+                    signed into every event, so it defaults to a constant
+                    rather than a random value.
+        seed:       Master seed for deriving agent keys.  Keep it secret:
+                    anyone holding it can sign as any agent.
+        agents:     Additional agent ids to issue keys to.
     """
 
     def __init__(
@@ -97,17 +116,21 @@ class CausalMesh:
         agent_id: str = "sdk-agent",
         contract: Contract,
         run_id: str | None = None,
+        seed: bytes | None = None,
+        agents: Iterable[str] = (),
         _sdk_config: SDKConfig | None = None,
     ) -> None:
         self._agent_id = agent_id
         self._contract = contract
-        self._run_id = run_id or f"sdk-{uuid.uuid4().hex[:12]}"
+        self._run_id = run_id or _DEFAULT_RUN_ID
         self._sdk_config = _sdk_config
 
+        agent_ids = sorted({agent_id, *(role.agent_id for role in contract.roles), *agents})
         self._relay, self._boundary, self._gate = _build_runtime(
             contract=contract,
             run_id=self._run_id,
-            agent_id=agent_id,
+            agent_ids=agent_ids,
+            seed=seed,
         )
 
         def _identity_factory(aid: str) -> EventIdentity:
@@ -118,6 +141,7 @@ class CausalMesh:
             relay=self._relay,
             agent_id=agent_id,
             identity_factory=_identity_factory,
+            gate=self._gate,
         )
 
     # ------------------------------------------------------------------ #
@@ -125,12 +149,23 @@ class CausalMesh:
     # ------------------------------------------------------------------ #
 
     @classmethod
-    def from_config(cls, path: str | Path, *, run_id: str | None = None) -> CausalMesh:
+    def from_config(
+        cls,
+        path: str | Path,
+        *,
+        run_id: str | None = None,
+        seed: bytes | None = None,
+        agents: Iterable[str] = (),
+    ) -> CausalMesh:
         """Build a ``CausalMesh`` from a ``causalmesh.yaml`` file.
+
+        ``run_id``, ``seed`` and ``agents`` are passed through to the
+        constructor; see the class docstring.
 
         Raises:
             ConfigurationError: When the file is missing, invalid, or
-                contains an unsupported policy arm.
+                contains an unsupported policy arm, or when
+                ``identity.keys`` lacks a key file for a declared agent.
         """
         try:
             contract, sdk_config = load_sdk_config(path)
@@ -140,12 +175,17 @@ class CausalMesh:
             raise ConfigurationError(str(exc)) from exc
 
         agent_id = sdk_config.agent_id or "sdk-agent"
-        return cls(
-            agent_id=agent_id,
-            contract=contract,
-            run_id=run_id,
-            _sdk_config=sdk_config,
-        )
+        try:
+            return cls(
+                agent_id=agent_id,
+                contract=contract,
+                run_id=run_id,
+                seed=seed,
+                agents=agents,
+                _sdk_config=sdk_config,
+            )
+        except SignatureError as exc:
+            raise ConfigurationError(str(exc)) from exc
 
     # ------------------------------------------------------------------ #
     # Tool registration                                                   #
@@ -229,12 +269,27 @@ class CausalMesh:
         """Default agent id for this session."""
         return self._agent_id
 
-    def audit_events(self) -> list[Any]:
-        """All events recorded in the relay (in order).
+    @property
+    def agents(self) -> tuple[str, ...]:
+        """Every agent id this session can record calls for."""
+        return self._relay.actors
 
-        Returns dicts from the in-memory chain store — one per recorded call.
+    @property
+    def enforcing(self) -> bool:
+        """Whether the gate acts on refusals.
+
+        True only on arm C3.  On C0, C1 and C2 every call is allowed and a
+        call C3 would refuse comes back with ``result.would_refuse`` set.
         """
-        return list(self._relay._store.records())  # type: ignore[attr-defined]
+        return self._contract.arm == "C3"
+
+    def audit_events(self) -> list[dict[str, Any]]:
+        """All events recorded in the relay, in chain order.
+
+        One dict per recorded call.  A call whose result has
+        ``recorded is False`` does not appear here.
+        """
+        return self._relay.records()
 
     def boundary_summary(self) -> dict[str, Any]:
         """Per-outcome counts and hook latency from the lifecycle boundary."""
@@ -250,19 +305,17 @@ def _build_runtime(
     *,
     contract: Contract,
     run_id: str,
-    agent_id: str,
+    agent_ids: list[str],
+    seed: bytes | None,
 ) -> tuple[Relay, LifecycleBoundary, ContractGate]:
     """Assemble the relay, boundary, and gate for one SDK session.
 
     Uses the existing ``ContractGate`` (which wraps the existing
     ``PolicyGate`` / ``Gate``) — there is exactly one authorization path.
     """
-    # Derive a key pair for the agent so the relay can sign events.
-    keypair = KeyPair.derive(_SDK_SEED, agent_id)
-
     relay = Relay(
         run_id=run_id,
-        keypairs={agent_id: keypair},
+        keypairs=_keypairs(contract, agent_ids, seed),
         delivery=NullDelivery(),  # SDK runs: no peer fan-out needed
     )
 
@@ -276,3 +329,17 @@ def _build_runtime(
     boundary = LifecycleBoundary(gate=gate)
 
     return relay, boundary, gate
+
+
+def _keypairs(contract: Contract, agent_ids: list[str], seed: bytes | None) -> dict[str, KeyPair]:
+    """One signing key per agent, sourced as ``tasks/runner.py`` does.
+
+    ``identity.keys`` wins over ``seed``: an operator who declared external
+    keys did so to stop participants sharing a derivation seed, and
+    ``load_identity_keys`` refuses a partial set for the same reason.
+    """
+    if contract.identity_keys_dir is not None:
+        return load_identity_keys(contract.identity_keys_dir, agent_ids=agent_ids)
+    if seed is not None:
+        return {agent: KeyPair.derive(seed, agent) for agent in agent_ids}
+    return {agent: KeyPair.generate(agent) for agent in agent_ids}
