@@ -20,6 +20,9 @@ import pytest
 pytestmark = pytest.mark.integration
 
 
+import os
+from pathlib import Path
+
 def modules_loaded_by(import_target: str) -> set[str]:
     """Return the causalmesh modules pulled in by importing one module."""
     program = (
@@ -27,8 +30,10 @@ def modules_loaded_by(import_target: str) -> set[str]:
         f"import {import_target};"
         "print(json.dumps(sorted(m for m in sys.modules if m.startswith('causalmesh'))))"
     )
+    env = dict(os.environ)
+    env["PYTHONPATH"] = str(Path(__file__).parents[2] / "src")
     result = subprocess.run(
-        [sys.executable, "-c", program], capture_output=True, text=True, timeout=60
+        [sys.executable, "-c", program], capture_output=True, text=True, timeout=60, env=env
     )
     assert result.returncode == 0, f"importing {import_target} failed:\n{result.stderr}"
     return set(json.loads(result.stdout))

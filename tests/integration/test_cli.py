@@ -311,7 +311,7 @@ class TestContractDiscovery:
         shutil.rmtree(REPO / "data" / "work" / experiment_id, ignore_errors=True)
 
     def test_a_discovered_contract_installs_the_contract_gate(self) -> None:
-        experiment_id = "exp_test_contract_discovery_on"
+        experiment_id = "exp_cd_on"
         self._cleanup(experiment_id)
         try:
             result = invoke(
@@ -343,7 +343,7 @@ class TestContractDiscovery:
             self._cleanup(experiment_id)
 
     def test_no_contract_flag_skips_discovery_even_with_one_present(self) -> None:
-        experiment_id = "exp_test_contract_discovery_off"
+        experiment_id = "exp_cd_off"
         self._cleanup(experiment_id)
         try:
             result = invoke(
