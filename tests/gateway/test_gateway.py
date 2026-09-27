@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import pytest
 
+from causalmesh.crypto.keys import KeyPair
 from causalmesh.gateway import GatewayResult, Tool, ToolGateway
 from causalmesh.hooks.lifecycle import AllowAllGate, GateDecision, LifecycleBoundary, ToolCall
 from causalmesh.relay import NullDelivery, Relay
-from causalmesh.crypto.keys import KeyPair
 
 pytestmark = pytest.mark.unit
 
@@ -76,7 +76,7 @@ class TestExecuteBasics:
 
 class TestPathExtraction:
     def test_path_from_arguments(self) -> None:
-        gw = _make_gateway()
+        _make_gateway()
         call_paths: list = []
 
         class _CapturingGate:

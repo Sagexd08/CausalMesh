@@ -22,7 +22,6 @@ import pytest
 
 from causalmesh.claims.registry import ClaimRegistry
 from causalmesh.policy import (
-    Checkpoint,
     Contract,
     ContractError,
     Gate,
@@ -198,7 +197,7 @@ class TestContract:
         assert Contract.from_dict({"version": 1}).identity_keys_dir is None
 
     def test_identity_must_be_a_mapping(self) -> None:
-        with pytest.raises(ContractError, match="identity.*mapping"):
+        with pytest.raises(ContractError, match=r"identity.*mapping"):
             Contract.from_dict({"version": 1, "identity": "not-a-mapping"})
 
     def test_an_identity_typo_is_an_error_not_a_shrug(self) -> None:

@@ -22,7 +22,7 @@ second schema.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -97,8 +97,8 @@ def load_sdk_config(path: Path | str) -> tuple[Contract, SDKConfig]:
 
     # Contract.from_dict is strict and rejects unknown keys.
     # Strip the Phase-1 SDK extension keys before passing to it.
-    _SDK_ONLY_KEYS = {"agent", "tools"}
-    contract_raw = {k: v for k, v in raw.items() if k not in _SDK_ONLY_KEYS}
+    _sdk_only_keys = {"agent", "tools"}
+    contract_raw = {k: v for k, v in raw.items() if k not in _sdk_only_keys}
 
     try:
         contract = Contract.from_dict(contract_raw, source=path)

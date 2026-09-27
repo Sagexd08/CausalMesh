@@ -107,7 +107,7 @@ class TestValidation:
             AgentScript.from_dict("a", {"actions": [{"rename": "a.py"}]})
 
     def test_modify_without_old_and_new_is_refused(self) -> None:
-        with pytest.raises(ScriptError, match="old.*new"):
+        with pytest.raises(ScriptError, match=r"old.*new"):
             AgentScript.from_dict("a", {"actions": [{"modify": "a.py"}]})
 
     def test_two_verbs_in_one_action_are_refused(self) -> None:

@@ -15,7 +15,6 @@ from textwrap import dedent
 import pytest
 
 from causalmesh import CausalMesh, Tool
-from causalmesh.events.schema import EventType
 
 pytestmark = pytest.mark.unit
 

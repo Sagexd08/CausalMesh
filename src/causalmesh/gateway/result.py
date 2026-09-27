@@ -30,7 +30,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from causalmesh.hooks.lifecycle import GateDecision, ToolOutcome, ToolResult
+from causalmesh.hooks.lifecycle import ToolOutcome
 
 __all__ = ["GatewayResult"]
 

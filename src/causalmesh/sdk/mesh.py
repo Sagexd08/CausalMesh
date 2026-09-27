@@ -60,12 +60,12 @@ from causalmesh.hooks.policy_gate import ContractGate
 from causalmesh.policy.contract import Contract, ContractError
 from causalmesh.relay import NullDelivery, Relay
 
-from .config import SDKConfig, load_sdk_config
-from .errors import ConfigurationError, PolicyError
-from .identity import make_identity
 from ..gateway.gateway import ToolGateway
 from ..gateway.result import GatewayResult
 from ..gateway.tool import Tool
+from .config import SDKConfig, load_sdk_config
+from .errors import ConfigurationError
+from .identity import make_identity
 
 __all__ = ["CausalMesh"]
 
@@ -125,7 +125,7 @@ class CausalMesh:
     # ------------------------------------------------------------------ #
 
     @classmethod
-    def from_config(cls, path: str | Path, *, run_id: str | None = None) -> "CausalMesh":
+    def from_config(cls, path: str | Path, *, run_id: str | None = None) -> CausalMesh:
         """Build a ``CausalMesh`` from a ``causalmesh.yaml`` file.
 
         Raises:
