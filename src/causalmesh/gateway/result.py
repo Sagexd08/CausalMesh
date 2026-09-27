@@ -30,9 +30,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from causalmesh.hooks.lifecycle import ToolOutcome
+from causalmesh.hooks.lifecycle import ToolOutcome, ToolResult
 
-__all__ = ["GatewayResult"]
+__all__ = ["GatewayResult", "ToolResult"]
 
 
 class GatewayResult:
@@ -49,7 +49,7 @@ class GatewayResult:
         *,
         event_id: str | None = None,
     ) -> None:
-        self._raw = raw
+        self._raw: ToolResult = raw
         self._event_id = event_id
 
     # ------------------------------------------------------------------ #
@@ -188,7 +188,3 @@ class GatewayResult:
             "rule": self.rule,
             "tool": self.tool,
         }
-
-
-# Convenience alias — GatewayResult IS the public ToolResult for SDK users
-ToolResult = GatewayResult

@@ -59,6 +59,8 @@ dev = [
     # opened. CI installs these exact versions.
     "ruff==0.9.6",
     "mypy==1.14.1",
+    "types-PyYAML>=6.0",
+    "bandit[toml]>=1.7",
 ]
 
 [project.urls]
@@ -142,3 +144,7 @@ python_version = "3.11"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = ["yaml", "yaml.*"]
+ignore_missing_imports = true

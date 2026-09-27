@@ -148,34 +148,23 @@ class ToolGateway:
             path_arg = args.get("path")
             paths = (str(path_arg),) if path_arg else ()
 
-        call = ToolCall(
-            tool=tool_name,
-            agent_id=agent_id,
-            paths=paths,
-            arguments=args,
-        )
-
         # Override is_mutating based on the Tool's own declaration.
         # LifecycleBoundary only gates calls whose .is_mutating is True,
         # which uses the MUTATING_TOOLS frozenset.  For SDK tools we need
         # to honour the Tool.mutating flag instead.
-        # We wrap the tool call to teach the boundary about mutability.
-        _mutating_override = tool.mutating
-
-        # Temporarily patch via a subclass so the boundary respects
-        # the Tool's own mutating declaration.
-        call = _MutatingAwareCall(
+        # Wrap the tool call so the boundary respects the Tool's mutating flag.
+        aware_call: ToolCall = _MutatingAwareCall(  # type: ignore[assignment]
             tool=tool_name,
             agent_id=agent_id,
             paths=paths,
             arguments=args,
-            _mutating=_mutating_override,
+            _mutating=tool.mutating,
         )
 
         def executor(c: ToolCall) -> Any:
             return tool.handler(**c.arguments)
 
-        internal_result = self._boundary.invoke(call, executor, now_us=ts)
+        internal_result = self._boundary.invoke(aware_call, executor, now_us=ts)
 
         event_id = self._emit_event(internal_result, agent_id=agent_id, ts=ts)
         return GatewayResult(internal_result, event_id=event_id)
@@ -190,7 +179,8 @@ class ToolGateway:
 
     def _identity_for(self, agent_id: str) -> EventIdentity:
         if self._identity_factory is not None:
-            return self._identity_factory(agent_id)
+            result = self._identity_factory(agent_id)
+            return result  # type: ignore[return-value,no-any-return]
         # Fallback: minimal valid identity
         return EventIdentity(
             experiment_id="sdk-run",

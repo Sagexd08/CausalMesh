@@ -42,7 +42,7 @@ class ChainStore:
         self._fsync = fsync
         self._lock = threading.Lock()
         self._records: list[dict[str, Any]] = []
-
+        self._handle: Any = None  # TextIOWrapper when path given, else None
         if self._path is not None:
             self._path.parent.mkdir(parents=True, exist_ok=True)
             if self._path.exists() and self._path.stat().st_size > 0:
