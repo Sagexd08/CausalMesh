@@ -37,6 +37,8 @@ from causalmesh.hooks.lifecycle import (
     ToolOutcome,
     ToolResult as InternalToolResult,
 )
+from causalmesh.hooks.policy_gate import ContractGate
+from causalmesh.policy.gate import Verdict
 from causalmesh.relay import Relay
 
 from .resolver import ResourceResolver
@@ -64,6 +66,9 @@ class ToolGateway:
         agent_id:   Default agent id (can be overridden per call).
         identity_factory: Callable ``(agent_id) -> EventIdentity`` for
                     building event identity when emitting.
+        gate:       The ``ContractGate`` behind ``boundary``, when there is
+                    one.  Supplying it lets a result report the refusal an
+                    unenforced arm recorded but did not act on.
     """
 
     def __init__(
@@ -73,11 +78,13 @@ class ToolGateway:
         relay: Relay,
         agent_id: str = "sdk-agent",
         identity_factory: Any | None = None,
+        gate: ContractGate | None = None,
     ) -> None:
         self._boundary = boundary
         self._relay = relay
         self._agent_id = agent_id
         self._identity_factory = identity_factory
+        self._gate = gate
         self._tools: dict[str, Tool] = {}
         self._event_counter = 0
         self._resolver = ResourceResolver()
@@ -145,13 +152,22 @@ class ToolGateway:
 
         Raises:
             ToolNotFoundError: When ``tool_name`` is not registered.
+            UnknownAgentError: When the relay holds no key for ``agent_id``.
+                Checked before the gate, so the handler never runs for a
+                call that could not be recorded.
         """
-        from causalmesh.sdk.errors import ToolNotFoundError
+        from causalmesh.sdk.errors import ToolNotFoundError, UnknownAgentError
 
         if tool_name not in self._tools:
             raise ToolNotFoundError(
                 f"tool {tool_name!r} is not registered. "
                 f"Known tools: {self.registered_tools() or ['(none)']}"
+            )
+        if not self._relay.has_key(agent_id):
+            raise UnknownAgentError(
+                f"agent {agent_id!r} has no signing key in this session, so its "
+                f"calls cannot be recorded. Known agents: {list(self._relay.actors)}. "
+                "Declare it under `roles` in causalmesh.yaml or pass it in `agents=`."
             )
 
         tool = self._tools[tool_name]
@@ -186,10 +202,29 @@ class ToolGateway:
         def executor(c: ToolCall) -> Any:
             return tool.handler(**c.arguments)
 
+        checks_before = len(self._gate.verdicts) if self._gate is not None else 0
         internal_result = self._boundary.invoke(aware_call, executor, now_us=ts)
+        shadow = self._shadow_refusal(checks_before)
 
-        event_id = self._emit_event(internal_result, agent_id=agent_id, ts=ts)
-        return GatewayResult(internal_result, event_id=event_id)
+        event_id, audit_error = self._emit_event(
+            internal_result,
+            agent_id=agent_id,
+            ts=ts,
+            mutating=tool.mutating,
+            shadow=shadow,
+        )
+        return GatewayResult(
+            internal_result, event_id=event_id, audit_error=audit_error, shadow=shadow
+        )
+
+    def _shadow_refusal(self, checks_before: int) -> Verdict | None:
+        """The first refusal this call's checks recorded but did not enforce."""
+        if self._gate is None:
+            return None
+        for verdict in self._gate.verdicts[checks_before:]:
+            if verdict.detail.get("would_refuse") is True:
+                return verdict
+        return None
 
     async def execute_async(
         self,
@@ -259,22 +294,37 @@ class ToolGateway:
             arm="C3",
         )
 
-    def _emit_event(self, result: InternalToolResult, *, agent_id: str, ts: int) -> str | None:
+    def _emit_event(
+        self,
+        result: InternalToolResult,
+        *,
+        agent_id: str,
+        ts: int,
+        mutating: bool,
+        shadow: Verdict | None = None,
+    ) -> tuple[str | None, str | None]:
         """Emit one event to the relay for this result.
 
         Mirrors the pattern in ``tools/executor.py:ToolExecutor._emit``.
-        Executed calls emit as WRITE or READ depending on mutability;
-        denied and failed calls emit as FAILURE.
+        Executed calls emit as WRITE or READ according to the tool's own
+        ``mutating`` declaration; denied and failed calls emit as FAILURE.
+
+        Returns ``(event_id, None)`` when recorded and ``(None, reason)``
+        when not, so a missing record is reported rather than silent.
         """
         event_id = self._next_event_id(agent_id)
         identity = self._identity_for(agent_id)
 
         if result.outcome == ToolOutcome.EXECUTED:
-            event_type = _MUTATING_EVENT_TYPE if result.call.paths else _READ_EVENT_TYPE
+            event_type = _MUTATING_EVENT_TYPE if mutating else _READ_EVENT_TYPE
             payload: dict[str, Any] = {
                 "tool": result.call.tool,
                 "outcome": "executed",
             }
+            if shadow is not None:
+                payload["would_refuse"] = True
+                payload["shadow_rule"] = shadow.rule
+                payload["shadow_reason"] = shadow.reason
         else:
             event_type = _FAILURE_EVENT_TYPE
             payload = {
@@ -303,13 +353,13 @@ class ToolGateway:
                 parent_id=None,
                 payload=payload,
             )
-            if not ingested.accepted:
-                # Relay refusal is non-fatal for the SDK — we log but
-                # do not raise; the call outcome stands.
-                return None
-            return event_id
-        except Exception:  # noqa: BLE001 — relay errors must not mask tool results
-            return None
+        except Exception as exc:  # noqa: BLE001 — relay errors must not mask tool results
+            return None, f"{type(exc).__name__}: {exc}"
+        if not ingested.accepted:
+            # The call outcome stands; the missing record is reported on
+            # the result instead of raised, so it cannot mask the outcome.
+            return None, ingested.reason or "the relay refused the event"
+        return event_id, None
 
 
 class _MutatingAwareCall:

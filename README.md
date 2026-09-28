@@ -214,6 +214,13 @@ else:
     print(f"Action denied: {result.describe()}")
 ```
 
+Tools are gated unless registered with `mutating=False`. Only agents declared
+under `roles` (or passed as `agents=`) can call `execute`; any other agent raises
+`UnknownAgentError` before anything runs, because its calls could not be signed.
+Only arm C3 refuses. On C0-C2 a call C3 would refuse runs and reports
+`result.would_refuse`. Pass `seed=` or declare `identity.keys` for a
+reproducible signed chain. `docs/backlog.md` lists what the SDK does not do yet.
+
 For async agents, use `await mesh.execute_async(...)` to ensure non-blocking execution while maintaining policy enforcement boundaries. A denied async action is never awaited.
 
 See [`examples/phase1_basic_agent.py`](examples/phase1_basic_agent.py) and [`examples/phase1_async_agent.py`](examples/phase1_async_agent.py) for complete working examples.

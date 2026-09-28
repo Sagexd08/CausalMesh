@@ -14,6 +14,10 @@ and exposes a clean surface:
     result.agent_id  → agent that made the call
     result.value     → return value of the handler (None when denied/failed)
     result.event_id  → audit identifier when available
+    result.recorded  → True when the call reached the evidence chain
+    result.audit_error → why it did not, when it did not
+    result.would_refuse → True when an unenforced arm (C0-C2) would have
+                       refused this call under C3
 
 A denial prints a message a developer can act on::
 
@@ -31,6 +35,7 @@ from __future__ import annotations
 from typing import Any
 
 from causalmesh.hooks.lifecycle import ToolOutcome, ToolResult
+from causalmesh.policy.gate import Verdict
 
 __all__ = ["GatewayResult", "ToolResult"]
 
@@ -48,9 +53,13 @@ class GatewayResult:
         raw: ToolResult,
         *,
         event_id: str | None = None,
+        audit_error: str | None = None,
+        shadow: Verdict | None = None,
     ) -> None:
         self._raw: ToolResult = raw
         self._event_id = event_id
+        self._audit_error = audit_error
+        self._shadow = shadow
 
     # ------------------------------------------------------------------ #
     # Public interface                                                     #
@@ -132,6 +141,39 @@ class GatewayResult:
         return self._event_id
 
     @property
+    def recorded(self) -> bool:
+        """True when the call's event was accepted into the evidence chain.
+
+        False means the outcome stands but no signed record of it exists;
+        ``audit_error`` says why.  Callers that require evidence for every
+        action should treat ``recorded is False`` as a failure.
+        """
+        return self._event_id is not None
+
+    @property
+    def audit_error(self) -> str | None:
+        """Why the event was not recorded, or ``None`` when it was."""
+        return self._audit_error
+
+    @property
+    def would_refuse(self) -> bool:
+        """True when an unenforced arm let through a call C3 would refuse.
+
+        Always False on C3, where such a call is denied instead.
+        """
+        return self._shadow is not None
+
+    @property
+    def shadow_reason(self) -> str | None:
+        """The refusal an unenforced arm recorded but did not act on."""
+        return self._shadow.reason if self._shadow is not None else None
+
+    @property
+    def shadow_rule(self) -> str | None:
+        """The rule behind ``shadow_reason``."""
+        return self._shadow.rule if self._shadow is not None else None
+
+    @property
     def duration_us(self) -> int:
         """How long the handler ran, in microseconds (0 when denied)."""
         return self._raw.duration_us
@@ -146,7 +188,15 @@ class GatewayResult:
         For allowed calls returns a one-liner.
         """
         if self.executed:
-            return f"Allowed. Agent: {self.agent_id}  Tool: {self.tool}"
+            line = f"Allowed. Agent: {self.agent_id}  Tool: {self.tool}"
+            if self.would_refuse:
+                line += (
+                    f"\nNot enforced on this arm; C3 would refuse it."
+                    f"\nRule:  {self.shadow_rule}\nReason: {self.shadow_reason}"
+                )
+            if not self.recorded:
+                line += f"\nNot recorded: {self.audit_error}"
+            return line
         if self.failed:
             return (
                 f"Tool execution failed.\n\n"
@@ -177,6 +227,7 @@ class GatewayResult:
         return {
             "agent_id": self.agent_id,
             "allowed": self.allowed,
+            "audit_error": self.audit_error,
             "blocked_path": self.blocked_path,
             "denied": self.denied,
             "duration_us": self.duration_us,
@@ -185,6 +236,10 @@ class GatewayResult:
             "failed": self.failed,
             "holder": self.holder,
             "reason": self.reason,
+            "recorded": self.recorded,
             "rule": self.rule,
+            "shadow_reason": self.shadow_reason,
+            "shadow_rule": self.shadow_rule,
             "tool": self.tool,
+            "would_refuse": self.would_refuse,
         }

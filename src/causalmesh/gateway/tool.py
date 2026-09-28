@@ -14,6 +14,10 @@ handler — that invariant is enforced by the boundary, not by this class.
 
 ``mutating=False`` calls still pass through the boundary (for recording)
 but are allowed unconditionally by the gate.
+
+``mutating`` defaults to ``True``: a tool is gated unless it is declared
+read-only.  Skipping the gate has to be a statement someone made, not the
+result of a forgotten argument.
 """
 
 from __future__ import annotations
@@ -42,7 +46,7 @@ class Tool:
     name: str
     handler: Callable[..., Any]
     kind: str = "generic"
-    mutating: bool = False
+    mutating: bool = True
     resource_args: list[str] = field(default_factory=list)
     description: str = ""
     metadata: dict[str, Any] = field(default_factory=dict)
