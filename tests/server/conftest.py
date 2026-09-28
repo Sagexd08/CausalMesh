@@ -1,4 +1,6 @@
 import pytest
+
+pytest.importorskip("fastapi")
 from fastapi.testclient import TestClient
 
 from causalmesh import CausalMesh, Tool
