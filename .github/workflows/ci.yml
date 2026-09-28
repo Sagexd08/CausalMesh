@@ -30,6 +30,10 @@ on:
   # Lets a maintainer re-run the suite without an empty commit.
   workflow_dispatch:
 
+env:
+  PIP_DEFAULT_TIMEOUT: "100"
+  PIP_RETRIES: "10"
+
 # A new push to the same branch supersedes the run in flight. Without this a
 # busy branch queues runs that are already answering a stale question.
 concurrency:
