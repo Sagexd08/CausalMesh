@@ -138,7 +138,7 @@ def create_app(
             would_refuse=result.would_refuse,
         )
 
-    @app.post("/v1/chat/completions")
+    @app.post("/v1/chat/completions", dependencies=[Depends(auth_dep)])
     async def chat_completions(request: Request) -> JSONResponse:
         m: CausalMesh = app.state.mesh
         upstream_url = app.state.upstream_base_url

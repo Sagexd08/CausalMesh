@@ -63,6 +63,14 @@ def serve_command(
         )
         raise typer.Exit(Exit.USAGE)
 
+    if dev and host not in ("127.0.0.1", "localhost"):
+        fail("--dev mode disables authentication and is only allowed on localhost/127.0.0.1")
+        raise typer.Exit(Exit.USAGE)
+
+    if not dev and api_token is None:
+        fail("--api-token is required when not in --dev mode")
+        raise typer.Exit(Exit.USAGE)
+
     mesh = CausalMesh(contract=contract, run_id=run_id, agent_id="agent")
 
     tokens = {api_token} if api_token else None
@@ -80,11 +88,6 @@ def serve_command(
     else:
         note("no --upstream set; calls are gated and recorded, and get a stub reply")
     note("POST /v1/chat/completions  ·  GET /healthz  ·  Ctrl-C to stop")
-
-    if not dev and api_token is None:
-        note(
-            "WARNING: no --api-token set. Auth is disabled. Use --api-token or set CAUSALMESH_API_TOKEN."
-        )
 
     # In tests, if the user imports serve_command, we don't want to block, but Typer callback runs synchronously.
     # To retain exactly the old test behavior where `run_server` was mockable or used a thread,

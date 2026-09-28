@@ -98,3 +98,17 @@ def test_invalid_json_body_is_400(client):
         "/v1/chat/completions", content=b"{not json", headers={"Content-Type": "application/json"}
     )
     assert response.status_code == 400
+
+
+def test_chat_completions_requires_auth_when_configured(authed_client):
+    response = authed_client.post("/v1/chat/completions", json={"model": "any"})
+    assert response.status_code == 401
+
+
+def test_chat_completions_allows_auth_with_valid_token(authed_client):
+    response = authed_client.post(
+        "/v1/chat/completions",
+        headers={"Authorization": "Bearer good-token"},
+        json={"model": "any"},
+    )
+    assert response.status_code == 200
