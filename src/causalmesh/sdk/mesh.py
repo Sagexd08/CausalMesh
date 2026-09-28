@@ -206,6 +206,10 @@ class CausalMesh:
         """Names of all registered tools."""
         return self._gateway.registered_tools()
 
+    def get_tool(self, name: str) -> Tool:
+        """Fetch a registered tool by name."""
+        return self._gateway.get_tool(name)
+
     # ------------------------------------------------------------------ #
     # Execution                                                           #
     # ------------------------------------------------------------------ #

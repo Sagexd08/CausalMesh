@@ -102,6 +102,19 @@ class TestToolRegistration:
         result = mesh.execute(agent_id="coding-agent", tool="t")
         assert result.value == "v2"
 
+    def test_get_tool_retrieves_registered_tool(self, tmp_path: Path) -> None:
+        mesh = CausalMesh.from_config(_simple_contract(tmp_path))
+        t = Tool(name="fetch", handler=lambda: None)
+        mesh.register_tool(t)
+        assert mesh.get_tool("fetch") is t
+
+    def test_get_tool_raises_on_unknown(self, tmp_path: Path) -> None:
+        from causalmesh.sdk.errors import ToolNotFoundError
+
+        mesh = CausalMesh.from_config(_simple_contract(tmp_path))
+        with pytest.raises(ToolNotFoundError, match="tool 'missing' is not registered"):
+            mesh.get_tool("missing")
+
 
 class TestAllowedExecution:
     """Allowed calls must reach the handler and return its value."""
