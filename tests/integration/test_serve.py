@@ -18,6 +18,9 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+
+pytest.importorskip("fastapi")
+pytest.importorskip("uvicorn")
 from typer.testing import CliRunner
 
 from causalmesh.adapters.serve import ServeConfig, run_server
