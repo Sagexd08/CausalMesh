@@ -24,6 +24,7 @@ from __future__ import annotations
 from .base import BaseFrameworkAdapter
 from .generic import AgentAdapter, GenericAdapter
 from .langchain import LangChainAdapter
+from .openai import OpenAIAdapter
 from .schema import tool_to_json_schema
 
 __all__ = [
@@ -31,5 +32,6 @@ __all__ = [
     "BaseFrameworkAdapter",
     "GenericAdapter",
     "LangChainAdapter",
+    "OpenAIAdapter",
     "tool_to_json_schema",
 ]
