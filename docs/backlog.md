@@ -619,8 +619,70 @@ older `mix_stderr` constructor flag with separate-by-default capture, so
 `result.stdout` no longer includes what a command wrote to stderr — the
 assertion now fails against real, correct CLI behavior. Confirmed present on
 this branch's `HEAD` before any change in this pass (`git stash` + rerun), not
-a regression this work introduced. Fixing it (either pin `click`, or have the
-two `TestQuickstartEndToEnd` tests assert against `result.output` /
-`result.stderr` instead of `result.stdout`) is real, scoped, unstarted work,
-recorded here rather than patched silently alongside an unrelated feature.
+a regression this work introduced.
+
+**Resolved 2026-09-28.** The Phase 1 SDK commit deleted the two assertions
+instead of fixing them. They are restored and now read `result.output`, which
+holds both streams under every `click` version, so the tests again check
+that quickstart reported what it did rather than only its exit code.
   and PILOT/DERIVED labeling conventions) does not.
+
+## Developer SDK (Phase 1, landed 2026-09-27)
+
+`causalmesh.sdk`, `causalmesh.gateway` and `causalmesh.integrations` let an
+operator put the existing gate in front of their own agent's tools:
+`CausalMesh.from_config(...)`, `register_tool(Tool(...))`, `execute(...)`.
+There is one authorization path. The SDK reuses `ContractGate`,
+`LifecycleBoundary` and `Relay`; it adds no policy logic of its own.
+
+**Status: shipped, with defects found in review and fixed on 2026-09-28.**
+Each fix is pinned by `tests/sdk/test_evidence.py`, and each was
+mutation-checked: reverting the fix makes a test there fail.
+
+- **A second agent's calls ran unrecorded.** The relay was given a key for
+  the default agent only, so any other `agent_id` executed and its event
+  was refused, with `event_id=None` and no error. Keys are now issued to
+  the default agent, every `roles` entry and anything in `agents=`. Any
+  other agent raises `UnknownAgentError` before the gate or handler runs.
+  When the relay refuses or fails on an event anyway, the result reports it
+  (`recorded is False`, `audit_error`) rather than dropping it.
+- **Read-only tools were recorded as `WRITE`.** The event type was chosen
+  by whether the call had a path. It now follows `Tool.mutating`.
+- **A tool registered without `mutating=` skipped the gate.**
+  `Tool.mutating` now defaults to `True`. Only an explicit `mutating=False`
+  skips the gate.
+- **Unenforced arms were silent.** On C0-C2 a call that C3 would refuse
+  now comes back with `would_refuse`, `shadow_rule` and `shadow_reason`.
+  The signed event records `would_refuse` too. `CausalMesh.enforcing`
+  states the arm's behaviour. Enforcing only on C3 is unchanged; `serve`
+  and the harness do the same.
+- **Keys came from a hard-coded public seed**, so anyone could sign as any
+  agent. Keys now come from `identity.keys` when the contract declares it,
+  otherwise from a caller-supplied `seed=` (reproducible), otherwise from
+  fresh random keys, as `serve` does.
+- **The run id was a random `uuid4`** inside the signed identity, which
+  broke chain reproducibility. It now defaults to the constant `"sdk"`, and
+  callers pass their own when they keep several chains.
+
+**What does not ship:**
+
+- **Framework adapters.** OpenAI function calling, Anthropic `tool_use`,
+  LangGraph and CrewAI are not implemented. `GenericAdapter` is the only
+  adapter. Each framework's call shape is its own contract, and none has
+  been exercised.
+- **Human-in-the-loop approval from the SDK.** Checkpoints exist in the
+  gate, but the SDK installs no checkpoint handler, so a matched checkpoint
+  refuses by default.
+- **Claims.** The SDK builds its gate with `registry=None`. Exclusive
+  leases (§74) do not apply to SDK sessions.
+- **Persistence.** The chain lives in an in-memory `ChainStore`, and
+  `CausalMesh` exposes no export. A session's evidence is gone when the
+  process exits unless the caller reads `audit_events()`.
+- **Wall-clock timestamps in the signed chain.** When `execute()` is called
+  without `now_us`, the event is stamped with `utc_now_micros()`, and that
+  timestamp is signed. `serve` does the same. The chain is reproducible
+  only when the caller supplies `now_us`. Putting a logical clock in the
+  chain and the wall clock in the envelope is unstarted work.
+- **Reads are not gated.** `mutating=False` tools go around the gate, as
+  §20 defines for the experiment. An operator who wants reads checked has
+  to declare those tools mutating.

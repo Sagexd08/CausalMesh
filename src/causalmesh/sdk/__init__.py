@@ -15,6 +15,7 @@ from .errors import (
     PolicyError,
     ToolExecutionError,
     ToolNotFoundError,
+    UnknownAgentError,
 )
 from .mesh import CausalMesh
 
@@ -26,5 +27,6 @@ __all__ = [
     "SDKConfig",
     "ToolExecutionError",
     "ToolNotFoundError",
+    "UnknownAgentError",
     "load_sdk_config",
 ]

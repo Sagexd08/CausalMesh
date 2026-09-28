@@ -2,6 +2,7 @@
 @import 'fumadocs-ui/css/neutral.css';
 @import 'fumadocs-ui/css/preset.css';
 @import './landing.css';
+@import './site.css';
 
 /* The landing components live outside content/, so Tailwind's automatic
    source detection has to be told about them explicitly. */
