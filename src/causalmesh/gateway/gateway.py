@@ -268,10 +268,20 @@ class ToolGateway:
             else:
                 return tool_obj.handler(**c.arguments)
 
+        checks_before = len(self._gate.verdicts) if self._gate is not None else 0
         internal_result = await self._boundary.invoke_async(aware_call, async_executor, now_us=ts)
+        shadow = self._shadow_refusal(checks_before)
 
-        event_id = self._emit_event(internal_result, agent_id=agent_id, ts=ts)
-        return GatewayResult(internal_result, event_id=event_id)
+        event_id, audit_error = self._emit_event(
+            internal_result,
+            agent_id=agent_id,
+            ts=ts,
+            mutating=tool_obj.mutating,
+            shadow=shadow,
+        )
+        return GatewayResult(
+            internal_result, event_id=event_id, audit_error=audit_error, shadow=shadow
+        )
 
     # ------------------------------------------------------------------ #
     # Event emission (mirrors tools/executor.py pattern)                  #
