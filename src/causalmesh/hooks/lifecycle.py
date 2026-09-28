@@ -278,6 +278,66 @@ class LifecycleBoundary:
         )
         return self._finish(context, result)
 
+    async def invoke_async(
+        self, call: ToolCall, executor: Callable[[ToolCall], Any], *, now_us: int
+    ) -> ToolResult:
+        """Run one async tool call through the full lifecycle.
+
+        `executor` must return an awaitable. The gate check and hooks
+        run synchronously (as policies are purely local). The actual work
+        is awaited only if the gate allows it.
+        """
+        hook_start = self._clock()
+        context = HookContext(call=call, now_us=now_us)
+        for hook in self._pre_hooks:
+            hook(context)
+        hook_overhead = self._clock() - hook_start
+
+        decision = (
+            self._gate.check(call, now_us)
+            if call.is_mutating
+            else GateDecision(allowed=True, reason="non-mutating call; gate not consulted")
+        )
+
+        if not decision.allowed:
+            result = ToolResult(
+                call=call,
+                outcome=ToolOutcome.DENIED,
+                decision=decision,
+                hook_overhead_us=max(0, hook_overhead),
+                injected_events=context.injected_events,
+                injected_bytes=context.injected_bytes,
+            )
+            return self._finish(context, result)
+
+        started = self._clock()
+        try:
+            value = await executor(call)
+        except Exception as exc:
+            result = ToolResult(
+                call=call,
+                outcome=ToolOutcome.FAILED,
+                error=f"{type(exc).__name__}: {exc}",
+                decision=decision,
+                duration_us=max(0, self._clock() - started),
+                hook_overhead_us=max(0, hook_overhead),
+                injected_events=context.injected_events,
+                injected_bytes=context.injected_bytes,
+            )
+            return self._finish(context, result)
+
+        result = ToolResult(
+            call=call,
+            outcome=ToolOutcome.EXECUTED,
+            value=value,
+            decision=decision,
+            duration_us=max(0, self._clock() - started),
+            hook_overhead_us=max(0, hook_overhead),
+            injected_events=context.injected_events,
+            injected_bytes=context.injected_bytes,
+        )
+        return self._finish(context, result)
+
     def _finish(self, context: HookContext, result: ToolResult) -> ToolResult:
         """Run post-hooks and record the result — for every outcome.
 

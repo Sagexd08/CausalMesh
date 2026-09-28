@@ -77,6 +77,7 @@ mesh.register_tool(
         handler=read_file,
         kind="filesystem",
         mutating=False,
+        resource_args=["path"],
         description="Read a file from the filesystem.",
     )
 )
@@ -87,6 +88,7 @@ mesh.register_tool(
         handler=write_file,
         kind="filesystem",
         mutating=True,
+        resource_args=["path"],
         description="Write content to a file.",
     )
 )

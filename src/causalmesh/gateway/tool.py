@@ -43,6 +43,7 @@ class Tool:
     handler: Callable[..., Any]
     kind: str = "generic"
     mutating: bool = False
+    resource_args: list[str] = field(default_factory=list)
     description: str = ""
     metadata: dict[str, Any] = field(default_factory=dict)
 

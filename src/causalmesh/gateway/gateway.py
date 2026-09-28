@@ -39,6 +39,7 @@ from causalmesh.hooks.lifecycle import (
 )
 from causalmesh.relay import Relay
 
+from .resolver import ResourceResolver
 from .result import GatewayResult
 from .tool import Tool
 
@@ -79,6 +80,7 @@ class ToolGateway:
         self._identity_factory = identity_factory
         self._tools: dict[str, Tool] = {}
         self._event_counter = 0
+        self._resolver = ResourceResolver()
 
     # ------------------------------------------------------------------ #
     # Registration                                                        #
@@ -156,12 +158,9 @@ class ToolGateway:
         args = dict(arguments or {})
         ts = now_us if now_us is not None else utc_now_micros()
 
-        # Determine paths for the gate.  When the caller does not provide
-        # explicit paths, look for a "path" argument — the common case for
-        # filesystem tools.
+        # Extract paths using ResourceResolver instead of guessing "path".
         if paths is None:
-            path_arg = args.get("path")
-            paths = (str(path_arg),) if path_arg else ()
+            paths = self._resolver.resolve(tool, args)
 
         # Override is_mutating based on the Tool's own declaration.
         # LifecycleBoundary only gates calls whose .is_mutating is True,
@@ -176,10 +175,65 @@ class ToolGateway:
             _mutating=tool.mutating,
         )
 
+        import inspect
+
+        if inspect.iscoroutinefunction(tool.handler):
+            raise TypeError(
+                f"Tool {tool_name!r} has an asynchronous handler. "
+                f"Use execute_async() instead of execute()."
+            )
+
         def executor(c: ToolCall) -> Any:
             return tool.handler(**c.arguments)
 
         internal_result = self._boundary.invoke(aware_call, executor, now_us=ts)
+
+        event_id = self._emit_event(internal_result, agent_id=agent_id, ts=ts)
+        return GatewayResult(internal_result, event_id=event_id)
+
+    async def execute_async(
+        self,
+        *,
+        agent_id: str,
+        tool: str,
+        arguments: dict[str, Any] | None = None,
+        paths: tuple[str, ...] | None = None,
+        now_us: int | None = None,
+    ) -> GatewayResult:
+        """Route an async tool call through the policy boundary."""
+        from causalmesh.sdk.errors import ToolNotFoundError
+
+        if tool not in self._tools:
+            raise ToolNotFoundError(
+                f"tool {tool!r} is not registered. "
+                f"Known tools: {self.registered_tools() or ['(none)']}"
+            )
+
+        tool_obj = self._tools[tool]
+        args = dict(arguments or {})
+        ts = now_us if now_us is not None else utc_now_micros()
+
+        if paths is None:
+            paths = self._resolver.resolve(tool_obj, args)
+
+        aware_call: ToolCall = _MutatingAwareCall(  # type: ignore[assignment]
+            tool=tool,
+            agent_id=agent_id,
+            paths=paths,
+            arguments=args,
+            _mutating=tool_obj.mutating,
+        )
+
+        import inspect
+
+        async def async_executor(c: ToolCall) -> Any:
+            # Optionally support synchronous handlers in execute_async
+            if inspect.iscoroutinefunction(tool_obj.handler):
+                return await tool_obj.handler(**c.arguments)
+            else:
+                return tool_obj.handler(**c.arguments)
+
+        internal_result = await self._boundary.invoke_async(aware_call, async_executor, now_us=ts)
 
         event_id = self._emit_event(internal_result, agent_id=agent_id, ts=ts)
         return GatewayResult(internal_result, event_id=event_id)

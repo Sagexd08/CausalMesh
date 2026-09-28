@@ -11,6 +11,7 @@ from __future__ import annotations
 __all__ = [
     "CausalMeshError",
     "ConfigurationError",
+    "MissingResourceError",
     "PolicyError",
     "ToolExecutionError",
     "ToolNotFoundError",
@@ -26,6 +27,14 @@ class ConfigurationError(CausalMeshError):
 
     Raised by ``CausalMesh.from_config`` when it cannot produce a usable
     policy from the supplied file.  The message describes what to fix.
+    """
+
+
+class MissingResourceError(CausalMeshError):
+    """A required resource argument is missing from the tool arguments.
+
+    Raised when the gateway cannot resolve resources declared in
+    ``resource_args`` because the agent failed to supply them.
     """
 
 
