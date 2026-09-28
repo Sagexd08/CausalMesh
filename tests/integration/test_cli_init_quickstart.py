@@ -128,7 +128,11 @@ class TestQuickstartEndToEnd:
                 "quickstart", "--root", str(REPO), "--profile", "smoke", "--id", experiment_id
             )
             assert result.exit_code == 0, result.stdout
-            assert "already exists; skipping init" in result.output
+            # note() emits via Rich console which may word-wrap the long path,
+            # splitting "already exists; skipping init" across lines.
+            # Assert both substrings independently so the test is layout-stable.
+            assert "already exists" in result.output
+            assert "skipping init" in result.output
             assert contract_path.read_text(encoding="utf-8") == before
         finally:
             _cleanup_experiment(experiment_id)
