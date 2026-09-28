@@ -114,3 +114,22 @@ def test_langchain_denial_returns_safe_message(mesh: CausalMesh) -> None:
     events = mesh.audit_events()
     assert len(events) == 1
     assert events[0]["event"]["event_type"] == "FAILURE"
+
+
+@pytest.mark.asyncio
+async def test_langchain_adapter_supports_async_arun(mesh: CausalMesh) -> None:
+    """The adapter supports asynchronous execution via _arun natively."""
+    pytest.importorskip("langchain_core")
+
+    adapter = LangChainAdapter(mesh, agent_id="test-agent")
+    tools = adapter.get_tools()
+    lc_tool = tools[0]
+
+    # LangChain's ainvoke uses the _arun / coroutine handler we attached
+    result = await lc_tool.ainvoke({"a": 99, "b": "async/path"})
+
+    assert result == "async/path-99"
+
+    events = mesh.audit_events()
+    assert len(events) == 1
+    assert events[0]["event"]["payload"]["tool"] == "test_tool"

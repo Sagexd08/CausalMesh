@@ -9,6 +9,8 @@ from __future__ import annotations
 import inspect
 from typing import TYPE_CHECKING, Any
 
+from .base import BaseFrameworkAdapter
+
 if TYPE_CHECKING:
     from causalmesh.gateway.tool import Tool
     from causalmesh.sdk.mesh import CausalMesh
@@ -20,7 +22,7 @@ except ImportError:
     StructuredTool = None  # type: ignore[misc,assignment]
 
 
-class LangChainAdapter:
+class LangChainAdapter(BaseFrameworkAdapter):
     """Wraps a CausalMesh instance to expose its tools to LangChain agents.
 
     Requires ``langchain-core``.
@@ -37,8 +39,7 @@ class LangChainAdapter:
                 "langchain-core is required for the LangChain integration. "
                 "Install it with: pip install langchain-core"
             )
-        self._mesh = mesh
-        self._agent_id = agent_id
+        super().__init__(mesh, agent_id=agent_id)
 
     def get_tools(self, *, agent_id: str | None = None) -> list[BaseTool]:
         """Return all registered CausalMesh tools as LangChain StructuredTools."""
@@ -54,22 +55,28 @@ class LangChainAdapter:
         original_sig = inspect.signature(tool.handler)
 
         def _dynamic_handler(*args: Any, **kwargs: Any) -> Any:
-            # Bind arguments according to the original signature to extract kwargs properly
             bound = original_sig.bind(*args, **kwargs)
             bound.apply_defaults()
 
-            result = self._mesh.execute(
-                agent_id=agent_id,
-                tool=tool.name,
+            result = self.call_tool(
+                tool_name=tool.name,
                 arguments=bound.arguments,
+                agent_id=agent_id,
             )
 
-            # Surface authorization denials clearly to the agent model
-            if result.denied:
-                return f"Action denied by policy: {result.reason}"
-            if result.failed:
-                return f"Action failed: {result.reason}"
-            return result.value
+            return self.format_result(result)
+
+        async def _async_dynamic_handler(*args: Any, **kwargs: Any) -> Any:
+            bound = original_sig.bind(*args, **kwargs)
+            bound.apply_defaults()
+
+            result = await self.acall_tool(
+                tool_name=tool.name,
+                arguments=bound.arguments,
+                agent_id=agent_id,
+            )
+
+            return self.format_result(result)
 
         # Trick LangChain into reading the original signature and docstring
         _dynamic_handler.__signature__ = original_sig  # type: ignore[attr-defined]
@@ -79,6 +86,7 @@ class LangChainAdapter:
 
         return StructuredTool.from_function(
             func=_dynamic_handler,
+            coroutine=_async_dynamic_handler,
             name=tool.name,
             description=_dynamic_handler.__doc__,
         )
