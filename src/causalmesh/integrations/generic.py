@@ -83,7 +83,7 @@ class GenericAdapter:
             print(result.describe())
     """
 
-    def __init__(self, mesh: "CausalMesh", *, agent_id: str | None = None) -> None:
+    def __init__(self, mesh: CausalMesh, *, agent_id: str | None = None) -> None:
         """
         Args:
             mesh:     A ``CausalMesh`` instance.

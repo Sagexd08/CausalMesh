@@ -182,6 +182,8 @@ It covers the architecture, the honest security model, the 17-step build sequenc
 
 To integrate CausalMesh into an existing AI coding agent, use the SDK to register your tools and route executions through the policy gateway.
 
+Security-sensitive resources should be explicitly declared rather than inferred from arbitrary tool arguments. CausalMesh extracts them deterministically.
+
 ```python
 from causalmesh import CausalMesh, Tool
 
@@ -195,6 +197,7 @@ mesh.register_tool(
         handler=my_agent.write_file_handler,
         kind="filesystem",
         mutating=True,
+        resource_args=["path"],  # Explicitly declare protected resources
     )
 )
 
@@ -211,7 +214,9 @@ else:
     print(f"Action denied: {result.describe()}")
 ```
 
-See [`examples/phase1_basic_agent.py`](examples/phase1_basic_agent.py) for a complete working example.
+For async agents, use `await mesh.execute_async(...)` to ensure non-blocking execution while maintaining policy enforcement boundaries. A denied async action is never awaited.
+
+See [`examples/phase1_basic_agent.py`](examples/phase1_basic_agent.py) and [`examples/phase1_async_agent.py`](examples/phase1_async_agent.py) for complete working examples.
 
 Run the suite with `pytest`. The slow integration tests execute real
 subprocesses; `pytest -m "not slow"` skips them.

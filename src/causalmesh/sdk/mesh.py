@@ -191,8 +191,8 @@ class CausalMesh:
             tool:       Name of a registered tool.
             arguments:  Keyword arguments forwarded to the handler.
             paths:      Paths the call touches (used by the ownership /
-                        claim rules).  When omitted, extracted from
-                        ``arguments["path"]`` when present.
+                        claim rules).  When omitted, extracted by the
+                        ResourceResolver based on the Tool's resource_args.
             now_us:     Timestamp override for deterministic tests.
 
         Returns:
@@ -206,6 +206,28 @@ class CausalMesh:
             aid,
             tool,
             arguments,
+            paths=paths,
+            now_us=now_us,
+        )
+
+    async def execute_async(
+        self,
+        *,
+        agent_id: str | None = None,
+        tool: str,
+        arguments: dict[str, Any] | None = None,
+        paths: tuple[str, ...] | None = None,
+        now_us: int | None = None,
+    ) -> GatewayResult:
+        """Execute an asynchronous tool call through the policy gate.
+
+        See ``execute()`` for argument details.
+        """
+        aid = agent_id or self._agent_id
+        return await self._gateway.execute_async(
+            agent_id=aid,
+            tool=tool,
+            arguments=arguments,
             paths=paths,
             now_us=now_us,
         )
