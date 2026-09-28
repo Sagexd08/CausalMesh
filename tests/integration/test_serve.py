@@ -336,7 +336,9 @@ class TestCliWiring:
         assert "no causalmesh.yaml" in result.output
 
     def test_serve_dev_on_public_interface_is_rejected(self, tmp_path: Path) -> None:
-        (tmp_path / "causalmesh.yaml").write_text("version: 1\nroles: []\npolicy:\n  arm: C3\nevidence:\n  sign: false\n")
+        (tmp_path / "causalmesh.yaml").write_text(
+            "version: 1\nroles: []\npolicy:\n  arm: C3\nevidence:\n  sign: false\n"
+        )
         result = runner.invoke(
             app, ["serve", "--root", str(tmp_path), "--dev", "--host", "0.0.0.0"]
         )
@@ -344,7 +346,9 @@ class TestCliWiring:
         assert "disables authentication" in result.output
 
     def test_serve_without_dev_requires_token(self, tmp_path: Path) -> None:
-        (tmp_path / "causalmesh.yaml").write_text("version: 1\nroles: []\npolicy:\n  arm: C3\nevidence:\n  sign: false\n")
+        (tmp_path / "causalmesh.yaml").write_text(
+            "version: 1\nroles: []\npolicy:\n  arm: C3\nevidence:\n  sign: false\n"
+        )
         result = runner.invoke(app, ["serve", "--root", str(tmp_path)])
         assert result.exit_code == 2
         assert "--api-token is required" in result.output

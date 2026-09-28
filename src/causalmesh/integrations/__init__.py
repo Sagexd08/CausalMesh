@@ -21,7 +21,15 @@ Example future usage (not yet implemented)::
 
 from __future__ import annotations
 
+from .base import BaseFrameworkAdapter
 from .generic import AgentAdapter, GenericAdapter
 from .langchain import LangChainAdapter
+from .schema import tool_to_json_schema
 
-__all__ = ["AgentAdapter", "GenericAdapter", "LangChainAdapter"]
+__all__ = [
+    "AgentAdapter",
+    "BaseFrameworkAdapter",
+    "GenericAdapter",
+    "LangChainAdapter",
+    "tool_to_json_schema",
+]

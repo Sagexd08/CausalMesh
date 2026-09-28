@@ -25,8 +25,10 @@ from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 from causalmesh.gateway.result import GatewayResult
 
+from .base import BaseFrameworkAdapter
+
 if TYPE_CHECKING:
-    from causalmesh.sdk.mesh import CausalMesh
+    pass
 
 __all__ = ["AgentAdapter", "GenericAdapter"]
 
@@ -61,8 +63,18 @@ class AgentAdapter(Protocol):
         """
         ...
 
+    async def acall_tool(
+        self,
+        tool_name: str,
+        arguments: dict[str, Any],
+        *,
+        agent_id: str | None = None,
+    ) -> GatewayResult:
+        """Route one asynchronous tool call through CausalMesh."""
+        ...
 
-class GenericAdapter:
+
+class GenericAdapter(BaseFrameworkAdapter):
     """A framework-neutral adapter for a ``CausalMesh`` session.
 
     Use this when there is no framework integration needed — the
@@ -82,30 +94,6 @@ class GenericAdapter:
         if result.denied:
             print(result.describe())
     """
-
-    def __init__(self, mesh: CausalMesh, *, agent_id: str | None = None) -> None:
-        """
-        Args:
-            mesh:     A ``CausalMesh`` instance.
-            agent_id: Default agent id.  Falls back to the mesh's own
-                      default when omitted.
-        """
-        self._mesh = mesh
-        self._agent_id = agent_id
-
-    def call_tool(
-        self,
-        tool_name: str,
-        arguments: dict[str, Any],
-        *,
-        agent_id: str | None = None,
-    ) -> GatewayResult:
-        """Route a tool call through the attached CausalMesh session."""
-        return self._mesh.execute(
-            agent_id=agent_id or self._agent_id,
-            tool=tool_name,
-            arguments=arguments,
-        )
 
     def __repr__(self) -> str:
         return f"<GenericAdapter agent_id={self._agent_id!r}>"
