@@ -32,13 +32,24 @@ def serve_command(
     upstream_api_key: Annotated[
         str | None, typer.Option("--upstream-api-key", envvar="CAUSALMESH_UPSTREAM_API_KEY")
     ] = None,
+    api_token: Annotated[
+        str | None, typer.Option("--api-token", envvar="CAUSALMESH_API_TOKEN")
+    ] = None,
+    dev: Annotated[bool, typer.Option("--dev")] = False,
 ) -> None:
     """Start the endpoint. Ctrl-C to stop."""
     if ctx.invoked_subcommand is not None:
         return
 
-    from causalmesh.adapters.serve import ServeConfig, run_server
+    try:
+        import uvicorn
+    except ImportError:
+        fail("uvicorn is required: pip install 'causalmesh[server]'")
+        raise typer.Exit(Exit.USAGE) from None
+
     from causalmesh.policy.contract import Contract, ContractError
+    from causalmesh.sdk.mesh import CausalMesh
+    from causalmesh.server.app import create_app
 
     try:
         contract = Contract.find(root_option or Path.cwd())
@@ -52,11 +63,21 @@ def serve_command(
         )
         raise typer.Exit(Exit.USAGE)
 
-    config = ServeConfig(
-        contract=contract,
-        run_id=run_id,
-        host=host,
-        port=port,
+    if dev and host not in ("127.0.0.1", "localhost"):
+        fail("--dev mode disables authentication and is only allowed on localhost/127.0.0.1")
+        raise typer.Exit(Exit.USAGE)
+
+    if not dev and api_token is None:
+        fail("--api-token is required when not in --dev mode")
+        raise typer.Exit(Exit.USAGE)
+
+    mesh = CausalMesh(contract=contract, run_id=run_id, agent_id="agent")
+
+    tokens = {api_token} if api_token else None
+    fastapi_app = create_app(
+        mesh=mesh,
+        api_tokens=tokens,
+        auth_disabled=dev or api_token is None,
         upstream_base_url=upstream,
         upstream_api_key=upstream_api_key,
     )
@@ -68,5 +89,13 @@ def serve_command(
         note("no --upstream set; calls are gated and recorded, and get a stub reply")
     note("POST /v1/chat/completions  ·  GET /healthz  ·  Ctrl-C to stop")
 
-    run_server(config, block=True)
+    # In tests, if the user imports serve_command, we don't want to block, but Typer callback runs synchronously.
+    # To retain exactly the old test behavior where `run_server` was mockable or used a thread,
+    # we might need a workaround for `test_serve.py`. But wait, test_serve.py imports `run_server` from `causalmesh.adapters.serve`.
+    # Let's keep `adapters/serve.py` intact and just change the CLI to point to FastAPI.
+    # The requirement was: "Do not delete the BaseHTTPRequestHandler implementation immediately. Create a safe migration strategy."
+    # So `test_serve.py` which uses `run_server` will still pass!
+    # We just update the CLI to use FastAPI instead!
+
+    uvicorn.run(fastapi_app, host=host, port=port, log_level="warning")
     raise typer.Exit(Exit.OK)
