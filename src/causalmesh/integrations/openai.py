@@ -16,7 +16,7 @@ class OpenAIAdapter(BaseFrameworkAdapter):
         """Return all registered CausalMesh tools formatted as OpenAI tools."""
         tools = []
         for name in sorted(self._mesh.registered_tools()):
-            tool = self._mesh._gateway.get_tool(name)
+            tool = self._mesh.get_tool(name)
             desc = tool.description or f"Executes the {name} action."
             schema = tool_to_json_schema(name, desc, tool.handler)
             tools.append(

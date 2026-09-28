@@ -46,7 +46,7 @@ class LangChainAdapter(BaseFrameworkAdapter):
         aid = agent_id or self._agent_id
         langchain_tools: list[BaseTool] = []
         for name in self._mesh.registered_tools():
-            tool = self._mesh._gateway.get_tool(name)
+            tool = self._mesh.get_tool(name)
             langchain_tools.append(self._create_tool(tool, aid))
         return langchain_tools
 
