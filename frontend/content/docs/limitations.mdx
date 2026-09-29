@@ -86,10 +86,6 @@ profile. It is exercised by unit tests but has **no production consumer** in
 this slice — a genuine exception to the no-dead-code rule, recorded here
 rather than hidden.
 
-`adapters/serve.py` (the stdlib `http.server` implementation of `serve`) is
-unreachable from any entrypoint since `serve` moved onto FastAPI; only its own
-test file exercises it.
-
 `RunState.TIMED_OUT` is reachable in the state machine and tested there, but
 no run has yet reached it: whole-run timeouts need a watchdog this slice
 does not have.
