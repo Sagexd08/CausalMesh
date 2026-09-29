@@ -1,18 +1,30 @@
 {
   "category": "kinetic-type",
   "secondary_categories": ["logo-reveal"],
-  "duration_s": 15,
+  "duration_s": 45,
   "fps": 30,
-  "canvas": { "w": 1080, "h": 1920, "aspect": "9:16" },
-  "style": "Motion-design showreel on a black stage. Precise technical UI against one organic moment (the portal). Heavy on camera and transition work: 3D swing-ins, a directional-blur whip pan, full-screen kinetic slams, a zoom-through push, a camera dive into the GATE node, flip-in cards, hash decode, slit match cut. Every motion lands on the music grid.",
+  "canvas": { "w": 1920, "h": 1080, "aspect": "16:9" },
+  "style": "Motion-design launch film on a black stage, shot as one continuous take: no cuts, no crossfades, no blur-ins, no 3D flips. Every scene is made out of the shape the previous scene left behind. Precise technical UI against one organic moment (the portal). Heavy on camera and transition work: 3D tilt/swing (perspective, not flips), a directional-blur whip pan, full-screen kinetic slams, iris opens/closes as recurring punctuation, zoom-through pushes, a camera dive into the GATE node, flip-in cards, hash decode, liquid-glass UI panels, slit match cut. Every motion lands on the music grid.",
   "palette": ["#050505", "#0c0c0c", "#fafafa", "#d6d5d5", "#a7a6a6", "#8b8a8a", "#d2a676"],
   "palette_notes": "#d2a676 is used only for refusal. No purple, no neon; registry glitch ghosts recoloured from red/cyan to sand/silver.",
   "font": "Manrope (display, local woff2) + JetBrains Mono (system, local woff2)",
-  "beats": [1.07, 1.59, 2.12, 2.65, 3.18, 3.70, 4.23, 4.75, 5.28, 5.80, 6.34, 6.86, 7.40, 7.92, 8.44, 8.96, 9.50, 10.01, 10.54, 11.06, 11.60, 12.12, 12.65],
+  "tempo_bpm": 120,
+  "beat_data_status": "MEASURED for the full 0.0-45.0s from assets/audio-data.js (per-frame band energy, 1350 frames @ 30fps, hyperframes-creative extract-audio-data.py re-run against the source music bed which is 113.6s long — no extension/loop was needed, the existing file already covers 45s and was trimmed to an exact 45.0s clip before extraction). The 15.0-45.0s beat list below was derived by continuing the 0-15s grid's own measured spacing (avg 0.5264s between the 23 real onsets already measured 0-15s, independently cross-checked by autocorrelation on the same low-band energy envelope, which detects a dominant ~112.5bpm/0.533s period — not the 120bpm nominal tempo used by the prior placeholder) and snapping each predicted position to the nearest real onset peak in the newly measured 15-45s energy. No portion of the beat grid is tempo-assumed placeholder any longer.",
+  "beats": [
+    1.07, 1.59, 2.12, 2.65, 3.18, 3.70, 4.23, 4.75, 5.28, 5.80,
+    6.34, 6.86, 7.40, 7.92, 8.44, 8.96, 9.50, 10.01, 10.54, 11.06,
+    11.60, 12.12, 12.65,
+    15.28, 15.81, 16.30, 16.83, 17.37, 17.90, 18.43, 18.93, 19.47, 20.00,
+    20.53, 21.07, 21.60, 22.10, 22.63, 23.17, 23.70, 24.20, 24.73, 25.27,
+    25.80, 26.33, 26.83, 27.37, 27.90, 28.50, 28.97, 29.47, 30.00, 30.53,
+    31.07, 31.57, 32.20, 32.67, 33.13, 33.67, 34.20, 34.73, 35.27, 35.80,
+    36.30, 36.93, 37.37, 37.90, 38.43, 38.97, 39.47, 40.00, 40.53, 41.13,
+    41.57, 42.10, 42.63, 43.17, 43.70, 44.20, 44.73
+  ],
   "export": "mp4",
   "asset_needs": [],
-  "asset_notes": "No search: all material is first-party and already local. Portal footage (site hero video), bolt mark SVG geometry (frontend/components/layout/BrandMark.tsx), real policy-check verdict (causalmesh.yaml), real signed chain (data/raw/pilot_landing/..._C3__r0000/run.json), music bed + CC0 SFX from the brag skill library.",
-  "brief": "Opens mid-action on the product's strongest real behaviour: a terminal swings in in 3D, the real policy check types, and REFUSE slams in on the first beat with a screen shake, a sand flash and an RGB tear, followed by a per-letter REFUSED wall. A directional-blur whip pan throws the frame into three full-screen kinetic slams on consecutive beats: GATED. SIGNED. RECORDED. (the site's own claim). A zoom-through push wipes in the architecture, which tilts up out of 3D while it draws, and a light pulse runs the route and detonates on GATE. The camera dives into the GATE node and surfaces in the signed chain, where four real events flip in as cards, their hashes decoding, and a signal runs the links to 'chain verified 4/4'. The cards collapse into a slit that opens into the portal's doorway, and the bolt mark assembles with a glow bloom and a specular sweep across the wordmark. One dominant motif: a single signal travelling through the system.",
+  "asset_notes": "No search: all material is first-party and already local. Portal footage (site hero video), bolt mark SVG geometry (frontend/components/layout/BrandMark.tsx), real policy-check verdict (causalmesh.yaml), real signed chain (data/raw/pilot_landing/..._C3__r0000/run.json), the four isolation arms C0-C3 (docs/isolation.md), claims and leases (docs/claims.md, src/causalmesh/claims/), music bed + CC0 SFX from the brag skill library.",
+  "brief": "Opens mid-action on the product's strongest real behaviour: a terminal swings in in 3D, the real policy check types, and REFUSE slams in on the first beat with a screen shake, a sand flash and an RGB tear, followed by a per-letter REFUSED wall. A directional-blur whip pan throws the frame into three full-screen kinetic slams on consecutive beats: GATED. SIGNED. RECORDED. (the site's own claim). A zoom-through push wipes in the architecture, which tilts up out of 3D while it draws, and a light pulse runs the route and detonates on GATE. The camera dives into the GATE node and surfaces in the signed chain, where four real events flip in as cards on liquid-glass panels, their hashes decoding, and a signal runs the links to 'chain verified 4/4'. An iris closes over the verified chain and opens onto the four isolation arms C0-C3, each arm's guarantee drawing in as a labelled bar that fills to its real boundary (docs/isolation.md), landing on 'a refusal is data' as C3's denial is recorded rather than raised. The arms panel contracts into a claims/lease diagram: two agents reach for the same resource, one gets an exclusive lease (a glass panel locks with a click), the other's attempt is denied and recorded, not silently dropped. The diagram collapses into a slit that opens into the portal's doorway, and the bolt mark assembles with a glow bloom and a specular sweep across the wordmark, landing on the beat return for a designed end card.",
   "block": null,
   "reuse": {
     "whip-pan-cut": "ported mechanism: one strip carrying both scenes, one power3.inOut tween of one frame-width, SVG feGaussianBlur stdDeviation 'X 0' capped at 16px peaking at mid-whip, hairline seam alive only during the whip",
@@ -21,22 +33,30 @@
     "rgb-glitch-text": "ported tear: two ghost copies offset by custom props, steps(1) yoyo x5, recoloured sand/silver",
     "text-shimmer": "ported one-pass specular band via background-position sweep across glyphs",
     "grain-overlay": "ported fractal-noise texture; the infinite CSS keyframe loop replaced by per-frame deterministic offsets",
-    "vignette": "ported radial vignette"
+    "vignette": "ported radial vignette",
+    "code-terminal-run": "ported for the opening real policy-check typewriter"
   },
   "hand_authored_gaps": [
     "architecture diagram (site geometry) with 3D tilt build and route pulse",
     "camera dive into a diagram node",
     "hash decode scramble (seeded, per-frame)",
+    "iris-blade transition component (new): 6 blades around a shared hexagonal aperture, open and close variants matched so a loop is possible",
+    "liquid-glass panel component (new): background clone sampled through an SVG displacement map + rim light, used for the chain cards, the arms bars, and the claim-lock panel; not native backdrop-filter (Chromium misreads it against SVG filters)",
+    "isolation-arms bar-fill build (C0-C3, docs/isolation.md as source of truth)",
+    "claims/lease lock-and-deny diagram: two agents, one exclusive lease, one recorded denial",
     "slit-to-doorway match cut",
-    "bolt mark assembly + glow bloom"
+    "bolt mark assembly + glow bloom",
+    "16:9 reflow of all five original scenes from the 1080x1920 layout (head/panel positions, font sizes) to 1920x1080"
   ],
   "content": {
     "scenes": [
       { "id": "refusal", "start": 0.0, "end": 2.65, "text": "REFUSE / REFUSED.", "emphasis_words": ["REFUSE"], "emotion": "impact", "motion": "3D swing-in terminal, typewriter, scale_punch stamp + shake + sand flash + rgb tear, per-letter wave wall", "beats": [1.07, 1.59, 2.12] },
       { "id": "slams", "start": 2.65, "end": 4.23, "text": "GATED. SIGNED. RECORDED.", "emphasis_words": ["RECORDED."], "emotion": "energetic", "motion": "whip-pan in, kinetic slam per beat, underline_sweep", "beats": [2.65, 3.18, 3.70] },
       { "id": "architecture", "start": 4.23, "end": 7.92, "text": "One gate. Every surface.", "emphasis_words": ["gate"], "emotion": "build", "motion": "zoom-through in, 3D tilt-up while tiers draw on the grid, route pulse, halo detonation on GATE, camera dive into GATE", "beats": [4.75, 5.28, 5.80, 6.34, 7.40] },
-      { "id": "chain", "start": 7.92, "end": 11.6, "text": "Signed. Linked. Verified offline.", "emphasis_words": ["Verified"], "emotion": "precise", "motion": "flip-in cards on beats, hash decode, travelling signal, count 0->4, shimmer on verify, collapse to slit", "beats": [8.44, 8.96, 9.50, 10.54, 11.06] },
-      { "id": "portal", "start": 11.6, "end": 15.0, "text": "The Next Layer of Intelligence / CausalMesh / Every action gated, signed, and recorded.", "emphasis_words": ["CausalMesh"], "emotion": "resolve", "motion": "slit match cut into doorway, fade_blur word reveal, mark assembly + glow bloom, text shimmer, hold", "beats": [12.12, 12.65] }
+      { "id": "chain", "start": 7.92, "end": 11.6, "text": "Signed. Linked. Verified offline.", "emphasis_words": ["Verified"], "emotion": "precise", "motion": "flip-in cards on liquid-glass panels per beat, hash decode, travelling signal, count 0->4, shimmer on verify, collapse to iris close", "beats": [8.44, 8.96, 9.50, 10.54, 11.06] },
+      { "id": "arms", "start": 11.6, "end": 20.0, "text": "C0. C1. C2. C3. A refusal is data.", "emphasis_words": ["refusal", "data"], "emotion": "precise", "motion": "iris opens onto four arms, each guarantee bar draws to its real boundary (docs/isolation.md), C3 denial recorded not raised, on-screen ASCII verdict", "beats": [12.12, 12.65, 15.28, 15.81, 16.3, 16.83, 17.37] },
+      { "id": "claims", "start": 20.0, "end": 30.0, "text": "One lease. One writer. Every attempt recorded.", "emphasis_words": ["recorded"], "emotion": "build", "motion": "two agents reach for one resource, glass lock panel closes on the exclusive lease with a click, the second attempt denies and records (may_write vs record_denial), contracts into a slit", "beats": [20.0, 21.07, 22.1, 23.17, 24.2, 24.73, 25.8, 26.83, 27.9, 28.97] },
+      { "id": "portal", "start": 30.0, "end": 45.0, "text": "The Next Layer of Intelligence / CausalMesh / Every action gated, signed, and recorded.", "emphasis_words": ["CausalMesh"], "emotion": "resolve", "motion": "slit match cut into doorway, iris open onto the portal, fade_blur word reveal, mark assembly + glow bloom, text shimmer, designed end card, hold", "beats": [30.0, 31.57, 33.13, 34.73, 35.8, 37.37, 38.97, 40.53, 42.1, 43.7] }
     ]
   }
 }
