@@ -14,7 +14,7 @@ from typing import Annotated
 import typer
 
 from causalmesh.cli._context import Repo, find_root
-from causalmesh.cli._output import Exit, emit, fail, out_console, table
+from causalmesh.cli._output import Exit, emit, fail, note, out_console, table
 
 app = typer.Typer(help="Inspect and validate tasks.", no_args_is_help=True)
 
@@ -113,3 +113,97 @@ def validate_command(
                 )
 
     raise typer.Exit(Exit.FAILED if invalid else Exit.OK)
+
+
+@app.command("import-cooperbench")
+def import_cooperbench_command(
+    source: Annotated[
+        Path,
+        typer.Argument(
+            help="A dataset/<repo>/task<id>/ directory in the CooperBench raw layout "
+            "(feature1/, feature2/, each with feature.md + feature.patch)."
+        ),
+    ],
+    base_repo: Annotated[
+        Path,
+        typer.Option(
+            "--base-repo",
+            help="The pre-patch repository checkout the two features' patches apply "
+            "against. Required: the loader materializes each feature's write actions "
+            "from feature.patch applied to this state (backlog item 54); it does not "
+            "run setup.sh itself.",
+        ),
+    ],
+    task_id: Annotated[
+        str | None,
+        typer.Option("--task-id", help="Override the derived task_id (cb_<repo>_<task>)."),
+    ] = None,
+    root_option: Annotated[Path | None, typer.Option("--root")] = None,
+    as_json: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Import one CooperBench task into `tasks/` and `fixtures/` (backlog §54).
+
+    Structural-only, same as `validate`: this writes the task YAML and its
+    execution fixture and runs the §36 structural gate. It deliberately does
+    NOT run the §37 sensitivity gate — that costs a real C0-versus-C2
+    execution and belongs to a caller who has decided the cost is worth
+    paying for this specific task, not to an import command run once per
+    file. Run `check_sensitivity` separately (see
+    `causalmesh.tasks.cooperbench`'s module docstring) once this command
+    reports success.
+    """
+    from causalmesh.tasks import validate_structure
+    from causalmesh.tasks.cooperbench import CooperBenchImportError, ImportOptions, import_task
+
+    repo = _repo_or_exit(root_option)
+
+    if not base_repo.is_dir():
+        fail(f"--base-repo {base_repo} is not a directory")
+        raise typer.Exit(Exit.USAGE)
+
+    base_files = {
+        path.relative_to(base_repo).as_posix(): path.read_text(encoding="utf-8", errors="strict")
+        for path in base_repo.rglob("*")
+        if path.is_file() and "__pycache__" not in path.parts and ".git" not in path.parts
+    }
+
+    try:
+        imported = import_task(
+            source,
+            base_files=base_files,
+            options=ImportOptions(task_id=task_id),
+        )
+    except CooperBenchImportError as exc:
+        fail(str(exc), hint="See causalmesh.tasks.cooperbench for the expected layout.")
+        raise typer.Exit(Exit.ERROR) from exc
+
+    yaml_path = repo.tasks_dir / f"{imported.definition.task_id}.yaml"
+    fixture_path = repo.fixtures_dir / imported.definition.fixture
+    imported.write_yaml(yaml_path)
+    imported.write_fixture(fixture_path)
+    note(f"wrote {yaml_path}")
+    note(f"wrote {fixture_path}")
+
+    report = validate_structure(imported.definition, fixtures_root=repo.fixtures_dir)
+
+    payload = {
+        "fixture": str(fixture_path),
+        "task_id": imported.definition.task_id,
+        "task_yaml": str(yaml_path),
+        "validation": report.to_dict(),
+    }
+    if not emit(payload, as_json=as_json):
+        status = "[green]VALID[/green]" if report.valid else "[red]INVALID[/red]"
+        out_console.print(f"{imported.definition.task_id}: {status}")
+        for issue in report.issues:
+            colour = "red" if issue.severity == "error" else "yellow"
+            out_console.print(
+                f"  [{colour}]{issue.severity}[/{colour}] {issue.code} - {issue.detail}"
+            )
+        if report.valid:
+            note(
+                "structurally valid. Run the sensitivity gate "
+                "(check_sensitivity) before trusting this task in a collection."
+            )
+
+    raise typer.Exit(Exit.OK if report.valid else Exit.FAILED)

@@ -1,0 +1,25 @@
+diff --git a/src/greeter.py b/src/greeter.py
+index 2a89d8e..6420f43 100644
+--- a/src/greeter.py
++++ b/src/greeter.py
+@@ -2,6 +2,7 @@
+ 
+ GREETINGS = {
+     "casual": "Hi",
++    "friendly": "Hey there",
+ }
+ 
+ 
+diff --git a/src/utils.py b/src/utils.py
+index 392e09f..0e64fac 100644
+--- a/src/utils.py
++++ b/src/utils.py
+@@ -4,3 +4,8 @@
+ def shout(text):
+     """Return text, upper-cased."""
+     return text.upper()
++
++
++def whisper(text):
++    """Return text, lower-cased."""
++    return text.lower()

@@ -40,19 +40,36 @@ class TaskError(ValueError):
 
 
 class TaskFamily:
-    """The four families §35 names.
+    """The four families §35 names, plus one added for imported tasks.
 
     A plain namespace rather than an enum: families are a descriptive
     grouping used for reporting task composition (§69), not a switch that
     changes behaviour. Making them an enum would invite code that branches
     on family, which would let two families differ in more than their task
     content.
+
+    `COOPERBENCH_IMPORT` (backlog §54) was added rather than folding
+    imported tasks into `SHARED_UTILITY_REFACTOR` or
+    `CONCURRENT_EDIT_COLLISION`, the two closest existing shapes. Neither
+    fits honestly: `SHARED_UTILITY_REFACTOR` and `CONCURRENT_EDIT_COLLISION`
+    both name a coordination *shape* chosen by the task's author in
+    advance, the same way `SCHEMA_HANDLER` does — §35's four families are
+    all authored-by-construction. A CooperBench import's defining property
+    is the opposite: whether paths are contested, and which ones, is
+    *discovered* by parsing two independently-authored real patches, not
+    declared. Reusing an existing family name would claim a coordination
+    shape the importer has not actually verified the task has — some
+    imported pairs may turn out disjoint (no coordination dependency at
+    all), some contested, some dependent, and that variance is the point of
+    importing real-world tasks rather than only authored ones. See
+    `causalmesh.tasks.cooperbench` for the loader and its design notes.
     """
 
     SCHEMA_HANDLER = "schema_handler"
     INTERFACE_CONSUMER = "interface_consumer"
     SHARED_UTILITY_REFACTOR = "shared_utility_refactor"
     CONCURRENT_EDIT_COLLISION = "concurrent_edit_collision"
+    COOPERBENCH_IMPORT = "cooperbench_import"
 
     ALL = frozenset(
         {
@@ -60,6 +77,7 @@ class TaskFamily:
             INTERFACE_CONSUMER,
             SHARED_UTILITY_REFACTOR,
             CONCURRENT_EDIT_COLLISION,
+            COOPERBENCH_IMPORT,
         }
     )
 
