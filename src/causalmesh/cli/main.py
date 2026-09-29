@@ -22,6 +22,7 @@ from causalmesh.cli import (
     commands_verify,
     commands_watch,
 )
+from causalmesh.cli.commands_agreement import agreement_command
 from causalmesh.cli.commands_analyze import analyze_command
 from causalmesh.cli.commands_audit import audit_command
 from causalmesh.cli.commands_doctor import doctor_command
@@ -53,6 +54,10 @@ app.add_typer(commands_task.app, name="task")
 app.add_typer(commands_experiment.app, name="experiment")
 app.command("verify")(commands_verify.verify_command)
 app.command("analyze")(analyze_command)
+app.command(
+    "agreement",
+    help="Compute inter-rater kappa (S53) over a judgement file an operator supplies.",
+)(agreement_command)
 app.add_typer(commands_policy.app, name="policy")
 app.add_typer(commands_serve.app, name="serve")
 app.add_typer(commands_audit.app, name="manifest")
