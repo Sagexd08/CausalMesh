@@ -219,7 +219,12 @@ class ExperimentRunner:
             result = await execute_task(
                 task,
                 self._config_for(record),
-                workspace_root=self.environment.workspace_root / record.run_id,
+                # Not `workspace_root / run_id`: `execute_task` already namespaces
+                # everything it makes by run id (`<run_id>/<agent>`,
+                # `<run_id>_integrated`, `<run_id>_claims.db`). Nesting it again put the
+                # run id in the path twice, and on Windows that alone pushed a
+                # checkout at an ordinary location past MAX_PATH.
+                workspace_root=self.environment.workspace_root,
                 fixtures_root=self.environment.fixtures_root,
             )
         except BaseException as exc:

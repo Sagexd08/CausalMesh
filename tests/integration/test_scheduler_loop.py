@@ -12,6 +12,7 @@ The smoke profile is used throughout — one task, four arms, one repetition
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
 import pytest
@@ -445,3 +446,81 @@ class TestDeterminism:
 
         with RunIndex(tmp_path / "raw" / "index.db") as reopened:
             assert reopened.plan_hash("exp_hash") == stored == plan.content_hash()
+
+
+class TestWorkspaceLayout:
+    """Where a run's files go, which decides whether a checkout can hold them.
+
+    `execute_task` already namespaces everything by run id (`<run_id>/<agent>`,
+    `<run_id>_integrated`, `<run_id>_claims.db`). The scheduler used to hand it a
+    base that already ended in the run id, so the id was in the path twice and a
+    checkout at an ordinary Windows location overflowed MAX_PATH.
+    """
+
+    async def test_each_run_is_one_directory_of_agents_not_a_directory_of_itself(
+        self, executed: dict
+    ) -> None:
+        work = executed["environment"].workspace_root
+        for record in executed["runner"].index.runs("exp_loop"):
+            run_dir = work / record.run_id
+            assert (run_dir / "agent_a").is_dir()
+            assert not (run_dir / record.run_id).exists(), "the run id is nested twice"
+
+    async def test_no_path_in_the_workspace_tree_repeats_a_run_id(self, executed: dict) -> None:
+        work = executed["environment"].workspace_root
+        for path in work.rglob("*"):
+            parts = path.relative_to(work).parts
+            named = [part for part in parts if part.startswith("exp_loop__")]
+            assert len(named) == len(set(named)) <= 1, path
+
+    async def test_the_run_siblings_sit_beside_the_workspaces(self, executed: dict) -> None:
+        work = executed["environment"].workspace_root
+        for record in executed["runner"].index.runs("exp_loop"):
+            assert (work / f"{record.run_id}_integrated").is_dir()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="MAX_PATH is a Windows limit")
+class TestADeepCheckout:
+    async def test_a_checkout_deep_enough_to_have_broken_the_old_layout_still_runs(
+        self, task: TaskDefinition, executed: dict, tmp_path_factory
+    ) -> None:
+        """The regression: the same collection, run where the old layout overflowed.
+
+        The root is padded so the deepest path the new layout makes is about 235
+        characters, which is under MAX_PATH and over what a run id nested a
+        second time would need. That arithmetic is asserted, so this cannot pass
+        by being shallow.
+        """
+        work = executed["environment"].workspace_root
+        # The padding below is sized from this collection's deepest path, so the
+        # collection must have the right layout first. Sized from one that nests
+        # the run id twice, the padding shrinks to match and the test would pass
+        # on the very regression it exists to catch.
+        for record in executed["runner"].index.runs("exp_loop"):
+            assert not (work / record.run_id / record.run_id).exists(), "the run id is nested twice"
+        deepest_relative = max(len(p.relative_to(work).as_posix()) for p in work.rglob("*"))
+        run_id_length = max(len(r.run_id) for r in executed["runner"].index.runs("exp_loop"))
+
+        base = tmp_path_factory.mktemp("deep")
+        target = 235
+        padding = target - (len(str(base)) + len("/x/work/") + deepest_relative)
+        assert padding > 0, "the temp directory is already too deep to build this test"
+        root = base / ("x" * padding)
+        runner, _, environment = build_runner(task, root)
+        try:
+            runner.prepare()
+            report = await runner.run()
+            assert report.is_complete and report.executed == 4
+            states = [r.state for r in runner.index.runs("exp_loop")]
+            assert states == [RunState.COMPLETED] * 4, states
+
+            deepest = max(len(str(p)) for p in environment.workspace_root.rglob("*"))
+            assert 215 <= deepest <= 259, deepest
+            assert deepest + run_id_length + 1 > 259, (
+                "the old layout would have fitted here as well, so this proves nothing"
+            )
+            for run_dir in environment.raw_root.glob("exp_loop__*"):
+                document = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+                assert document["chain"], "a completed run must carry its chain"
+        finally:
+            runner.close()
