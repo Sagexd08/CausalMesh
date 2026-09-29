@@ -1,6 +1,8 @@
 import json
 from typing import Any
 
+from causalmesh.sdk.errors import MissingResourceError, ToolNotFoundError
+
 from .base import BaseFrameworkAdapter
 from .schema import tool_to_json_schema
 
@@ -44,60 +46,58 @@ class OpenAIAdapter(BaseFrameworkAdapter):
             An OpenAI chat message dict with `role="tool"`.
         """
         call_id = tool_call.get("id", "")
-
-        if tool_call.get("type") != "function":
-            return {
-                "role": "tool",
-                "tool_call_id": call_id,
-                "content": "Action failed: Unsupported tool_call type, expected 'function'.",
-            }
-
-        function_data = tool_call.get("function", {})
-        tool_name = function_data.get("name", "")
-        arguments_str = function_data.get("arguments", "{}")
+        parsed = self._parse_tool_call(tool_call)
+        if isinstance(parsed, str):
+            return self._tool_message(call_id, parsed)
+        tool_name, arguments = parsed
 
         try:
-            arguments = json.loads(arguments_str)
-        except json.JSONDecodeError as exc:
-            return {
-                "role": "tool",
-                "tool_call_id": call_id,
-                "content": f"Action failed: Malformed JSON arguments - {exc}",
-            }
+            result = self.call_tool(tool_name, arguments, agent_id=agent_id)
+        except (ToolNotFoundError, MissingResourceError) as exc:
+            return self._tool_message(call_id, f"Action failed: {exc}")
 
-        result = self.call_tool(tool_name, arguments, agent_id=agent_id)
-
-        return {"role": "tool", "tool_call_id": call_id, "content": self.format_result(result)}
+        return self._tool_message(call_id, self.format_result(result))
 
     async def ahandle_tool_call(
         self, tool_call: dict[str, Any], *, agent_id: str | None = None
     ) -> dict[str, Any]:
         """Asynchronously execute a single OpenAI tool_call securely through CausalMesh."""
         call_id = tool_call.get("id", "")
+        parsed = self._parse_tool_call(tool_call)
+        if isinstance(parsed, str):
+            return self._tool_message(call_id, parsed)
+        tool_name, arguments = parsed
 
+        try:
+            result = await self.acall_tool(tool_name, arguments, agent_id=agent_id)
+        except (ToolNotFoundError, MissingResourceError) as exc:
+            return self._tool_message(call_id, f"Action failed: {exc}")
+
+        return self._tool_message(call_id, self.format_result(result))
+
+    @staticmethod
+    def _tool_message(call_id: str, content: str) -> dict[str, Any]:
+        return {"role": "tool", "tool_call_id": call_id, "content": content}
+
+    @staticmethod
+    def _parse_tool_call(tool_call: dict[str, Any]) -> tuple[str, dict[str, Any]] | str:
+        """The tool name and arguments of a `tool_call`, or the message to return.
+
+        Everything here is model output, so a bad value is an answer for the
+        model to read and correct, not an exception for the caller's loop.
+        """
         if tool_call.get("type") != "function":
-            return {
-                "role": "tool",
-                "tool_call_id": call_id,
-                "content": "Action failed: Unsupported tool_call type, expected 'function'.",
-            }
+            return "Action failed: Unsupported tool_call type, expected 'function'."
 
         function_data = tool_call.get("function", {})
         tool_name = function_data.get("name", "")
-        arguments_str = function_data.get("arguments", "{}")
-
         try:
-            arguments = json.loads(arguments_str)
+            arguments = json.loads(function_data.get("arguments", "{}"))
         except json.JSONDecodeError as exc:
-            return {
-                "role": "tool",
-                "tool_call_id": call_id,
-                "content": f"Action failed: Malformed JSON arguments - {exc}",
-            }
-
-        result = await self.acall_tool(tool_name, arguments, agent_id=agent_id)
-
-        return {"role": "tool", "tool_call_id": call_id, "content": self.format_result(result)}
+            return f"Action failed: Malformed JSON arguments - {exc}"
+        if not isinstance(arguments, dict):
+            return "Action failed: Tool arguments must be a JSON object."
+        return tool_name, arguments
 
     def handle_tool_calls(
         self, tool_calls: list[dict[str, Any]], *, agent_id: str | None = None

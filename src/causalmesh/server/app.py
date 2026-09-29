@@ -6,6 +6,7 @@ import logging
 import os
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from typing import Any
 
@@ -24,6 +25,25 @@ from .models import ExecuteRequest, ExecuteResponse, ToolListResponse, ToolMeta
 log = logging.getLogger(__name__)
 
 
+def _upstream_host(url: str) -> str:
+    """The `host[:port]` an upstream URL connects to, refusing non-HTTP schemes.
+
+    `urlopen` would read a `file://` URL as readily as an HTTP one, so the
+    scheme is checked once at startup, as `HttpTransport` checks it. The host
+    comes from the parsed URL rather than a string split: a `#` or `?` in the
+    URL must not let text after it stand in for the host the allowlist sees.
+    """
+    parts = urllib.parse.urlsplit(url)
+    if parts.scheme.lower() not in ("http", "https"):
+        raise ValueError(
+            f"refusing upstream URL with scheme {parts.scheme or '(none)'!r}: "
+            "only http and https are permitted"
+        )
+    if not parts.hostname or parts.username is not None:
+        raise ValueError("upstream URL must name a host and carry no credentials")
+    return parts.hostname if parts.port is None else f"{parts.hostname}:{parts.port}"
+
+
 def create_app(
     *,
     mesh: CausalMesh | None = None,
@@ -38,11 +58,22 @@ def create_app(
     Exactly one of `mesh` or `config_path` must be provided.
     `mesh` takes precedence when both are given (for testing).
 
-    api_tokens: set of valid bearer tokens. None means dev mode (no auth).
-    auth_disabled: explicit flag to disable auth (same as api_tokens=None).
+    api_tokens: set of valid bearer tokens.
+    auth_disabled: the explicit switch for dev mode (no auth).
+
+    Authentication is fail-closed: one of the two must be given. A factory
+    that quietly served without auth when a caller forgot `api_tokens` would
+    make the unauthenticated server the default rather than a choice.
+    `api_tokens=set()` refuses every request.
     """
     if mesh is None and config_path is None:
         raise ValueError("Either mesh or config_path must be provided")
+    if api_tokens is None and not auth_disabled:
+        raise ValueError(
+            "authentication is required: pass api_tokens={...}, "
+            "or auth_disabled=True to serve without it (dev only)"
+        )
+    upstream_host = _upstream_host(upstream_base_url) if upstream_base_url else None
     if mesh is None:
         mesh = CausalMesh.from_config(str(config_path))
 
@@ -147,8 +178,31 @@ def create_app(
             body = await request.json()
         except Exception as exc:
             return JSONResponse(status_code=400, content={"error": f"invalid JSON body: {exc}"})
+        if not isinstance(body, dict):
+            return JSONResponse(
+                status_code=400, content={"error": "request body must be a JSON object"}
+            )
+        # `model` is signed into the chain, which has no canonical form for
+        # floats; a client-supplied one must not be able to fail the write.
+        model = body.get("model", "")
+        if not isinstance(model, str):
+            return JSONResponse(status_code=400, content={"error": "`model` must be a string"})
 
+        # The caller names the agent, so an agent this session has no key for
+        # must be refused here, as `/execute` refuses it. Left to the gate it
+        # would match no role, skip that role's allowlist, and be forwarded
+        # with no record of the call.
         agent_id = str(body.get("causalmesh_agent") or m.agent_id)
+        if agent_id not in m.agents:
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "error": {
+                        "message": f"agent {agent_id!r} is not known to this session",
+                        "type": "causalmesh_unknown_agent",
+                    }
+                },
+            )
         now_us = time.time_ns() // 1_000
 
         # Check gate
@@ -158,9 +212,8 @@ def create_app(
             reason = "no upstream configured; recorded only"
             rule = "no-upstream"
         else:
-            host = upstream_url.split("://", 1)[-1].split("/", 1)[0]
             try:
-                resource = Resource.endpoint(host)
+                resource = Resource.endpoint(upstream_host or "")
                 verdict = m._gate.policy.check(agent_id=agent_id, resource=resource, now_us=now_us)
                 allowed = verdict.allowed
                 reason = verdict.reason
@@ -189,7 +242,7 @@ def create_app(
             identity=identity,
             timestamp_us=now_us,
             payload={
-                "model": body.get("model", ""),
+                "model": model,
                 "allowed": allowed,
                 "reason": reason,
                 "rule": rule,
@@ -242,12 +295,18 @@ def create_app(
         try:
             with urllib.request.urlopen(req, timeout=60) as resp:  # nosec B310
                 payload = json.loads(resp.read())
-        except urllib.error.URLError as exc:
+            if not isinstance(payload, dict):
+                raise ValueError("upstream did not return a JSON object")
+        except (OSError, ValueError) as exc:
+            # URLError, HTTPError and socket timeouts are OSError; a body that
+            # is not JSON is ValueError. Either way the call was allowed and
+            # recorded but produced no reply, which is a gateway failure, not
+            # a success carrying an error message.
             return JSONResponse(
-                status_code=200,
+                status_code=502,
                 content={
                     "error": {
-                        "message": f"upstream unreachable: {exc}",
+                        "message": f"upstream failed: {type(exc).__name__}: {exc}",
                         "type": "causalmesh_upstream_error",
                     }
                 },
