@@ -1,3 +1,8 @@
+import pytest
+
+pytestmark = pytest.mark.integration
+
+
 def test_execute_allowed(client, mesh):
     response = client.post(
         "/v1/tools/write_file/execute",

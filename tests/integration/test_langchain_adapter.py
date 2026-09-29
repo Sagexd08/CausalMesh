@@ -5,6 +5,8 @@ import pytest
 from causalmesh import CausalMesh, Tool
 from causalmesh.integrations import LangChainAdapter
 
+pytestmark = pytest.mark.integration
+
 
 @pytest.fixture
 def mesh(tmp_path) -> CausalMesh:

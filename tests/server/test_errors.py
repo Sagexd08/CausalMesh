@@ -1,3 +1,8 @@
+import pytest
+
+pytestmark = pytest.mark.integration
+
+
 def test_unknown_tool_is_404(client):
     response = client.post(
         "/v1/tools/does_not_exist/execute", json={"agent_id": "test-agent", "arguments": {}}
@@ -15,6 +20,7 @@ def test_missing_resource_is_422(client):
     assert "was not provided" in response.json()["detail"]
 
 
+@pytest.mark.failure
 def test_an_unhandled_error_is_a_generic_500_without_detail(client, mesh, monkeypatch):
     def explode(**_kwargs):
         raise RuntimeError("secret-token-xyz at /home/operator/private.key")

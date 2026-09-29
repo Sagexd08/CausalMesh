@@ -8,6 +8,8 @@ from causalmesh.integrations.openai import OpenAIAdapter
 from causalmesh.policy.contract import Contract
 from causalmesh.sdk.errors import UnknownAgentError
 
+pytestmark = pytest.mark.integration
+
 MINIMAL_CONTRACT_YAML = """
 version: 1
 roles:

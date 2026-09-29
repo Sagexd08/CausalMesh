@@ -225,6 +225,7 @@ class TestRecovery:
         assert resumed.run_id == record.run_id
         assert resumed.attempts == 2
 
+    @pytest.mark.failure
     def test_recovery_does_not_touch_finished_runs(self, index: RunIndex, plan) -> None:
         index.register_plan(plan, now_us=1)
         record = index.claim_next("exp", now_us=2)
@@ -232,6 +233,7 @@ class TestRecovery:
         assert index.abandon_running("exp", now_us=4) == 0
         assert index.get(record.run_id).state == RunState.FAILED
 
+    @pytest.mark.failure
     def test_the_resume_is_visible_in_the_transition_log(self, index: RunIndex, plan) -> None:
         """§80: a resumed run must not look like a clean one.
 

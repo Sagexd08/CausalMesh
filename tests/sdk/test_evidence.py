@@ -124,6 +124,7 @@ class TestEveryDeclaredAgentIsRecorded:
 
 
 class TestAMissingRecordIsReported:
+    @pytest.mark.failure
     def test_a_relay_failure_leaves_the_outcome_and_reports_the_gap(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:

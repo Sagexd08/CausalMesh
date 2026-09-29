@@ -18,6 +18,11 @@ it would block every change on debt unrelated to it.
 **A tool that is not installed is a failure, not a skip.** A gate that quietly
 passes because `bandit` is missing certifies nothing.
 
+**So is an optional dependency the tests need.** The server, adapter and
+analysis tests `importorskip` their extras, so on a machine without them the
+suite passes while skipping exactly the tests that cover the authentication
+boundary and the framework adapters. The last step names what is missing.
+
 Output is ASCII: Windows consoles default to cp1252 (AGENTS.md).
 """
 
@@ -40,6 +45,31 @@ MYPY_ENFORCED = (
     "src/causalmesh/policy",
     "src/causalmesh/hooks",
 )
+
+
+# Modules whose absence makes tests skip rather than fail. Each entry is a tuple
+# of alternatives: one of them must import.
+TEST_DEPENDENCIES: tuple[tuple[str, ...], ...] = (
+    ("fastapi",),
+    ("uvicorn",),
+    ("httpx", "httpx2"),
+    ("langchain_core",),
+    ("numpy",),
+    ("pandas",),
+    ("scipy",),
+    ("statsmodels",),
+    ("matplotlib",),
+    ("hypothesis",),
+)
+
+
+def missing_test_dependencies() -> list[str]:
+    """The optional test dependencies that cannot be imported."""
+    return [
+        " or ".join(alternatives)
+        for alternatives in TEST_DEPENDENCIES
+        if all(importlib.util.find_spec(name) is None for name in alternatives)
+    ]
 
 
 def steps(*, fast: bool) -> list[tuple[str, str, list[str]]]:
@@ -69,6 +99,17 @@ def main(argv: list[str] | None = None) -> int:
         started = time.monotonic()
         code = subprocess.run([sys.executable, "-m", *command], cwd=ROOT).returncode
         results.append((label, "PASS" if code == 0 else "FAIL", time.monotonic() - started))
+
+    print("\n=== test dependencies", flush=True)
+    missing = missing_test_dependencies()
+    if missing:
+        print(f"not installed: {', '.join(missing)}")
+        print(
+            "those tests skip instead of failing: pip install -e '.[dev,server,analysis,langchain]'"
+        )
+    else:
+        print("all present: no test is skipped for want of an extra")
+    results.append(("test dependencies", "FAIL" if missing else "PASS", 0.0))
 
     print("\n=== summary")
     for label, status, seconds in results:

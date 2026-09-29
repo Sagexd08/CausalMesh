@@ -286,6 +286,7 @@ class TestInducedConflict:
 class TestFailureModes:
     """§9, §22: crashes, stalls and retries as first-class behaviour."""
 
+    @pytest.mark.failure
     async def test_a_scripted_crash_is_recorded_not_propagated(self, tmp_path: Path) -> None:
         scenario = Scenario.from_yaml(
             """

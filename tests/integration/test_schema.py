@@ -1,4 +1,8 @@
+import pytest
+
 from causalmesh.integrations.schema import tool_to_json_schema
+
+pytestmark = pytest.mark.unit
 
 
 def dummy_tool_no_types(a, b):
