@@ -163,7 +163,9 @@ All §62 commands with `--help` and meaningful exit codes. `doctor` reports PASS
 
 **Partially done.** Built and exercised: `doctor`, `task list`, `task validate`, `experiment plan`, `experiment run`, `experiment status`, `verify` (including `--run` for the §82 clean-room case). Every command takes `--json`; exit codes are 0 success, 1 negative result, 2 bad invocation, 3 could not run. A failed *run* exits 0, because §81 makes a failed run evidence.
 
-Not built: `analyze`, `report` and `audit`. The first two wait on `metrics/`, `analysis/` and `reporting/`, which are empty; `audit` waits on `provenance/`. `causalmesh doctor` names the unbuilt subsystems rather than leaving them to be discovered by use.
+Not built: `report`. It waits on `reporting/`, which is empty. `causalmesh doctor` names the unbuilt subsystems rather than leaving them to be discovered by use.
+
+`analysis/` is no longer empty: `agreement.py` (multi-rater kappa coding, §53 — see `docs/backlog.md`) is built and exposed as `causalmesh agreement`. It computes over an operator-supplied judgement file only; no run in this repository has been coded by a real rater.
 
 Two defects surfaced by running the CLI against real artifacts, both the same shape as the enforcement-measurement defect in `docs/backlog.md`: a read of a field that does not exist, reporting a confident zero. The key ring was built from `event.actor_id` when the actor is at `event.identity.agent_id`, so every chain failed verification; and `status` counted `result.success` when success is `result.outcome.succeeded`, so every arm showed zero passes. The second now counts an absent outcome as `unknown` rather than as a failure.
 
@@ -206,7 +208,7 @@ Each is recorded as a tracked item in `docs/backlog.md` rather than left as a si
 
 - Real LLM adapters (OpenAI, Anthropic, local)
 - CooperBench import (§54)
-- Multi-rater kappa coding (§53)
+- Multi-rater kappa coding (§53) — coding scheme and kappa computation built; no run coded by a real rater
 - Scaling beyond 4 agents (§86)
 - The 1920-run confirmatory execution — machinery and gates built, gate closed
 
