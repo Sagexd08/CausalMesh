@@ -38,6 +38,7 @@ from typing import TYPE_CHECKING, Any
 
 from causalmesh.hooks.lifecycle import GateDecision, ToolCall
 from causalmesh.policy import Contract, Gate as PolicyGate, Resource, Verdict
+from causalmesh.policy.resource import ResourceError
 
 if TYPE_CHECKING:
     from causalmesh.claims.registry import ClaimRegistry
@@ -69,6 +70,7 @@ class ContractGate:
         enforcing: bool = True,
         ledger: object | None = None,
         checkpoint_handler: CheckpointHandler | None = None,
+        require_ledger: bool = False,
     ) -> ContractGate:
         """Assemble a gate from a contract, and a registry when there is one.
 
@@ -83,6 +85,7 @@ class ContractGate:
             registry=registry,
             enforcing=enforcing,
             checkpoint_handler=checkpoint_handler,
+            require_ledger=require_ledger,
         )
         if ledger is not None:
             policy.attach_ledger(ledger)
@@ -97,20 +100,35 @@ class ContractGate:
         would leave the workspace in a state no event describes, which is
         the same reasoning `ClaimGate` records.
         """
-        for path in call.paths:
-            verdict = self.policy.check(
-                agent_id=call.agent_id, resource=Resource.path(path), now_us=now_us
-            )
+        # Paths first, in the order the call lists them, then any other
+        # resource the call declared (`Tool(resource_kind=...)`). The harness's
+        # own `ToolCall` carries no `resources`, so it sees paths only.
+        named: list[tuple[str, Resource | None]] = [(path, None) for path in call.paths]
+        named.extend((resource.identity, resource) for resource in getattr(call, "resources", ()))
+
+        for label, declared in named:
+            try:
+                resource = declared if declared is not None else Resource.path(label)
+            except ResourceError as exc:
+                # A path that cannot be formed cannot be decided on. Refuse it as
+                # data, like every other refusal, instead of raising past the gate.
+                return GateDecision(
+                    allowed=False,
+                    reason=f"{label!r} is not a usable resource: {exc}",
+                    blocked_path=label,
+                    rule="malformed",
+                )
+            verdict = self.policy.check(agent_id=call.agent_id, resource=resource, now_us=now_us)
             self.verdicts.append(verdict)
             if not verdict.refused:
                 continue
 
             if verdict.rule == "claim" and self.registry is not None:
                 holder = self.registry.check(
-                    path=Resource.path(path).identity, run_id=self.policy.run_id, now_us=now_us
+                    path=resource.identity, run_id=self.policy.run_id, now_us=now_us
                 )
                 self.registry.record_denial(
-                    path=Resource.path(path).identity,
+                    path=resource.identity,
                     requesting_agent=call.agent_id,
                     run_id=self.policy.run_id,
                     now_us=now_us,
@@ -122,7 +140,7 @@ class ContractGate:
                 allowed=False,
                 reason=verdict.reason,
                 holder_agent=verdict.holder,
-                blocked_path=path,
+                blocked_path=label,
                 rule=verdict.rule,
             )
 

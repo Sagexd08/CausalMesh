@@ -92,11 +92,13 @@ class Gate:
         registry: ClaimRegistry | None = None,
         enforcing: bool = True,
         checkpoint_handler: CheckpointHandler | None = None,
+        require_ledger: bool = False,
     ) -> None:
         self.contract = contract
         self.run_id = run_id
         self.registry = registry
         self.enforcing = enforcing
+        self.require_ledger = require_ledger
         self.checkpoint_handler = checkpoint_handler or AutoDenyHandler()
 
     def check(self, *, agent_id: str, resource: Resource, now_us: int) -> Verdict:
@@ -259,6 +261,22 @@ class Gate:
         limit = self.contract.budget_for(agent_id, resource)
         if limit is None:
             return None
+        if self.require_ledger and getattr(self, "_ledger", None) is None:
+            # A total with nothing recording consumption is a total nobody is
+            # enforcing. Callers that cannot supply a ledger opt out by not
+            # setting `require_ledger`; the SDK sets it, because a session that
+            # declares a budget and quietly allows every spend is worse than one
+            # that refuses.
+            return Verdict(
+                allowed=False,
+                resource=resource,
+                reason=(
+                    f"{resource.describe()}: a total of {limit:f} is declared for "
+                    f"{agent_id!r} but no ledger is attached, so it cannot be enforced"
+                ),
+                rule="budget",
+                detail={"limit": f"{limit:f}", "ledger": "absent"},
+            )
         spent = self.spent(agent_id=agent_id, resource=resource)
         if spent + resource.amount <= limit:
             return None

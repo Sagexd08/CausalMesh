@@ -38,7 +38,7 @@ import pytest
 
 from causalmesh.gateway.resolver import ResourceResolver
 from causalmesh.gateway.tool import Tool
-from causalmesh.sdk.errors import MissingResourceError
+from causalmesh.sdk.errors import InvalidResourceError, MissingResourceError
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -74,24 +74,35 @@ class TestExplicitResourceArgs:
         tool = _tool(resource_args=["path"])
         assert _resolve(tool, {"path": "file.txt", "content": "data"}) == ("file.txt",)
 
-    def test_integer_value_stringified(self) -> None:
+    @pytest.mark.parametrize("value", [123, 1.5, True, None, b"a/b", ["a", "b"], ("a",), {"a": 1}])
+    def test_a_value_that_is_not_text_is_refused(self, value: object) -> None:
+        """The handler receives the raw object; the gate would have seen `str(value)`.
+
+        These were once stringified ("123", "None", the repr of a list). A list
+        of two paths was then checked as one odd string while the handler
+        wrote both, so the gate decided about a resource the handler never
+        touched. A resource argument has to be text, or nothing is decided.
+        """
         tool = _tool(resource_args=["path"])
-        assert _resolve(tool, {"path": 123}) == ("123",)
+        with pytest.raises(InvalidResourceError, match="must be a str or a path"):
+            _resolve(tool, {"path": value})
 
     def test_path_object_stringified(self) -> None:
         tool = _tool(resource_args=["path"])
         result = _resolve(tool, {"path": Path("src") / "main.py"})
         assert result == (str(Path("src") / "main.py"),)
 
-    def test_none_value_stringified_as_none(self) -> None:
-        """None is a valid (if unusual) value; the gate decides whether it is allowed."""
+    @pytest.mark.parametrize("value", ["", "   ", "\t\n"])
+    def test_an_empty_or_blank_path_is_refused_with_a_typed_error(self, value: str) -> None:
+        # It used to reach the gate and raise a bare ResourceError from inside it.
         tool = _tool(resource_args=["path"])
-        assert _resolve(tool, {"path": None}) == ("None",)
+        with pytest.raises(InvalidResourceError, match="is empty"):
+            _resolve(tool, {"path": value})
 
-    def test_empty_string_value_extracted(self) -> None:
-        """An empty string resource is extracted as-is; the gate decides."""
+    def test_a_path_containing_nul_is_refused(self) -> None:
         tool = _tool(resource_args=["path"])
-        assert _resolve(tool, {"path": ""}) == ("",)
+        with pytest.raises(InvalidResourceError, match="NUL"):
+            _resolve(tool, {"path": "allowed/x\x00/../forbidden/y"})
 
     def test_duplicate_resource_args_extracted_twice(self) -> None:
         """Duplicate entries in resource_args are unusual but must not silently collapse."""

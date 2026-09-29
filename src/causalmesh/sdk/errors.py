@@ -11,6 +11,7 @@ from __future__ import annotations
 __all__ = [
     "CausalMeshError",
     "ConfigurationError",
+    "InvalidResourceError",
     "MissingResourceError",
     "PolicyError",
     "ToolExecutionError",
@@ -36,6 +37,21 @@ class MissingResourceError(CausalMeshError):
 
     Raised when the gateway cannot resolve resources declared in
     ``resource_args`` because the agent failed to supply them.
+    """
+
+
+class InvalidResourceError(MissingResourceError):
+    """A resource argument is present but cannot be turned into a resource.
+
+    A subclass of ``MissingResourceError`` on purpose: both mean the gate has
+    nothing trustworthy to decide on, both are refused before the handler
+    runs, and everything that already handles the parent (the HTTP server's
+    422, the OpenAI adapter's tool message) handles this too.
+
+    Raised for a value of the wrong type (a list, ``None``, bytes: the handler
+    would receive the raw object while the gate saw ``str(value)``), an empty
+    name, an amount that is not a finite non-negative number, or an endpoint
+    that names no host.
     """
 
 
