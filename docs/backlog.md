@@ -61,15 +61,56 @@ cost is the gate, not the loader.
 
 ### Multi-rater kappa coding (§53)
 
-**Status:** not built.
+**Status: the code is built; the coding itself has not been executed.**
 
-**Why:** §53 concerns the *secondary* qualitative coding of failure modes.
-The primary outcome (§38) is deliberately free of human judgement, and it
-is the only thing this slice measures.
+**Why it was deferred:** §53 concerns the *secondary* qualitative coding of
+failure modes. The primary outcome (§38) is deliberately free of human
+judgement, and it is the only thing this slice measures. Building the
+machinery does not change that — `src/causalmesh/analysis/agreement.py`
+has no import of `tasks.outcome` and feeds nothing back into
+`TaskOutcome` or `AcceptanceDecision`; it computes *about* human
+judgements an operator supplies, never *into* the automatic outcome.
 
-**What it would take:** a coding scheme, at least two raters, and a kappa
-computation. The raters are the hard part and the reason this is not a
-code-only task.
+**What is built.** A fixed, closed taxonomy of seven failure-mode
+categories (`FailureModeCategory`), each traced to a concrete shape this
+codebase can actually produce rather than a generic qualitative-coding
+rubric — `STALE_READ_DIVERGENCE` from `TaskOutcome.divergence_absent`,
+`CLOBBERED_WRITE` from the ownership-merge defect this file already
+records, `DENIED_CLAIM_NOT_SURFACED` from the "enforcement was
+unmeasurable" defect below, `POLICY_REFUSAL_MISHANDLED` from a recorded
+`Verdict` refusal the agent's own recovery still failed on,
+`UNRELATED_TEST_FAILURE` and `RUN_INCOMPLETE` from `TaskOutcome`'s own
+fields, and `ACCEPTANCE_REJECTED_UNCLEAR_CAUSE` as the explicit catch-all
+for a rejection the evidence tuple does not explain — coded as unclear
+rather than forced into a category that does not fit, the same "unknown,
+never a plausible zero" discipline AGENTS.md states for counters.
+`RaterJudgement` records one rater's category for one run, validated
+eagerly — an unknown category is refused, never coerced onto the nearest
+known member. Cohen's kappa (2 raters) and Fleiss' kappa (N >= 2 raters,
+refusing input with an unequal rater count per item rather than silently
+dropping items) are implemented directly, no new dependency, each
+returning a `KappaResult` that carries the observed and expected
+agreement figures alongside the kappa value — the same evidence-retention
+pattern `TaskOutcome.evidence` already follows, so a kappa number is
+never reported detached from what produced it. `causalmesh agreement
+<file>` runs it over an operator-supplied JSON or YAML judgement file.
+17 tests in `tests/unit/test_agreement.py`, including both kappa formulas
+checked against hand-computed worked examples independently re-derived
+rather than asserted against the module's own arithmetic.
+
+**What is not built, and cannot be from code alone: real raters.** No run
+in this repository has been coded by a human, and no kappa value in this
+project's history was computed from real judgements — `causalmesh
+agreement` has never been pointed at anything but a smoke-test fixture.
+The raters were always the hard part and remain it; this entry now
+separates "the machinery does not exist" (resolved) from "the qualitative
+coding has not happened" (still true), per `docs/PLAN.md`'s standing
+commitment against fabricated results.
+
+**What it would still take:** at least two people willing to read run
+transcripts and code them against the taxonomy above, independently, and
+a decision about which failed runs across which collections are worth
+coding at all.
 
 ### Scaling beyond 4 agents (§86)
 
