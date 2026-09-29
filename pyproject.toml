@@ -30,21 +30,46 @@ classifiers = [
 # Runtime core is deliberately light (spec §7). The coordination substrate —
 # relay, events, claims, hooks, storage, verifier — leans on the standard
 # library; `cryptography` supplies Ed25519 and PyYAML parses configuration.
+#
+# The floors below are deliberate, and each was measured (2026-09-30):
+#
+# - `cryptography>=50.0`: every release below it carries an advisory in
+#   pip-audit's data (14 at 41.0.0 alone). This is the library that signs the
+#   chain, so its floor is the one that matters most.
+# - `click>=8.3.3`: typer's own dependency, declared here because the CLI
+#   depends on its behaviour and 8.3.2 and below carry PYSEC-2026-2132.
+# - `typer>=0.16`: the CLI annotates options as `Path | None`, which 0.12.0 rejects
+#   ("Type not yet supported"), and with click 8.3 0.15.4 and below fail too;
+#   0.16.0 is the lowest release for which every CLI command runs.
+# - `PyYAML>=6.0.2`: 6.0 and 6.0.1 have no wheel for Python 3.13, and 6.0 does
+#   not build on 3.12.
+# Re-run `pip-audit` against the floors pinned exactly before changing any.
 dependencies = [
-    "cryptography>=41.0",
-    "PyYAML>=6.0",
-    "typer>=0.12",
+    "cryptography>=50.0",
+    "PyYAML>=6.0.2",
+    "typer>=0.16",
+    "click>=8.3.3",
     "rich>=13.0",
 ]
 
 [project.optional-dependencies]
 # The analysis stack is heavier than the runtime, and intentionally separate.
+# Each package has a floor per Python because the oldest release with a wheel
+# differs: numpy 1.26, scipy 1.11.0, pandas 2.0.0, statsmodels 0.14.0 and
+# matplotlib 3.8.0 (the previous floors) have no wheel for 3.13, and scipy
+# 1.11.0 and pandas 2.0.0 have none for 3.12 either, so `pip install
+# causalmesh[analysis]` would have tried to build them from source.
 analysis = [
-    "numpy>=1.26",
-    "scipy>=1.11",
-    "pandas>=2.0",
-    "statsmodels>=0.14",
-    "matplotlib>=3.8",
+    "numpy>=1.26; python_version < '3.13'",
+    "numpy>=2.1; python_version >= '3.13'",
+    "scipy>=1.11.2; python_version < '3.13'",
+    "scipy>=1.14.1; python_version >= '3.13'",
+    "pandas>=2.1.1; python_version < '3.13'",
+    "pandas>=2.2.3; python_version >= '3.13'",
+    "statsmodels>=0.14; python_version < '3.13'",
+    "statsmodels>=0.14.4; python_version >= '3.13'",
+    "matplotlib>=3.8; python_version < '3.13'",
+    "matplotlib>=3.9.2; python_version >= '3.13'",
 ]
 dev = [
     "pytest>=8.0",
@@ -69,8 +94,20 @@ dev = [
     "bandit[toml]>=1.7",
 ]
 server = [
-    "fastapi>=0.111",
+    # `fastapi>=0.111` allowed starlette 0.37.2, which has 7 advisories (fixed
+    # by 1.3.1). The smallest fastapi that admits starlette 1.3.1 is 0.133.0,
+    # so that is the honest floor; starlette is named because it is what carries
+    # the advisories, and pydantic because 2.0 to 2.3 have one.
+    "fastapi>=0.133",
+    "starlette>=1.3.1",
+    "pydantic>=2.4",
     "uvicorn>=0.29",
+]
+# Needed for the LangChain adapter and its tests. Not in `server`: a gateway
+# does not need it. 1.3.3 is the lowest release with no advisory in pip-audit's
+# data (0.3.0 has 13), and the adapter tests pass at exactly that version.
+langchain = [
+    "langchain-core>=1.3.3",
 ]
 
 [project.urls]
