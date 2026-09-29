@@ -36,7 +36,10 @@ def test_unknown_agent_is_400(client):
         json={"agent_id": "imposter", "arguments": {"path": "allowed/file.txt"}},
     )
     assert response.status_code == 400
-    assert "no signing key" in response.json()["detail"]
+    assert response.json() == {"detail": "unknown agent"}
+    # The refusal must not tell a guesser which agents do exist.
+    for known in ("test-agent", "admin-agent"):
+        assert known not in response.text
 
 
 def test_unknown_agent_is_400_for_an_async_tool_and_the_handler_does_not_run(client, mesh):
@@ -46,6 +49,6 @@ def test_unknown_agent_is_400_for_an_async_tool_and_the_handler_does_not_run(cli
         json={"agent_id": "imposter", "arguments": {"path": "unowned/file.txt"}},
     )
     assert response.status_code == 400
-    assert "no signing key" in response.json()["detail"]
+    assert response.json() == {"detail": "unknown agent"}
     assert mesh._called == []
     assert mesh.audit_events() == []

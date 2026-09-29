@@ -41,7 +41,34 @@ def serve_command(
         str | None, typer.Option("--upstream-api-key", envvar="CAUSALMESH_UPSTREAM_API_KEY")
     ] = None,
     api_token: Annotated[
-        str | None, typer.Option("--api-token", envvar="CAUSALMESH_API_TOKEN")
+        str | None,
+        typer.Option(
+            "--api-token",
+            envvar="CAUSALMESH_API_TOKEN",
+            help="A token any client may use, naming any agent it likes (asserted, not proven).",
+        ),
+    ] = None,
+    agent_token: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--agent-token",
+            envvar="CAUSALMESH_AGENT_TOKENS",
+            help=(
+                "AGENT=TOKEN, repeatable. A token bound to one agent: the server takes the "
+                "agent from the token and refuses a request that names another."
+            ),
+        ),
+    ] = None,
+    max_body_bytes: Annotated[
+        int,
+        typer.Option("--max-body-bytes", help="Refuse request bodies larger than this (413)."),
+    ] = 1_048_576,
+    rate_limit: Annotated[
+        int | None,
+        typer.Option(
+            "--rate-limit",
+            help="Requests per minute allowed per credential, in this process (429 beyond it).",
+        ),
     ] = None,
     dev: Annotated[bool, typer.Option("--dev")] = False,
 ) -> None:
@@ -80,8 +107,22 @@ def serve_command(
         fail("--dev mode disables authentication and is only allowed on localhost/127.0.0.1")
         raise typer.Exit(Exit.USAGE)
 
-    if not dev and api_token is None:
-        fail("--api-token is required when not in --dev mode")
+    bound: dict[str, str] = {}
+    for pair in agent_token or []:
+        agent, separator, secret = pair.partition("=")
+        if not separator or not agent.strip() or not secret.strip():
+            fail(
+                "--agent-token must look like AGENT=TOKEN, with both parts non-blank",
+                hint="For example: --agent-token coder=s3cret-value",
+            )
+            raise typer.Exit(Exit.USAGE)
+        if agent in bound:
+            fail(f"--agent-token names {agent!r} twice")
+            raise typer.Exit(Exit.USAGE)
+        bound[agent] = secret
+
+    if not dev and api_token is None and not bound:
+        fail("--api-token or --agent-token is required when not in --dev mode")
         raise typer.Exit(Exit.USAGE)
 
     mesh = CausalMesh(contract=contract, run_id=run_id, agent_id="agent")
@@ -93,13 +134,27 @@ def serve_command(
         fastapi_app = create_app(
             mesh=mesh,
             api_tokens=tokens,
-            auth_disabled=tokens is None,
+            agent_tokens=bound or None,
+            auth_disabled=tokens is None and not bound,
             upstream_base_url=upstream,
             upstream_api_key=upstream_api_key,
+            max_body_bytes=max_body_bytes,
+            rate_limit_per_minute=rate_limit,
         )
     except ValueError as exc:
-        fail(str(exc), hint="Check --upstream: it must be an http:// or https:// URL.")
+        fail(str(exc), hint="Check --upstream (an http:// or https:// URL) and --agent-token.")
         raise typer.Exit(Exit.USAGE) from None
+
+    weak = [
+        name
+        for name, secret in [("--api-token", api_token), *bound.items()]
+        if secret and len(secret) < 16
+    ]
+    if weak:
+        note(
+            "a token shorter than 16 characters can be guessed; use a long random one "
+            '(for example `python -c "import secrets; print(secrets.token_urlsafe(32))"`)'
+        )
 
     out_console.print(f"causalmesh serve  [bold]http://{host}:{port}[/bold]  arm={contract.arm}")
     if upstream:

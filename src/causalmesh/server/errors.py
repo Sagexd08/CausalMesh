@@ -22,7 +22,9 @@ def register_error_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(UnknownAgentError)
     async def unknown_agent_handler(request: Request, exc: UnknownAgentError) -> JSONResponse:
-        return JSONResponse(status_code=400, content={"detail": str(exc)})
+        # Not `str(exc)`: that names every agent the session knows, which is
+        # exactly what someone guessing an identity wants to be told.
+        return JSONResponse(status_code=400, content={"detail": "unknown agent"})
 
     @app.exception_handler(MissingResourceError)
     async def missing_resource_handler(request: Request, exc: MissingResourceError) -> JSONResponse:
