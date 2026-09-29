@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -37,7 +38,11 @@ __all__ = [
     "Workspace",
     "WorkspaceError",
     "build_run_workspaces",
+    "check_path_budget",
 ]
+
+# MAX_PATH is 260 including the terminating NUL, so 259 usable characters.
+_WINDOWS_PATH_LIMIT = 259
 
 
 class WorkspaceError(RuntimeError):
@@ -146,6 +151,71 @@ class Workspace:
         return sorted(self.relative(path) for path in self.root.rglob("*") if path.is_file())
 
 
+def _long_paths_enabled() -> bool:
+    """Whether Windows will open paths longer than MAX_PATH. True off Windows."""
+    if sys.platform != "win32":
+        return True
+    import winreg
+
+    try:
+        with winreg.OpenKey(
+            winreg.HKEY_LOCAL_MACHINE, r"SYSTEM\CurrentControlSet\Control\FileSystem"
+        ) as key:
+            return bool(winreg.QueryValueEx(key, "LongPathsEnabled")[0])
+    except OSError:
+        return False
+
+
+def check_path_budget(
+    *,
+    base: Path,
+    run_id: str,
+    agent_ids: list[str],
+    fixture: Path | None,
+    enforce: bool | None = None,
+) -> None:
+    """Refuse, up front and in plain words, a run whose paths Windows cannot open.
+
+    Without this a checkout that is too deep fails halfway through copying the
+    fixture, with `FileNotFoundError`, `WinError 3` or a `shutil.Error` listing
+    dozens of paths, and nothing says the cause is the length. The check adds up
+    the deepest path a run is certain to create (the workspace root plus the
+    deepest file in the fixture) and compares it with MAX_PATH. It refuses only
+    what is certain to fail: a margin for files created later (`__pycache__`, an
+    agent's own) was tried and refused checkouts, 60 and 99 characters deep, whose
+    runs all completed. Something written below the fixture can still overflow a
+    checkout that is within a few dozen characters of the limit; that fails as it
+    always did, and `docs/backlog.md` says so.
+
+    It is skipped where the limit does not apply: off Windows, or where the
+    machine has long paths enabled. `enforce` overrides that, for tests.
+
+    Raises:
+        WorkspaceError: naming the length, the limit, and both ways out.
+    """
+    if enforce is None:
+        enforce = not _long_paths_enabled()
+    if not enforce:
+        return
+    deepest_file = 0
+    if fixture is not None and Path(fixture).is_dir():
+        fixture = Path(fixture)
+        deepest_file = max(
+            (len(p.relative_to(fixture).as_posix()) + 1 for p in fixture.rglob("*")), default=0
+        )
+    roots = [base / run_id / agent for agent in agent_ids] + [base / f"{run_id}_integrated"]
+    deepest_root = max(roots, key=lambda root: len(os.path.abspath(root)))
+    needed = len(os.path.abspath(deepest_root)) + deepest_file
+    if needed > _WINDOWS_PATH_LIMIT:
+        raise WorkspaceError(
+            f"run {run_id!r} needs paths up to about {needed} characters, and Windows opens "
+            f"at most {_WINDOWS_PATH_LIMIT} unless long paths are enabled. The workspace would "
+            f"be {os.path.abspath(deepest_root)}. Move the checkout somewhere shorter, use a "
+            "shorter experiment id (it is part of every run id), or enable long paths "
+            r"(HKLM\SYSTEM\CurrentControlSet\Control\FileSystem\LongPathsEnabled = 1)."
+        )
+
+
 def build_run_workspaces(
     *, base: Path, run_id: str, agent_ids: list[str], fixture: Path | None = None
 ) -> dict[str, Workspace]:
@@ -162,6 +232,7 @@ def build_run_workspaces(
     """
     if len(set(agent_ids)) != len(agent_ids):
         raise WorkspaceError(f"agent ids must be unique, got {agent_ids}")
+    check_path_budget(base=base, run_id=run_id, agent_ids=agent_ids, fixture=fixture)
 
     workspaces = {}
     for agent_id in agent_ids:
