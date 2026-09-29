@@ -7,6 +7,15 @@ hash (§33) would no longer pin what actually ran.
 
 from __future__ import annotations
 
+from .cooperbench import (
+    CooperBenchImportError,
+    ImportedFeature,
+    ImportedTask,
+    ImportOptions,
+    import_dataset,
+    import_task,
+    touched_paths,
+)
 from .definition import (
     AgentRole,
     SuccessCriteria,
@@ -37,6 +46,10 @@ __all__ = [
     "AcceptanceDecision",
     "AcceptanceVerdict",
     "AgentRole",
+    "CooperBenchImportError",
+    "ImportOptions",
+    "ImportedFeature",
+    "ImportedTask",
     "RunConfig",
     "RunResult",
     "SensitivityReport",
@@ -52,7 +65,10 @@ __all__ = [
     "diverged_files",
     "evaluate_outcome",
     "execute_task",
+    "import_dataset",
+    "import_task",
     "load_tasks",
+    "touched_paths",
     "validate_structure",
     "workspace_digest",
 ]

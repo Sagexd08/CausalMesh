@@ -207,7 +207,9 @@ causalmesh report  --latest
 Each is recorded as a tracked item in `docs/backlog.md` rather than left as a silent gap:
 
 - Real LLM adapters (OpenAI, Anthropic, local)
-- CooperBench import (§54)
+- CooperBench import (§54) — loader built and proven on one synthetic
+  worked example with a real §37 run; the real 30-task dataset is not
+  imported (see `docs/backlog.md`)
 - Multi-rater kappa coding (§53) — coding scheme and kappa computation built; no run coded by a real rater
 - Scaling beyond 4 agents (§86)
 - The 1920-run confirmatory execution — machinery and gates built, gate closed
