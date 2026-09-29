@@ -361,7 +361,7 @@ def _rate_style(passed: int, known: int) -> str:
     a third arbitrary hue.
     """
     if not known:
-        return "grey54"
+        return TEXT_MUTED
     ratio = passed / known
     return PASS if ratio == 1 else (FAIL if ratio == 0 else DENIAL)
 
@@ -387,14 +387,14 @@ def _arm_table(snapshot: Snapshot) -> Table:
         table.add_row(
             Text(arm_id, style=f"bold {arm_style(arm_id)}"),
             condition,
-            Text(f"{arm.passed}/{known}" if known else "-", style="white"),
+            Text(f"{arm.passed}/{known}" if known else "-", style=TEXT_MUTED),
             Text(
                 f"{arm.passed / known:.0%}" if known else "-", style=_rate_style(arm.passed, known)
             ),
-            Text(f"{mean:,.0f}" if mean is not None else "-", style="white"),
+            Text(f"{mean:,.0f}" if mean is not None else "-", style=TEXT_MUTED),
             Text(
                 str(arm.denials) if arm.denials else "-",
-                style=DENIAL if arm.denials else "grey35",
+                style=DENIAL if arm.denials else TEXT_FAINT,
             ),
         )
     return table
@@ -431,7 +431,7 @@ def _task_breakdown(snapshot: Snapshot) -> Table | None:
                 ),
                 Text(
                     str(denials) if denials else "-",
-                    style=DENIAL if denials else "grey35",
+                    style=DENIAL if denials else TEXT_FAINT,
                 ),
             )
     return table
@@ -460,7 +460,7 @@ def _active_runs(snapshot: Snapshot) -> Table | None:
             Text(run.arm, style=f"bold {arm_style(run.arm)}"),
             Text(run.task_id, style=TEXT_MUTED),
             Text(run.short_id, style=TEXT_MUTED),
-            Text(run.state.lower(), style=STATE_STYLE.get(run.state, "white")),
+            Text(run.state.lower(), style=STATE_STYLE.get(run.state, TEXT_MUTED)),
         )
     if len(ordered) > 6:
         table.add_row(
@@ -480,7 +480,7 @@ def _totals(snapshot: Snapshot) -> Text:
 
     line.append("      ")
     denials = snapshot.total_denials
-    line.append(str(denials), style=f"bold {DENIAL}" if denials else "bold white")
+    line.append(str(denials), style=f"bold {DENIAL}" if denials else f"bold {TEXT}")
     line.append(" write refused" if denials == 1 else " writes refused", style=TEXT_MUTED)
 
     if snapshot.connectors:
