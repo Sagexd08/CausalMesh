@@ -155,7 +155,13 @@ a row is only here if a test runs it.
 |---|---|
 | A denied mutating call never runs the handler (sync) | `tests/gateway/test_deny.py::TestHandlerNeverCalled`, `tests/gateway/test_async_gateway.py::test_sync_deny_gate_handler_never_called` |
 | A denied async call never awaits the handler | `tests/gateway/test_async_gateway.py::test_async_deny_gate_handler_never_awaited` |
-| An agent with no signing key is refused before the gate or handler | `tests/sdk/test_evidence.py::TestEveryDeclaredAgentIsRecorded` |
+| An agent with no signing key is refused before the gate or handler, sync and async (the async path skipped the check until 2026-09-30; mutation-checked) | `tests/sdk/test_evidence.py::TestEveryDeclaredAgentIsRecorded`, `tests/server/test_errors.py::test_unknown_agent_is_400_for_an_async_tool_and_the_handler_does_not_run` |
+| `/v1/chat/completions` refuses an agent it has no key for, rather than skipping that agent's allowlist and forwarding unrecorded | `tests/server/test_openai_compat.py::test_an_unknown_agent_is_refused_and_never_forwarded` |
+| The upstream allowlist sees the host the request connects to, and `--upstream` accepts only http and https | `tests/server/test_openai_compat.py::test_the_allowlist_sees_the_host_the_request_connects_to`, `::test_an_upstream_that_is_not_plain_http_is_refused_at_startup` |
+| `create_app` refuses to build without an explicit auth choice, refuses blank tokens, and an empty token set refuses every request | `tests/server/test_auth.py` |
+| Only the exact token authenticates: prefixes, extensions, other case, other schemes and a 4 KB token are refused; every `/v1` route refuses a missing token | `tests/server/test_auth.py::test_only_the_exact_token_is_accepted`, `::test_every_v1_route_refuses_a_missing_token` |
+| `serve --dev --api-token X` still enforces `X` | `tests/integration/test_serve.py::TestCliWiring::test_dev_with_a_token_still_enforces_the_token` |
+| An OpenAI tool call the model got wrong (unknown tool, missing resource, non-object arguments) becomes a tool message and runs nothing | `tests/integration/test_openai_adapter.py::test_a_bad_model_call_becomes_a_tool_message_and_nothing_runs` |
 | A declared `resource_args` name that is absent fails closed | `tests/gateway/test_resolver.py::TestMissingResourceFailsClosed` |
 | Without `--dev`, `/v1/tools` and `/v1/chat/completions` refuse a missing or wrong bearer token | `tests/server/test_auth.py`, `tests/server/test_openai_compat.py` |
 | `--dev` is refused for a non-localhost host; a token is required otherwise | `tests/integration/test_serve.py::TestCliWiring` |
@@ -167,18 +173,29 @@ Not protected:
 - **Reads.** A tool registered `mutating=False` bypasses the gate by design.
 - **Unenforced arms.** On C0-C2 the gate records what C3 would refuse and
   allows the call (`result.would_refuse`).
-- **`/v1/chat/completions` evidence.** It ignores the relay's ingest result,
-  so a request naming an undeclared `causalmesh_agent` is still gated but its
-  event is silently not recorded, unlike `/v1/tools/{name}/execute`, which
-  reports `recorded` and `audit_error`.
+- **`/v1/chat/completions` evidence.** It still ignores the relay's ingest
+  result, unlike `/v1/tools/{name}/execute`, which reports `recorded` and
+  `audit_error`. An undeclared `causalmesh_agent` no longer reaches that
+  point (it is refused with 400), so the remaining way for an event to go
+  unrecorded is a relay failure on a known agent.
+- **Identity.** One shared bearer token authenticates every client, and the
+  agent is named by the caller (`agent_id`, `causalmesh_agent`). A token
+  holder can act as any agent that has a key, within that agent's rules.
+- **Discovery.** `/docs`, `/redoc` and `/openapi.json` are served without
+  authentication.
+- **Resource kinds through the SDK.** `execute()` checks paths only. A
+  mutating tool that declares no `resource_args` and has no `path` argument
+  is checked against nothing. Allowlists, ceilings and budgets are reached
+  only through `/v1/chat/completions` (see `docs/backlog.md`).
 - **Key custody in SDK sessions.** With `seed=`, anyone holding the seed can
   sign as any agent. Without it, keys are random per session and the chain is
   not reproducible.
 - **Transport.** `serve` speaks plain HTTP; TLS is the operator's proxy.
-  The bearer token is a single shared secret compared as a set member, not a
-  per-agent identity.
+  The bearer token is a single shared secret, compared in constant time, not
+  a per-agent identity.
 - **The Docker image** binds `0.0.0.0` and therefore requires
   `CAUSALMESH_API_TOKEN`; it is not a sandbox for the tools registered in it.
+  It runs as root and declares no `HEALTHCHECK`.
 
 ## Verification is offline by construction
 

@@ -111,10 +111,10 @@ That last row is a real limitation, documented rather than hidden.
 ## Status
 
 **Substrate complete and exercised.** On 2026-09-30, `pytest --collect-only` found
-1425 tests, and a full `pytest` run (slow tests included) on one Windows 11,
-Python 3.12 machine gave 1384 passed, 0 failed and 41 skipped: 35 need pilot
-artifacts that are not in the checkout, 2 need symlink privilege, 1 needs
-`TYPESAFE_API_KEY`, 1 needs `bash` and `jq`. That is one machine on one day, and
+1492 tests, and a full `pytest` run (slow tests included) on one Windows 11,
+Python 3.12 machine gave 1451 passed, 0 failed and 41 skipped: 35 need pilot
+artifacts that are not in the checkout, 3 need `bash` and `jq`, 2 need symlink
+privilege, 1 needs `TYPESAFE_API_KEY`. That is one machine on one day, and
 there is no CI to corroborate it: the workflow was removed rather than paid
 for (see `docs/backlog.md`). Re-run `python scripts/check.py` rather than
 trust this line.

@@ -64,6 +64,7 @@ tell a known trade-off from a new finding.
 | The policy plane is wired into `experiment run` and `serve` only when a `causalmesh.yaml` is found; SDK sessions have no claim registry | `docs/backlog.md` |
 | No hosted model has been executed through any adapter | `docs/backlog.md` |
 | `serve --dev` disables authentication and is refused for non-localhost hosts | `docs/security.md` |
+| One shared bearer token; the calling agent is named by the client, not proven | `docs/security.md`, `docs/backlog.md` |
 | SDK reads (`mutating=False`) are not gated, and unenforced arms (C0-C2) record but do not refuse | `docs/backlog.md` |
 
 ## Supported versions

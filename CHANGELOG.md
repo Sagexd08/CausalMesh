@@ -50,6 +50,31 @@ inside it is in the commit log, and what is deliberately absent is in
 
 ### Fixed
 
+- **An async tool call ran for an agent the session had no key for.**
+  `execute_async` skipped the unknown-agent check `execute` makes, so the
+  handler ran and the call went unrecorded, and `/v1/tools/{name}/execute`
+  answered 200 for it. That path is also the one every adapter's async method
+  takes. Both paths now share one check and raise `UnknownAgentError` (HTTP
+  400) before the gate or the handler is reached.
+- **`/v1/chat/completions` trusted the caller's agent name.** An agent with no
+  key matched no role, so it skipped that role's allowlist, was forwarded, and
+  left no record. It is refused with 400. A body that is not a JSON object, or
+  a `model` that is not a string (a float has no canonical form in the chain),
+  returns 400 instead of 500, and an unreachable or non-JSON upstream returns
+  502 instead of 200 with an error body.
+- **`--upstream` accepted any URL scheme, and the allowlisted host came from a
+  string split.** `file://` and other non-HTTP schemes are refused at startup.
+  The host is taken from the parsed URL, so `http://evil.example#.api.example.com`
+  is checked as `evil.example` and not as a subdomain of the allowed host.
+- **`create_app` served without authentication when called without
+  `api_tokens`.** Authentication is now an explicit choice (`api_tokens=` or
+  `auth_disabled=True`), blank tokens are refused, tokens are compared in
+  constant time, and a 401 carries `WWW-Authenticate: Bearer`.
+  `serve --dev --api-token X` no longer switches the supplied token off.
+- **`OpenAIAdapter` raised on model mistakes.** An unknown tool name, a missing
+  resource argument or non-object arguments now come back as an `Action
+  failed:` tool message, as malformed JSON already did. An unknown *agent*
+  still raises, because the developer chose it, not the model.
 - **The Docker image could not start `serve`.** It installed no
   `fastapi`/`uvicorn`, and `docker-compose.yml` passed no API token. It now
   installs `.[server]` and reads `CAUSALMESH_API_TOKEN`.
