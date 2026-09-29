@@ -21,6 +21,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
+from causalmesh.cli._output import Exit
 from causalmesh.cli.main import app
 
 pytestmark = [pytest.mark.integration]
@@ -68,12 +69,16 @@ class TestDoctor:
 
         A CLI that offers commands without saying which ones have no
         implementation behind them leaves the user to discover the gaps by
-        hitting them.
+        hitting them. `reporting` is asserted rather than `analysis`
+        because `analysis/agreement.py` (kappa coding, §53) shipped: the
+        mechanism that names subsystems here reads the package directory
+        directly, so a module landing in `analysis/` is exactly what is
+        supposed to remove it from this list.
         """
         result = invoke("doctor", "--root", str(REPO), "--json")
         coverage = next(c for c in payload(result)["checks"] if c["check"] == "coverage")
         assert coverage["status"] == "WARN"
-        assert "analysis" in coverage["detail"]
+        assert "reporting" in coverage["detail"]
 
     def test_doctor_fails_outside_a_checkout(self, tmp_path: Path) -> None:
         result = invoke("doctor", "--root", str(tmp_path), "--json")
@@ -253,6 +258,81 @@ class TestTask:
         assert {"schema_handler_widen", "concurrent_edit_collision"} <= ids
         # §33 pins the suite by hash; a task without one is not attributable.
         assert all(len(task["hash"]) == 64 for task in tasks)
+
+    def test_the_imported_cooperbench_worked_example_is_in_the_suite(self) -> None:
+        """backlog §54: the one worked example ships as a real task."""
+        result = invoke("task", "list", "--root", str(REPO), "--json")
+        assert result.exit_code == 0, result.stdout
+        tasks = {task["task_id"]: task for task in payload(result)}
+        assert "cb_tinyrepo_task1" in tasks
+        assert tasks["cb_tinyrepo_task1"]["family"] == "cooperbench_import"
+
+
+class TestImportCooperbench:
+    """`causalmesh task import-cooperbench`, against the synthetic sample.
+
+    Not the real CooperBench dataset — see
+    `tests/fixtures/cooperbench_sample/README.md`. This proves the CLI
+    surface itself, distinct from the loader's own unit tests.
+    """
+
+    SAMPLE = REPO / "tests" / "fixtures" / "cooperbench_sample"
+
+    def test_imports_and_validates_from_the_cli(self, tmp_path: Path) -> None:
+        # Runs against a scratch root so this test never writes into the
+        # repository's real tasks/ or fixtures/ directories.
+        root = tmp_path / "repo"
+        for name in ("tasks", "fixtures", "pyproject.toml"):
+            source = REPO / name
+            target = root / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if source.is_dir():
+                shutil.copytree(source, target)
+            else:
+                shutil.copy2(source, target)
+
+        result = invoke(
+            "task",
+            "import-cooperbench",
+            str(self.SAMPLE / "dataset" / "tinyrepo" / "task1"),
+            "--base-repo",
+            str(self.SAMPLE / "base_repo"),
+            "--task-id",
+            "cb_cli_scratch_test",
+            "--root",
+            str(root),
+            "--json",
+        )
+        assert result.exit_code == 0, result.stdout
+        report = payload(result)
+        assert report["task_id"] == "cb_cli_scratch_test"
+        assert report["validation"]["valid"] is True
+        assert (root / "tasks" / "cb_cli_scratch_test.yaml").is_file()
+        assert (root / "fixtures" / "cb_cli_scratch_test").is_dir()
+
+    def test_a_missing_base_repo_is_a_usage_error(self, tmp_path: Path) -> None:
+        result = invoke(
+            "task",
+            "import-cooperbench",
+            str(self.SAMPLE / "dataset" / "tinyrepo" / "task1"),
+            "--base-repo",
+            str(tmp_path / "does_not_exist"),
+            "--root",
+            str(REPO),
+        )
+        assert result.exit_code == 2
+
+    def test_a_malformed_source_is_reported_not_crashed(self, tmp_path: Path) -> None:
+        result = invoke(
+            "task",
+            "import-cooperbench",
+            str(tmp_path),
+            "--base-repo",
+            str(self.SAMPLE / "base_repo"),
+            "--root",
+            str(REPO),
+        )
+        assert result.exit_code == Exit.ERROR
 
 
 class TestPlan:

@@ -111,7 +111,14 @@ That last row is a real limitation, documented rather than hidden.
 
 ## Status
 
-**Substrate complete and exercised. 865 tests passing.**
+**Substrate complete and exercised.** On 2026-09-30, `pytest --collect-only` found
+1425 tests, and a full `pytest` run (slow tests included) on one Windows 11,
+Python 3.12 machine gave 1384 passed, 0 failed and 41 skipped: 35 need pilot
+artifacts that are not in the checkout, 2 need symlink privilege, 1 needs
+`TYPESAFE_API_KEY`, 1 needs `bash` and `jq`. That is one machine on one day;
+no remote CI job has started since 2026-09-28 (GitHub billing block, see
+`docs/backlog.md`), so CI does not corroborate this. Re-run rather than trust
+this line.
 
 The build follows a vertical slice first: a single scenario driven end-to-end
 through every subsystem, executed under all four arms, before breadth is
@@ -131,17 +138,27 @@ executable path.
 | Task system + empirical §37 gate | ✅ 2 tasks |
 | Scheduler, state machine, run index | ✅ resume-tested |
 | Model adapters (OpenAI, Anthropic, local) | ✅ tested over real HTTP |
-| Metrics, statistics, provenance, CLI | ⬜ not built |
+| Policy plane (contract, gate, ledger), checkpoints, identity keys | ✅ unit and integration tested |
+| Developer SDK, tool gateway, `causalmesh serve` (FastAPI) | ✅ tested; Docker path re-verified 2026-09-30 |
+| Framework adapters: Generic, OpenAI function calling, LangChain | ✅ tested with a mock agent only; Anthropic, LangGraph, CrewAI not built |
+| Metrics (cost accounting, four contrasts), provenance, manifests, CLI | ✅ descriptive only |
+| Multi-rater kappa (`causalmesh agreement`), CooperBench loader | ✅ built and tested on synthetic fixtures only; no real rater data and no real CooperBench data exist in this repository |
+| Statistics (inference), analytical module, reporting | ⬜ not built (`src/causalmesh/reporting` is empty; `analysis/` holds only `agreement.py`) |
 
 Not yet done, and stated plainly: **no hosted model has been run** (no key was
-available, and spending money is the operator's decision), and the analysis
-and reporting layers do not exist. See [`docs/backlog.md`](docs/backlog.md),
+available, and spending money is the operator's decision), no real CooperBench
+task or human rater has been used, and there is no inferential statistics or
+reporting layer. See [`docs/backlog.md`](docs/backlog.md),
 which records every gap as a tracked item with its reason.
 
 ## Measured results
 
 A real pilot collection — 2 tasks × 4 arms × 3 repetitions = **24 runs**,
-executed on this machine, 150 s wall clock. Nothing below is illustrative.
+executed on this machine, 150 s wall clock, by a deterministic mock agent
+(no language model was involved). Nothing below is illustrative. The raw runs
+are not tracked in git; `data/manifests/pilot_landing.manifest.json` records
+24 artifact hashes, but `causalmesh audit` cannot re-check them from a fresh
+checkout, and 35 tests skip for that reason.
 
 | Arm | Success | Mean coordination bytes | Denials | Divergences | Chains verified |
 |:---:|:---:|---:|---:|---:|:---:|
@@ -331,7 +348,8 @@ frontend/     the website: landing page and documentation (Next.js)
 |---|---|
 | [`docs/IDEA.md`](docs/IDEA.md) | What this is and why, for a deployment reader |
 | [`docs/PLAN.md`](docs/PLAN.md) | The full build sequence |
-| [`docs/security.md`](docs/security.md) | The three-layer isolation model and its limits |
+| [`docs/security.md`](docs/security.md) | What the hash chain and signatures establish, and what they do not |
+| [`docs/isolation.md`](docs/isolation.md) | The three-layer isolation model and its limits |
 | [`docs/adapters.md`](docs/adapters.md) | Model adapters, and what has not been executed |
 | [`docs/scheduler.md`](docs/scheduler.md) | The run loop, state machine and randomization |
 | [`docs/claims.md`](docs/claims.md) | Write leases and enforcement |

@@ -35,10 +35,15 @@ from rich.console import Console, Group, RenderableType
 from rich.live import Live
 from rich.text import Text
 
-DENIAL = "dark_orange3"
-PASS = "green3"
-FAIL = "red3"
-LIVE = "cyan"
+from causalmesh.tui.palette import (
+    DENIAL,
+    LIVE,
+    RESULT_FAIL as FAIL,
+    RESULT_PASS as PASS,
+    TEXT,
+    TEXT_FAINT,
+    TEXT_MUTED,
+)
 
 FRAMES = ("|", "/", "-", "\\")
 FRAME_S = 0.09
@@ -90,11 +95,11 @@ def _wordmark(revealed: int) -> Text:
     """
     name = "causalmesh"
     line = Text()
-    line.append(name[:revealed], style="bold white")
+    line.append(name[:revealed], style=f"bold {TEXT}")
     if revealed < len(name):
         line.append("_", style=LIVE)
     else:
-        line.append("  coordination you can prove", style="grey42")
+        line.append("  coordination you can prove", style=TEXT_FAINT)
     return line
 
 
@@ -106,26 +111,26 @@ def _step_line(step: Step, frame: int) -> Text:
     """
     line = Text("  ")
     if step.ok is None and frame < 0:
-        line.append(".", style="grey30")
-        line.append(f"  {step.label}", style="grey35")
+        line.append(".", style=TEXT_FAINT)
+        line.append(f"  {step.label}", style=TEXT_FAINT)
         return line
 
     if step.ok is None:
         line.append(FRAMES[frame % len(FRAMES)], style=LIVE)
-        line.append(f"  {step.label}", style="white")
+        line.append(f"  {step.label}", style=TEXT_MUTED)
         if step.waiting:
-            line.append(f"  {step.waiting}", style="grey42")
+            line.append(f"  {step.waiting}", style=TEXT_FAINT)
         return line
 
     if step.ok:
         line.append("+", style=PASS)
-        line.append(f"  {step.label}", style="grey70")
+        line.append(f"  {step.label}", style=TEXT_MUTED)
     else:
         line.append("!" if step.optional else "x", style=DENIAL if step.optional else FAIL)
-        line.append(f"  {step.label}", style="grey70")
+        line.append(f"  {step.label}", style=TEXT_MUTED)
 
     if step.detail:
-        line.append(f"  {step.detail}", style="grey42")
+        line.append(f"  {step.detail}", style=TEXT_FAINT)
     return line
 
 
@@ -136,13 +141,13 @@ def _verdict(sequence: Sequence) -> Text:
         line.append("  ready", style=f"bold {PASS}")
         warnings = len(sequence.warnings)
         if warnings:
-            line.append(f"   {warnings} optional check", style="grey54")
-            line.append("" if warnings == 1 else "s", style="grey54")
-            line.append(" did not pass", style="grey54")
+            line.append(f"   {warnings} optional check", style=TEXT_MUTED)
+            line.append("" if warnings == 1 else "s", style=TEXT_MUTED)
+            line.append(" did not pass", style=TEXT_MUTED)
     else:
         line.append("  blocked", style=f"bold {FAIL}")
         failed = ", ".join(step.label for step in sequence.failures)
-        line.append(f"   {failed}", style="grey54")
+        line.append(f"   {failed}", style=TEXT_MUTED)
     return line
 
 

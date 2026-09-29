@@ -28,6 +28,9 @@ findings that matter most are the ones that break those claims:
   way the gate does not see. There is a recorded instance of this class in
   `docs/backlog.md`: a channel that reached around the coordination boundary
   and passed every test.
+- **Bypassing `causalmesh serve` authentication.** Reaching `/v1/tools`,
+  `/v1/tools/{name}/execute` or `/v1/chat/completions` without a valid bearer
+  token when the server was started without `--dev`.
 - **Escaping workspace isolation.** Reading or writing a peer agent's
   workspace during a C0 run, by relative path, absolute path, symlink,
   junction or traversal.
@@ -57,9 +60,11 @@ tell a known trade-off from a new finding.
 |---|---|
 | C0 isolation is layered, not absolute, on Windows | `docs/isolation.md` |
 | A run driven by a hosted model is not bit-reproducible | `docs/adapters.md`, §84 |
-| Provenance is outside the signed payload by design | `docs/security.md` |
-| The policy plane is built but not yet wired into the run loop | `docs/backlog.md` |
+| Provenance is outside the signed payload by design | `docs/PLAN.md` (Step 14) |
+| The policy plane is wired into `experiment run` and `serve` only when a `causalmesh.yaml` is found; SDK sessions have no claim registry | `docs/backlog.md` |
 | No hosted model has been executed through any adapter | `docs/backlog.md` |
+| `serve --dev` disables authentication and is refused for non-localhost hosts | `docs/security.md` |
+| SDK reads (`mutating=False`) are not gated, and unenforced arms (C0-C2) record but do not refuse | `docs/backlog.md` |
 
 ## Supported versions
 

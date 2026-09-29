@@ -113,7 +113,10 @@ def _unbuilt_check() -> Check:
 
     package_root = Path(causalmesh.__file__).parent
     unbuilt = []
-    for subsystem in ("metrics", "analysis", "reporting", "provenance", "adversarial"):
+    # "adversarial" is deliberately absent: the attack battery is a test suite
+    # (tests/adversarial) run against the shipped verifier, so an empty
+    # src/causalmesh/adversarial/ says nothing about whether it is built.
+    for subsystem in ("metrics", "analysis", "reporting", "provenance"):
         directory = package_root / subsystem
         modules = [p for p in directory.glob("*.py") if p.name != "__init__.py"]
         if not modules:

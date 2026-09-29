@@ -47,6 +47,7 @@ def _seed_bytes(seed: str) -> bytes:
 def _build_plan(repo: Repo, *, experiment_id: str, profile_name: str, seed: str, allow_gated: bool):
     from causalmesh.experiments import ProfileError, plan_experiment, profile
     from causalmesh.tasks import TaskError, load_tasks
+    from causalmesh.tasks.definition import TaskFamily
 
     try:
         selected = profile(profile_name, allow_gated=allow_gated)
@@ -59,6 +60,11 @@ def _build_plan(repo: Repo, *, experiment_id: str, profile_name: str, seed: str,
     except TaskError as exc:
         fail(str(exc))
         raise typer.Exit(Exit.ERROR) from exc
+
+    # An imported task's coordination shape is discovered, not declared, and
+    # it has to pass its own section 37 gate before it can join a preregistered
+    # design (backlog section 54). Never plan one implicitly.
+    tasks = [task for task in tasks if task.family != TaskFamily.COOPERBENCH_IMPORT]
 
     if not tasks:
         fail("no tasks found", hint=f"Expected task YAML in {repo.tasks_dir}.")

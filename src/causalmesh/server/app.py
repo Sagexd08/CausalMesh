@@ -74,8 +74,7 @@ def create_app(
     @app.get("/v1/tools", response_model=ToolListResponse, dependencies=[Depends(auth_dep)])
     async def list_tools() -> ToolListResponse:
         m: CausalMesh = app.state.mesh
-        gateway = m._gateway
-        tools = [ToolMeta(**gateway.get_tool(t).to_dict()) for t in gateway.registered_tools()]
+        tools = [ToolMeta(**m.get_tool(t).to_dict()) for t in m.registered_tools()]
         return ToolListResponse(tools=tools)
 
     @app.post(
@@ -90,7 +89,7 @@ def create_app(
         m: CausalMesh = app.state.mesh
         # Look up first to give 404 before any execution attempt
         try:
-            tool = m._gateway.get_tool(tool_name)
+            tool = m.get_tool(tool_name)
         except ToolNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
 

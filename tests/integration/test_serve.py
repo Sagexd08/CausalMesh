@@ -355,3 +355,20 @@ class TestCliWiring:
         result = runner.invoke(app, ["serve", "--root", str(tmp_path)])
         assert result.exit_code == 2
         assert "--api-token is required" in result.output
+
+    @pytest.mark.parametrize("blank", ["", "   "])
+    def test_a_blank_token_is_no_token_and_never_disables_auth(
+        self, tmp_path: Path, blank: str, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        uvicorn = pytest.importorskip("uvicorn")
+        started: list[object] = []
+        monkeypatch.setattr(uvicorn, "run", lambda *a, **k: started.append(k))
+        (tmp_path / "causalmesh.yaml").write_text(
+            "version: 1\nroles: []\npolicy:\n  arm: C3\nevidence:\n  sign: false\n"
+        )
+        result = runner.invoke(
+            app, ["serve", "--root", str(tmp_path), "--host", "0.0.0.0", "--api-token", blank]
+        )
+        assert started == [], "the server started with a blank token"
+        assert result.exit_code == 2
+        assert "--api-token is required" in result.output

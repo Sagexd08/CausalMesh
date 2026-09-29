@@ -18,7 +18,15 @@ import pytest
 from rich.console import Console
 
 from causalmesh.tui import welcome
-from causalmesh.tui.onboard import Sequence, Step, build_sequence, run
+from causalmesh.tui.onboard import (
+    Sequence,
+    Step,
+    _step_line,
+    _verdict,
+    _wordmark,
+    build_sequence,
+    run,
+)
 
 pytestmark = [pytest.mark.unit]
 
@@ -270,6 +278,90 @@ class TestPalette:
         from causalmesh.tui import palette
 
         assert palette.arm_style("C9") == palette.TEXT_MUTED
+
+
+class TestOnboardUsesTheSharedPalette:
+    """`onboard.py` used to define its own DENIAL/PASS/FAIL/LIVE and a
+    five-step grey hierarchy (grey70, grey54, grey42, grey35, grey30)
+    instead of importing `tui.palette`. That hierarchy is exactly the one
+    `TestPalette` documents as invisible on the windows colour system: every
+    one of those five greys collapses to the same escape code as either
+    `TEXT_MUTED` or `TEXT_FAINT` there, so the two surfaces disagreed about
+    what "muted" meant without it being visible on the terminal this ships
+    into. These assert the *fact* — that onboard's styles are drawn from
+    the same distinct set the palette test already proves survives the
+    downgrade — rather than pinning which colour name a role gets.
+    """
+
+    @staticmethod
+    def codes(*styles: str) -> list[str]:
+        return TestPalette.codes(*styles)
+
+    def test_a_resolved_step_and_a_pending_step_stay_visually_distinct(self) -> None:
+        """Before this fix, a resolved step's label (grey70) and a pending
+        step's label (grey35) both collapsed to the palette's own colours
+        under the windows colour system used on the target terminal, but by
+        accident: nothing tied them to the same two-tier system the rest of
+        the interface uses."""
+        pending = Step("check", lambda: (True, ""))
+        resolved = Step("check", lambda: (True, ""), ok=True)
+
+        pending_line = _step_line(pending, -1)
+        resolved_line = _step_line(resolved, 0)
+
+        pending_style = str(pending_line.spans[-1].style)
+        resolved_style = str(resolved_line.spans[-1].style)
+
+        emitted = self.codes(pending_style, resolved_style)
+        assert len(set(emitted)) == 2, f"pending vs resolved label collapsed: {emitted}"
+
+    def test_step_styles_are_drawn_from_the_shared_palette_tokens(self) -> None:
+        """A literal `"grey30"`/`"grey35"`/`"grey42"`/`"grey70"` anywhere in
+        this module is the regression: this walks the actual rendered spans
+        of every step state and asserts none of them is one of the five
+        retired shades."""
+        retired = {"grey30", "grey35", "grey42", "grey54", "grey62", "grey70"}
+
+        pending = Step("check", lambda: (True, ""))
+        live = Step("check", lambda: (True, ""), waiting="probing")
+        passed = Step("check", lambda: (True, ""), ok=True, detail="found it")
+        failed = Step("check", lambda: (False, ""), ok=False, detail="missing")
+        optional_failed = Step("check", lambda: (False, ""), ok=False, optional=True, detail="-")
+
+        lines = [
+            _step_line(pending, -1),
+            _step_line(live, 0),
+            _step_line(passed, 0),
+            _step_line(failed, 0),
+            _step_line(optional_failed, 0),
+        ]
+        for line in lines:
+            for span in line.spans:
+                names = str(span.style).split()
+                assert not (retired & set(names)), f"retired grey in {span.style!r}"
+
+    def test_the_wordmark_and_verdict_avoid_the_retired_greys(self) -> None:
+        retired = {"grey30", "grey35", "grey42", "grey54", "grey62", "grey70"}
+
+        ready = Sequence(steps=[Step("a", lambda: (True, ""), ok=True)])
+        blocked = Sequence(steps=[Step("a", lambda: (False, ""), ok=False)])
+
+        for renderable in (_wordmark(10), _verdict(ready), _verdict(blocked)):
+            for span in renderable.spans:
+                names = str(span.style).split()
+                assert not (retired & set(names)), f"retired grey in {span.style!r}"
+
+    def test_onboard_reuses_the_palettes_own_role_names(self) -> None:
+        """The module must import its colours rather than shadow them with
+        module-level constants of the same name (the original bug: local
+        `DENIAL = "dark_orange3"` etc. quietly diverged from
+        `palette.DENIAL`)."""
+        from causalmesh.tui import onboard, palette
+
+        assert onboard.DENIAL == palette.DENIAL
+        assert onboard.PASS == palette.RESULT_PASS
+        assert onboard.FAIL == palette.RESULT_FAIL
+        assert onboard.LIVE == palette.LIVE
 
 
 class TestChoosing:

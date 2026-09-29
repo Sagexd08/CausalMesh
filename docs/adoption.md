@@ -96,6 +96,9 @@ services:
       - ./causalmesh.yaml:/app/causalmesh.yaml:ro
     environment:
       - CAUSALMESH_UPSTREAM_API_KEY=${CAUSALMESH_UPSTREAM_API_KEY:-}
+      # --host 0.0.0.0 is never localhost, so --dev is refused and a real
+      # token is required -- see "What this does not do yet" below.
+      - CAUSALMESH_API_TOKEN=${CAUSALMESH_API_TOKEN}
     command: ["causalmesh", "serve", "--host", "0.0.0.0", "--upstream", "https://api.openai.com"]
 ```
 

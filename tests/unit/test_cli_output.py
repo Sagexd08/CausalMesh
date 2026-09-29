@@ -31,6 +31,34 @@ class _FakeFile(io.StringIO):
         return self._reported_encoding
 
 
+class TestMessagesAreNotParsedAsMarkup:
+    """`[server]` in an install hint is text, not a Rich style tag."""
+
+    @staticmethod
+    def _capture(monkeypatch) -> io.StringIO:
+        buffer = io.StringIO()
+        monkeypatch.setattr(_output, "err_console", Console(file=buffer, width=200))
+        return buffer
+
+    def test_fail_keeps_a_bracketed_extra_in_the_message_and_hint(self, monkeypatch) -> None:
+        buffer = self._capture(monkeypatch)
+        _output.fail("pip install 'causalmesh[server]'", hint="or 'causalmesh[analysis]'")
+        assert "causalmesh[server]" in buffer.getvalue()
+        assert "causalmesh[analysis]" in buffer.getvalue()
+
+    def test_warn_and_note_keep_brackets(self, monkeypatch) -> None:
+        buffer = self._capture(monkeypatch)
+        _output.warn("see [docs]")
+        _output.note("path [a] stays")
+        assert "[docs]" in buffer.getvalue()
+        assert "[a]" in buffer.getvalue()
+
+    def test_a_stray_closing_tag_does_not_raise(self, monkeypatch) -> None:
+        buffer = self._capture(monkeypatch)
+        _output.fail("odd text [/bold] from an exception")
+        assert "[/bold]" in buffer.getvalue()
+
+
 class TestSupportsEllipsis:
     def test_true_for_an_encoding_that_can_represent_it(self) -> None:
         # cp1252 has a real byte for U+2026 (0x85); this is the console this
