@@ -39,13 +39,14 @@ inside it is in the commit log, and what is deliberately absent is in
   carry a stable rule identifier, so analysis can group refusals by rule
   instead of parsing an English sentence that changes when the wording
   improves.
-- **CI.** Lint, format, the suite across Linux, Windows and macOS on two
-  Python versions, a security scan, an evidence job that produces a
-  collection and verifies it, and the site build.
 - **Contributor documentation.** `CONTRIBUTING.md`, `SECURITY.md`,
   `AGENTS.md`, issue and pull-request templates.
 - **A contract for this repository.** The project argues that AGENTS.md
   enforces nothing and a contract is the enforcement half, so it ships both.
+- **A local gate.** `python scripts/check.py` (or `make check`) runs lint,
+  format, mypy on the enforced modules, bandit and the full suite. There is
+  no CI, so this is the only enforcement; a tool that is not installed fails
+  it rather than being skipped.
 
 ### Fixed
 
@@ -92,6 +93,13 @@ inside it is in the commit log, and what is deliberately absent is in
   whole. Vercel's framework detection was also failing, because it looks for
   `next` in the root `package.json` and a workspace layout does not put it
   there.
+
+### Removed
+
+- **The GitHub Actions workflow.** Hosted runners were not worth paying for, and
+  the workflow had not started a job since 2026-09-28 (the account's payments
+  had failed). Nothing replaces the remote runs; `python scripts/check.py` is
+  the local gate. See `docs/backlog.md` for what that no longer covers.
 
 ## Before this file existed
 
