@@ -15,11 +15,24 @@ a deliberate scope decision, not a forgotten to-do.
 | Statistics layer | Every inferential claim |
 | Reporting | Generated figures, tables and the written report |
 | `causalmesh report` | Generated figures and tables; the rest of the CLI is built |
-| CooperBench import | Tasks whose structure is not known by construction |
-| Multi-rater kappa coding | Secondary qualitative failure analysis |
+| CooperBench import (real dataset) | Tasks whose structure is not known by construction; loader is built and proven on one synthetic worked example (see `docs/backlog.md`) |
 | Scaling beyond 4 agents | The scalability profile |
+| Anthropic `tool_use`, LangGraph and CrewAI adapters | The SDK ships Generic, OpenAI function-calling and LangChain adapters, tested with mocks only |
+| SDK claims, persistence and export | SDK sessions have no claim registry and keep their chain in memory |
 
 ## Built but not executed
+
+**Multi-rater kappa coding (§53) has no real rater behind it.** The coding
+scheme (`FailureModeCategory`, a fixed taxonomy of seven failure shapes
+this codebase can actually produce) and the kappa arithmetic (Cohen's for
+two raters, Fleiss' for more) are built, tested against independently
+verified worked examples, and reachable as `causalmesh agreement
+<judgements-file>`. What is not built is a rater: no run in this
+repository has been coded by a human, and no kappa value in this
+project's history was computed from real judgements. §53 was always the
+secondary, qualitative half of failure analysis — the primary outcome
+(§38) stays free of human judgement, deliberately, and this module never
+feeds into it. See `docs/backlog.md`.
 
 **No hosted model has produced a measured result.** The connectors exist and
 work — `causalmesh connectors list` probes this machine, and `claude` and
@@ -72,6 +85,10 @@ settings remove the randomness that can be removed and record the rest.
 profile. It is exercised by unit tests but has **no production consumer** in
 this slice — a genuine exception to the no-dead-code rule, recorded here
 rather than hidden.
+
+`adapters/serve.py` (the stdlib `http.server` implementation of `serve`) is
+unreachable from any entrypoint since `serve` moved onto FastAPI; only its own
+test file exercises it.
 
 `RunState.TIMED_OUT` is reachable in the state machine and tested there, but
 no run has yet reached it: whole-run timeouts need a watchdog this slice

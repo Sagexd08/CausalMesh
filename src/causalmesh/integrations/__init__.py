@@ -1,13 +1,18 @@
 """Framework-neutral integration interface for CausalMesh.
 
-Phase 1 defines the protocol and a minimal generic adapter.  Framework-
-specific integrations (OpenAI, Claude, LangGraph, CrewAI) are future work
-and are *not* implemented here.
+``GenericAdapter`` (no framework dependency), ``OpenAIAdapter`` (function
+calling, no vendor SDK) and ``LangChainAdapter`` (requires
+``langchain-core``, isolated behind an import guard) are implemented.
+Anthropic ``tool_use``, LangGraph and CrewAI adapters are not; see
+``docs/backlog.md``.
 
 The key abstraction is ``AgentAdapter``: a protocol that any framework can
-implement to route its tool calls through a ``CausalMesh`` session.
+implement to route its tool calls through a ``CausalMesh`` session. Every
+adapter here routes exclusively through ``BaseFrameworkAdapter.call_tool`` /
+``acall_tool`` — i.e. through ``CausalMesh.execute`` / ``execute_async`` —
+so there is one authorization path regardless of which framework is calling.
 
-Example future usage (not yet implemented)::
+Example::
 
     class MyFrameworkAdapter(AgentAdapter):
         def on_tool_call(self, call: FrameworkToolCall) -> FrameworkResult:

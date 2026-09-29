@@ -15,12 +15,13 @@ from __future__ import annotations
 import json
 import sqlite3
 from pathlib import Path
+from typing import ClassVar
 
 import pytest
 from rich.console import Console
 
 from causalmesh.tui import read_snapshot, render
-from causalmesh.tui.monitor import RunView, Snapshot
+from causalmesh.tui.monitor import RunView, Snapshot, _arm_table, _rate_style
 
 pytestmark = [pytest.mark.unit]
 
@@ -246,3 +247,51 @@ class TestRendering:
         snapshot = Snapshot(experiment_id="mock")
         snapshot.runs = [RunView("mock__t__C2__r0000", "C2", "t", "COMPLETED")]
         assert "not reproducible" not in plain(render(snapshot))
+
+
+class TestArmTableUsesTheSharedPalette:
+    """The arm table used to fall back to literal `"white"` and `"grey35"`
+    for the "no data yet" and "no denials" cells instead of the palette's
+    own `TEXT_MUTED`/`TEXT_FAINT` tokens. The retired greys (`grey30`
+    through `grey70`, excluding `TEXT_MUTED`'s own value of plain `"white"`)
+    each collapse onto the same escape code as one of the palette's tokens
+    on the windows colour system this ships into (see `TestPalette` in
+    `test_welcome.py`), so the divergence was invisible there — but it
+    meant this table and the rest of the surface could silently drift in
+    what "muted" or "no data" looked like. These assert that no cell is
+    drawn from one of the retired literals, and that the cells which used
+    to read `"white"` now equal the palette's own `TEXT_MUTED` token by
+    reference, not by coincidence.
+    """
+
+    RETIRED: ClassVar[set[str]] = {
+        "grey30",
+        "grey35",
+        "grey42",
+        "grey54",
+        "grey62",
+        "grey70",
+    }
+
+    def test_a_zero_known_arm_uses_a_palette_token_not_a_literal(self) -> None:
+        """An arm with no finished runs renders "-" cells; that used to be
+        styled with literal `"white"`/`"grey35"` rather than the palette's
+        `TEXT_MUTED`/`TEXT_FAINT`. This walks the table's own cells (each a
+        `rich.text.Text`) and checks the style actually assigned, rather
+        than pinning the rendered string.
+        """
+        snapshot = Snapshot(experiment_id="demo")
+        snapshot.runs = [RunView("demo__t__C0__r0000", "C0", "t", "RUNNING")]
+
+        table = _arm_table(snapshot)
+        for column in table.columns:
+            for cell in column.cells:
+                names = str(getattr(cell, "style", "") or "").split()
+                assert not (self.RETIRED & set(names)), f"retired literal in {cell.style!r}"
+
+    def test_an_unknown_rate_style_is_a_palette_token(self) -> None:
+        """`_rate_style` returned a bare `"grey54"` for the no-data case;
+        it must now return the palette's own `TEXT_MUTED` token."""
+        from causalmesh.tui.palette import TEXT_MUTED
+
+        assert _rate_style(0, 0) == TEXT_MUTED

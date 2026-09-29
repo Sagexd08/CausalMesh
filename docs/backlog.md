@@ -47,29 +47,157 @@ happened, which is a different property from being able to repeat it.
 
 ### CooperBench import (§54)
 
-**Status:** not built.
+**Status: loader built and proven end-to-end on one synthetic worked
+example, including a real §37 gate run. The real 30-task / 652-pair
+CooperBench dataset has not been imported.**
 
-**Why:** the task system (§35–38) had to exist and be proven on a task
-whose coordination structure is known by construction before importing
-tasks whose structure has to be discovered. `schema_handler_widen` was
-built so the §37 gate could be validated against a task where the expected
-answer was known.
+**Why it was deferred until now:** the task system (§35–38) had to exist
+and be proven on a task whose coordination structure is known by
+construction before importing tasks whose structure has to be discovered.
+`schema_handler_widen` was built so the §37 gate could be validated against
+a task where the expected answer was known.
 
-**What it would take:** a loader mapping CooperBench tasks onto
-`TaskDefinition`, and a §37 sensitivity run per imported task — most of the
-cost is the gate, not the loader.
+**What is built.** `causalmesh.tasks.cooperbench` (`import_task`,
+`import_dataset`) reads a CooperBench-shaped
+`dataset/<repo>/task<id>/feature{1,2}/{feature.md,feature.patch,tests.patch}`
+directory and produces a `TaskDefinition`, mapping `feature1` -> `agent_a`
+and `feature2` -> `agent_b` — CooperBench's own two-feature structure
+matches this project's two-agent floor directly. Two design decisions,
+recorded in the module's own docstring rather than only here:
+
+- **Patches are materialized at import time, not applied at run time.**
+  `agents/script.py`'s `Action` DSL has no diff-applying action kind, only
+  literal `write`/`create` content. Adding one (`ActionKind.PATCH`) was
+  considered and rejected: it would mean shelling out to `git apply` while
+  a scripted run is in flight, making what actually lands in a workspace
+  depend on the machine's `git` version rather than solely on the YAML —
+  exactly the "task that could execute arbitrary-ish operations" risk
+  `tasks/definition.py`'s own module docstring argues against. Instead the
+  loader applies each feature's `feature.patch` once, at import time,
+  against the supplied base-repo state, and bakes the resulting literal
+  content into ordinary `write` actions. The shipped task YAML stays pure
+  data with no runtime patch application, so §33's reproducibility
+  property is untouched.
+- **Contested paths are discovered, not assumed.** `touched_paths` parses
+  unified-diff `--- a/`/`+++ b/` headers out of each feature's patch;
+  `contested_paths` is the intersection of the two features' touched-path
+  sets, and `AgentRole.owns` excludes any contested path from either
+  role — this is exactly the "structure has to be discovered" property
+  that distinguishes a CooperBench import from `schema_handler_widen`.
+
+**A fifth `TaskFamily`, `COOPERBENCH_IMPORT`, was added** rather than
+reusing one of the four §35 families. All four existing families name a
+coordination shape chosen by the task's *author* in advance; a CooperBench
+import's defining property is that its shape — contested or not, which
+paths — is discovered from real patches, not declared. See
+`TaskFamily`'s own docstring for the full argument.
+
+**Divergence has no fabricated marker.** CooperBench's real success
+criterion ("both patches merge cleanly AND pass tests") has no single
+scalar the way `schema_handler_widen`'s `HANDLED_FIELDS` marker does.
+`divergence_file`/`divergence_marker` are left `None` on an imported task
+unless a caller supplies real ones by hand for a specific pair; an import
+with no marker validates as a task with no divergence check, not a task
+with an invented one. This is a genuine limitation of the import, not
+patched over.
+
+**The one worked example.** No real CooperBench data is vendored in this
+repository and this sandbox has no network access to clone it, so the
+loader is proven against a small, clearly-labeled SYNTHETIC sample built by
+hand at `tests/fixtures/cooperbench_sample/` — one fake repo, two tiny
+features, real `git diff` output against that fake repo (not hand-typed
+diff text). The full pipeline was run end to end from that sample: loader
+-> `tasks/cb_tinyrepo_task1.yaml` (checked in) -> `fixtures/cb_tinyrepo_task1/`
+(checked in) -> `validate_structure` (passes) -> `check_sensitivity`, the
+real §37 gate, executed for real rather than asserted.
+
+**The real §37 verdict for this worked example: NOT SENSITIVE** — C0 0/1,
+C2 0/1. Both arms fail identically. This is a real, reportable property of
+this specific synthetic example, not a defect in the gate or the loader:
+both synthetic features add a different key to the same dict in
+`src/greeter.py`, and this platform's contested-path merge
+(`tasks/runner.py::_integrate_workspaces`) resolves a contested path to a
+single last-writer from the signed chain rather than merging both
+features' changes, so whichever agent wrote last, the other's key is lost
+regardless of what either agent was told. A same-region, non-overlapping-
+key edit like this is exactly the shape the information-only C0-vs-C2
+contrast cannot rescue with this platform's winner-take-all merge — it
+would need finer-grained content merging (e.g. actually merging the two
+patches, or a real `git merge`) to succeed, which this platform does not
+attempt for any task, imported or authored. Reported honestly rather than
+tuned toward a "sensitive" result: the task asked for this explicitly, and
+"a refusal is data" applies here as much as anywhere else in this project.
+`tests/integration/test_cooperbench_import.py::TestQualityGate` pins this
+verdict as the expected, current behaviour.
+
+**What this does not claim.** Nothing here says anything about any real
+CooperBench task's coordination sensitivity, coordination structure, or
+whether a real repository's patches would produce a different verdict —
+there is no real CooperBench data behind this entry's numbers, only the
+one synthetic worked example described above.
+
+**What it would still take:** a real CooperBench checkout (clone
+`github.com/cooperbench/CooperBench`, supply each task's pre-patch base
+repo state as `base_files`) and a §37 run per imported task — the
+loader itself needs no further work to accept one; see
+`causalmesh.tasks.cooperbench`'s module docstring, "Pointing this at a
+real dataset," for the exact call shape. Batch import across all 30 tasks
+/ 652 feature pairs is `import_dataset` iterating the dataset root, already
+implemented and unit-tested against the synthetic sample, but not run
+against real data.
 
 ### Multi-rater kappa coding (§53)
 
-**Status:** not built.
+**Status: the code is built; the coding itself has not been executed.**
 
-**Why:** §53 concerns the *secondary* qualitative coding of failure modes.
-The primary outcome (§38) is deliberately free of human judgement, and it
-is the only thing this slice measures.
+**Why it was deferred:** §53 concerns the *secondary* qualitative coding of
+failure modes. The primary outcome (§38) is deliberately free of human
+judgement, and it is the only thing this slice measures. Building the
+machinery does not change that — `src/causalmesh/analysis/agreement.py`
+has no import of `tasks.outcome` and feeds nothing back into
+`TaskOutcome` or `AcceptanceDecision`; it computes *about* human
+judgements an operator supplies, never *into* the automatic outcome.
 
-**What it would take:** a coding scheme, at least two raters, and a kappa
-computation. The raters are the hard part and the reason this is not a
-code-only task.
+**What is built.** A fixed, closed taxonomy of seven failure-mode
+categories (`FailureModeCategory`), each traced to a concrete shape this
+codebase can actually produce rather than a generic qualitative-coding
+rubric — `STALE_READ_DIVERGENCE` from `TaskOutcome.divergence_absent`,
+`CLOBBERED_WRITE` from the ownership-merge defect this file already
+records, `DENIED_CLAIM_NOT_SURFACED` from the "enforcement was
+unmeasurable" defect below, `POLICY_REFUSAL_MISHANDLED` from a recorded
+`Verdict` refusal the agent's own recovery still failed on,
+`UNRELATED_TEST_FAILURE` and `RUN_INCOMPLETE` from `TaskOutcome`'s own
+fields, and `ACCEPTANCE_REJECTED_UNCLEAR_CAUSE` as the explicit catch-all
+for a rejection the evidence tuple does not explain — coded as unclear
+rather than forced into a category that does not fit, the same "unknown,
+never a plausible zero" discipline AGENTS.md states for counters.
+`RaterJudgement` records one rater's category for one run, validated
+eagerly — an unknown category is refused, never coerced onto the nearest
+known member. Cohen's kappa (2 raters) and Fleiss' kappa (N >= 2 raters,
+refusing input with an unequal rater count per item rather than silently
+dropping items) are implemented directly, no new dependency, each
+returning a `KappaResult` that carries the observed and expected
+agreement figures alongside the kappa value — the same evidence-retention
+pattern `TaskOutcome.evidence` already follows, so a kappa number is
+never reported detached from what produced it. `causalmesh agreement
+<file>` runs it over an operator-supplied JSON or YAML judgement file.
+17 tests in `tests/unit/test_agreement.py`, including both kappa formulas
+checked against hand-computed worked examples independently re-derived
+rather than asserted against the module's own arithmetic.
+
+**What is not built, and cannot be from code alone: real raters.** No run
+in this repository has been coded by a human, and no kappa value in this
+project's history was computed from real judgements — `causalmesh
+agreement` has never been pointed at anything but a smoke-test fixture.
+The raters were always the hard part and remain it; this entry now
+separates "the machinery does not exist" (resolved) from "the qualitative
+coding has not happened" (still true), per `docs/PLAN.md`'s standing
+commitment against fabricated results.
+
+**What it would still take:** at least two people willing to read run
+transcripts and code them against the taxonomy above, independently, and
+a decision about which failed runs across which collections are worth
+coding at all.
 
 ### Scaling beyond 4 agents (§86)
 
@@ -287,7 +415,7 @@ the blocker is measurement validity, not mechanism.
 **Status:** wired into `docker-compose.yml`, documented as optional.
 
 **Why:** Windows has no `chroot` and no mount namespaces, so the L1 layer
-is process separation rather than a filesystem jail. `docs/security.md`
+is process separation rather than a filesystem jail. `docs/isolation.md`
 states this precisely rather than claiming a jail that does not exist.
 
 **What it would take:** running the harness on Linux or in CI, where the
@@ -586,15 +714,34 @@ project, outside a CausalMesh checkout. All three are now real and tested;
   chain, no ledger, no run — it answers one question and exits, same as
   `policy check` always has.
 - **`docker/Dockerfile` and `docker-compose.yml`** package the already-standalone
-  `causalmesh serve` — only the four runtime dependencies (`cryptography`,
-  `PyYAML`, `typer`, `rich`; `serve` itself uses only `http.server` from the
-  stdlib), no `causalmesh.yaml` baked into the image, bind-mounted read-only at
-  run time instead. Verified by hand in this environment (Docker Desktop's
-  daemon was not running by default; started for this check): `docker build`
-  succeeds, `docker compose up` starts the container, `GET /healthz` returns
-  200, and a `POST /v1/chat/completions` against this repository's own
-  `causalmesh.yaml` (no `--upstream`, so a stub reply) returns a gated response
-  rather than a connection error.
+  `causalmesh serve`, no `causalmesh.yaml` baked into the image, bind-mounted
+  read-only at run time instead.
+
+  **Regression found and fixed 2026-09-30.** The paragraph above originally
+  described `serve` as using only `http.server` from the stdlib, needing
+  just the four base runtime dependencies. That was true when it was
+  written; it stopped being true when `causalmesh serve` moved onto FastAPI
+  (Phase 2A, `d7e02ce`) — `commands_serve.py` now imports `uvicorn`
+  unconditionally and fails with "uvicorn is required" if it is missing.
+  The Dockerfile still ran a bare `pip install .`, so the image it built
+  could not actually start `serve`; the CLI's own mandatory-auth check
+  (`--api-token` required unless `--dev`, and `--dev` is refused for any
+  non-localhost `--host`, which `--host 0.0.0.0` always is) meant
+  `docker-compose.yml` would have failed a second, independent way even
+  with the dependency fixed, since it passed no token. Nobody re-ran the
+  container after the FastAPI migration to catch either.
+
+  Fixed: the Dockerfile now installs `.[server]`, and `docker-compose.yml`
+  passes `CAUSALMESH_API_TOKEN` through from the environment.
+  **Re-verified by hand in this environment** (Docker Desktop, real
+  `docker build` + `docker run`, not asserted from reading the Dockerfile):
+  build succeeds, the container starts, `GET /healthz` returns 200,
+  `GET /v1/tools` without a token returns 401, and with the correct
+  `Authorization: Bearer` token returns 200. `docker compose up` was then
+  run for real against the final tree: the same 401/200 results held on
+  `/v1/tools`, `/v1/tools/{name}/execute` and `/v1/chat/completions`, and
+  with `CAUSALMESH_API_TOKEN` unset the container exits with code 2 and
+  "--api-token is required" instead of starting unauthenticated.
 
 **What does not ship:**
 
@@ -625,7 +772,6 @@ a regression this work introduced.
 instead of fixing them. They are restored and now read `result.output`, which
 holds both streams under every `click` version, so the tests again check
 that quickstart reported what it did rather than only its exit code.
-  and PILOT/DERIVED labeling conventions) does not.
 
 ## Developer SDK (Phase 1, landed 2026-09-27)
 
@@ -666,10 +812,18 @@ mutation-checked: reverting the fix makes a test there fail.
 
 **What does not ship:**
 
-- **Framework adapters.** OpenAI function calling, Anthropic `tool_use`,
-  LangGraph and CrewAI are not implemented. `GenericAdapter` is the only
-  adapter. Each framework's call shape is its own contract, and none has
-  been exercised.
+- **Framework adapters (updated 2026-09-29).** `GenericAdapter`,
+  `OpenAIAdapter` (function calling, no vendor SDK — `schema.py` derives
+  JSON Schema from the handler's own signature) and `LangChainAdapter`
+  (`langchain-core` required, isolated behind an `ImportError` guard so
+  importing `causalmesh.integrations` without it still works) are
+  implemented and tested (`tests/integration/test_openai_adapter.py`,
+  `tests/integration/test_langchain_adapter.py`). Every adapter routes
+  exclusively through `BaseFrameworkAdapter.call_tool`/`acall_tool` —
+  `CausalMesh.execute`/`execute_async` — so there is one authorization path
+  regardless of which framework calls in; none of the three constructs a
+  second gate or calls a tool's handler directly. Anthropic `tool_use`,
+  LangGraph and CrewAI adapters are still not implemented.
 - **Human-in-the-loop approval from the SDK.** Checkpoints exist in the
   gate, but the SDK installs no checkpoint handler, so a matched checkpoint
   refuses by default.
@@ -686,3 +840,31 @@ mutation-checked: reverting the fix makes a test there fail.
 - **Reads are not gated.** `mutating=False` tools go around the gate, as
   §20 defines for the experiment. An operator who wants reads checked has
   to declare those tools mutating.
+
+## CI cannot currently run (external blocker, recorded 2026-09-30)
+
+**Status: blocked outside the repository.** None of the 7 most recent GitHub
+Actions runs on `main` (2026-09-28 15:39 UTC through 2026-09-29 17:33 UTC)
+started a job: every job shows no runner and no recorded steps, and the
+check-run annotation reads *"The job was not started because recent account
+payments have failed or your spending limit needs to be increased."* The
+failures at the top of `main`'s history are therefore not test failures, and
+a green check has not been possible to obtain since then. Fixing it is an
+account and billing action for the repository owner, not a code change, and
+nothing in this repository should be edited to hide it.
+
+**What that means for every test claim here.** The counts in the README are
+from a local run on one Windows machine. The Linux and macOS legs, Python
+3.11 and 3.13, the security scan and the site build have had no remote
+execution in that window. The site build was run separately, in a Linux Node
+22 container, on 2026-09-30, and passed.
+
+**A related gap, closed in this change but unproven remotely.** The
+`test` job installs only `.[dev,analysis]`, so `tests/server`, the `serve`
+CLI tests and the LangChain adapter tests skipped there rather than ran.
+A `server-and-adapters` job now installs the `server` extra and
+`langchain-core` and runs them with `-rs`; it has been run locally, not on
+GitHub.
+
+**Heads-up from the same annotation:** `ubuntu-latest` migrates to Ubuntu 26
+from 2026-10-19.

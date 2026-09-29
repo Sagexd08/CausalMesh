@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=1080, height=1920" />
+    <meta name="viewport" content="width=1920, height=1080" />
     <title>CausalMesh — Motion Reel</title>
     <script src="assets/vendor/gsap.min.js"></script>
     <script src="assets/audio-data.js"></script>
@@ -27,7 +27,7 @@
         --fg2: #d6d5d5;
         --muted: #a7a6a6;
         --dim: #8b8a8a;
-        --faint: #7c7b7b;
+        --faint: #8b8a8a;
         --line: rgba(255, 255, 255, 0.09);
         --line-strong: rgba(255, 255, 255, 0.22);
         --deny: #d2a676;
@@ -41,8 +41,8 @@
       }
       html,
       body {
-        width: 1080px;
-        height: 1920px;
+        width: 1920px;
+        height: 1080px;
         overflow: hidden;
         background: var(--stage);
       }
@@ -66,7 +66,7 @@
       }
       .label {
         font-family: "JetBrains Mono", monospace;
-        font-size: 22px;
+        font-size: 18px;
         letter-spacing: 0.16em;
         text-transform: uppercase;
         color: var(--dim);
@@ -91,13 +91,13 @@
       }
       .head {
         position: absolute;
-        left: 72px;
-        top: 196px;
-        width: 936px;
+        left: 96px;
+        top: 80px;
+        width: 900px;
       }
       .head .display {
-        margin-top: 28px;
-        font-size: 104px;
+        margin-top: 18px;
+        font-size: 68px;
       }
       .panel {
         background: var(--panel);
@@ -107,13 +107,48 @@
       .panel-head {
         display: flex;
         justify-content: space-between;
-        padding: 22px 32px;
+        padding: 18px 26px;
         border-bottom: 1px solid var(--line);
         font-family: "JetBrains Mono", monospace;
-        font-size: 19px;
+        font-size: 16px;
         letter-spacing: 0.12em;
         text-transform: uppercase;
         color: var(--dim);
+      }
+
+      /* Liquid-glass technique (ported from compositions/components/liquid-glass-panel.html):
+         a background clone sampled through an SVG feDisplacementMap + rim light,
+         never native backdrop-filter (Chromium misreads it against SVG filters). */
+      .glass {
+        position: relative;
+        border-radius: 10px;
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      }
+      .glass-refract {
+        position: absolute;
+        inset: -8%;
+        filter: url("#glass-displace");
+        transform: scale(1.08);
+        opacity: 0.55;
+      }
+      .glass-tint {
+        position: absolute;
+        inset: 0;
+        background: rgba(12, 12, 12, 0.62);
+      }
+      .glass-rim {
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.42),
+          inset 0 0 0 1px rgba(255, 255, 255, 0.07),
+          inset 0 -16px 24px -18px rgba(0, 0, 0, 0.65);
+        pointer-events: none;
+      }
+      .glass-body {
+        position: relative;
       }
 
       /* Moving hairline grid: the stage is never dead-still. */
@@ -133,50 +168,50 @@
       .pane {
         position: absolute;
         top: 0;
-        width: 1080px;
-        height: 1920px;
+        width: 1920px;
+        height: 1080px;
       }
       #p1 {
         left: 0;
         perspective: 1600px;
       }
       #p2 {
-        left: 1080px;
+        left: 1920px;
       }
       #seam {
         position: absolute;
         top: 0;
-        left: 1080px;
+        left: 1920px;
         width: 4px;
-        height: 1920px;
+        height: 1080px;
         background: var(--fg);
         opacity: 0;
       }
       #p1-label {
         position: absolute;
-        left: 72px;
-        top: 196px;
+        left: 96px;
+        top: 80px;
       }
       #term-shake {
         position: absolute;
-        left: 60px;
-        top: 290px;
-        width: 960px;
-        height: 760px;
+        left: 96px;
+        top: 148px;
+        width: 800px;
+        height: 620px;
       }
       #term {
         position: absolute;
         inset: 0;
       }
       #term-body {
-        padding: 40px 40px 0;
+        padding: 30px 32px 0;
         font-family: "JetBrains Mono", monospace;
-        font-size: 27px;
-        line-height: 1.7;
+        font-size: 19px;
+        line-height: 1.6;
         color: var(--fg2);
       }
       #cmd {
-        min-height: 138px;
+        min-height: 92px;
         overflow-wrap: anywhere;
       }
       #cmd .p {
@@ -184,19 +219,20 @@
       }
       #caret {
         display: inline-block;
-        width: 15px;
-        height: 30px;
-        margin-left: 3px;
-        vertical-align: -5px;
+        width: 11px;
+        height: 22px;
+        margin-left: 2px;
+        vertical-align: -4px;
         background: var(--fg2);
       }
       #verdict {
-        margin-top: 40px;
+        margin-top: 28px;
       }
       #stamp-row {
         display: flex;
         align-items: center;
-        gap: 22px;
+        gap: 16px;
+        flex-wrap: wrap;
       }
       .glitch {
         position: relative;
@@ -221,26 +257,26 @@
         position: relative;
       }
       #stamp {
-        padding: 8px 18px;
+        padding: 6px 14px;
         border-radius: 5px;
         background: var(--deny-wash);
         color: var(--deny);
-        font-size: 26px;
+        font-size: 20px;
         letter-spacing: 0.14em;
       }
       #stamp .g {
-        padding: 8px 18px;
+        padding: 6px 14px;
       }
       #stamp-res {
         color: var(--muted);
-        font-size: 22px;
+        font-size: 16px;
       }
       #vdl {
-        margin-top: 30px;
+        margin-top: 22px;
         display: grid;
-        grid-template-columns: 130px 1fr;
-        row-gap: 8px;
-        font-size: 25px;
+        grid-template-columns: 108px 1fr;
+        row-gap: 6px;
+        font-size: 17px;
       }
       #vdl .k {
         color: var(--dim);
@@ -253,11 +289,12 @@
       }
       #wall {
         position: absolute;
-        left: 60px;
-        top: 1190px;
-        font-size: 196px;
+        left: 940px;
+        top: 148px;
+        width: 880px;
+        font-size: 142px;
         font-weight: 800;
-        letter-spacing: -0.055em;
+        letter-spacing: -0.045em;
         line-height: 1;
         color: var(--deny);
       }
@@ -271,9 +308,9 @@
       }
       #wall-sub {
         position: absolute;
-        left: 72px;
-        top: 1440px;
-        font-size: 36px;
+        left: 944px;
+        top: 400px;
+        font-size: 28px;
         font-weight: 300;
         letter-spacing: -0.015em;
         color: var(--muted);
@@ -289,7 +326,7 @@
         position: absolute;
         left: 0;
         right: 0;
-        top: 760px;
+        top: 420px;
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -302,24 +339,24 @@
         white-space: nowrap;
       }
       .slam .bar {
-        margin-top: 26px;
-        width: 520px;
+        margin-top: 20px;
+        width: 420px;
         height: 4px;
         background: var(--fg);
         transform-origin: 0% 50%;
       }
       .slam .sub {
-        margin-top: 30px;
+        margin-top: 22px;
         font-family: "JetBrains Mono", monospace;
-        font-size: 26px;
+        font-size: 21px;
         letter-spacing: 0.1em;
         text-transform: uppercase;
         color: var(--muted);
       }
       #slam-idx {
         position: absolute;
-        left: 72px;
-        top: 196px;
+        left: 96px;
+        top: 80px;
       }
 
       /* ---------- Act 2: architecture ---------- */
@@ -328,12 +365,15 @@
         inset: 0;
         background: var(--stage);
       }
+      /* Box width/height match the diagram SVG's viewBox aspect ratio
+         (690:650) exactly, so the uniform scale factor S used below for
+         the camera-dive gate coordinates is accurate on both axes. */
       #dia-3d {
         position: absolute;
-        left: 40px;
-        top: 560px;
-        width: 1000px;
-        height: 942px;
+        right: 130px;
+        top: 210px;
+        width: 849px;
+        height: 800px;
         perspective: 1800px;
       }
       #dia-rot {
@@ -343,20 +383,21 @@
       #diagram {
         position: absolute;
         inset: 0;
-        width: 1000px;
-        height: 942px;
+        width: 849px;
+        height: 800px;
         overflow: visible;
       }
       #a2-caption {
         position: absolute;
-        left: 72px;
-        top: 1590px;
+        left: 96px;
+        top: 860px;
+        width: 760px;
       }
       #a2-caption .big {
-        margin-top: 16px;
-        font-size: 44px;
+        margin-top: 14px;
+        font-size: 32px;
         font-weight: 300;
-        letter-spacing: -0.03em;
+        letter-spacing: -0.02em;
       }
 
       /* ---------- Act 3: chain ---------- */
@@ -366,50 +407,54 @@
       }
       #cards {
         position: absolute;
-        left: 60px;
-        top: 590px;
-        width: 960px;
+        left: 96px;
+        top: 270px;
+        width: 1728px;
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        column-gap: 26px;
         perspective: 1400px;
       }
       .card {
         position: relative;
-        height: 178px;
-        margin-bottom: 30px;
-        padding: 26px 34px;
+        height: 360px;
+        padding: 22px 24px;
         font-family: "JetBrains Mono", monospace;
       }
       .card .r1 {
         display: flex;
-        align-items: baseline;
-        gap: 22px;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 6px;
       }
       .card .seq {
-        font-size: 22px;
+        font-size: 16px;
         color: var(--faint);
       }
       .card .ty {
-        font-size: 32px;
+        font-size: 24px;
         letter-spacing: 0.04em;
       }
       .card .ag {
-        font-size: 26px;
+        font-size: 18px;
         color: var(--fg2);
       }
       .card .t {
-        margin-left: auto;
-        font-size: 22px;
+        margin-top: 8px;
+        font-size: 15px;
         color: var(--dim);
       }
       .card .r2 {
-        margin-top: 14px;
-        font-size: 24px;
+        margin-top: 18px;
+        font-size: 16px;
         color: var(--muted);
+        line-height: 1.5;
       }
       .card .h {
         position: absolute;
-        right: 34px;
-        bottom: 24px;
-        font-size: 22px;
+        left: 24px;
+        bottom: 22px;
+        font-size: 15px;
         color: var(--dim);
       }
       .card.deny .ty,
@@ -426,32 +471,36 @@
       .card.deny .card-edge {
         border-color: var(--deny);
       }
+      /* Links run left-to-right across the row rather than stacked
+         top-to-bottom (16:9 reflow: four cards sit in a row, not a column). */
       .link {
         position: absolute;
-        right: 120px;
-        bottom: -31px;
-        width: 2px;
-        height: 32px;
+        right: -26px;
+        top: 50%;
+        width: 26px;
+        height: 2px;
         background: rgba(255, 255, 255, 0.55);
-        transform-origin: 50% 0%;
+        transform-origin: 0% 50%;
+        transform: translateY(-50%) scaleX(0);
       }
       #signal {
         position: absolute;
-        right: 116px;
         top: 0;
+        left: 0;
         width: 10px;
         height: 10px;
         border-radius: 50%;
         background: #ffffff;
         box-shadow: 0 0 18px 4px rgba(255, 255, 255, 0.7);
         opacity: 0;
+        margin-top: 174px;
       }
       #verify {
         position: absolute;
-        left: 72px;
-        top: 1470px;
+        left: 96px;
+        top: 660px;
         font-family: "JetBrains Mono", monospace;
-        font-size: 30px;
+        font-size: 26px;
       }
       #verify-word {
         background: linear-gradient(100deg, #d6d5d5 0%, #d6d5d5 40%, #ffffff 50%, #d6d5d5 60%, #d6d5d5 100%);
@@ -466,25 +515,256 @@
       }
       #run-id {
         position: absolute;
-        left: 72px;
-        top: 1530px;
+        left: 96px;
+        top: 710px;
         font-family: "JetBrains Mono", monospace;
-        font-size: 19px;
+        font-size: 16px;
         color: var(--faint);
       }
       #slit {
         position: absolute;
         inset: auto;
-        left: 372px;
-        top: 618px;
+        left: 792px;
+        top: 90px;
         width: 336px;
-        height: 804px;
+        height: 900px;
         background: #ffffff;
         box-shadow: 0 0 70px rgba(255, 255, 255, 0.6);
         opacity: 0;
       }
 
-      /* ---------- Act 4: portal ---------- */
+      /* ---------- Act 5: isolation arms (C0-C3) ---------- */
+      #a5 {
+        position: absolute;
+        inset: 0;
+      }
+      #arms-iris {
+        position: absolute;
+        inset: 0;
+      }
+      #arms-row {
+        position: absolute;
+        left: 96px;
+        top: 260px;
+        width: 1728px;
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        column-gap: 30px;
+      }
+      .arm {
+        height: 560px;
+        padding: 26px 28px;
+        display: flex;
+        flex-direction: column;
+      }
+      .arm .arm-id {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 22px;
+        letter-spacing: 0.08em;
+        color: var(--fg);
+      }
+      .arm .arm-mech {
+        margin-top: 6px;
+        font-size: 15px;
+        color: var(--dim);
+        font-family: "JetBrains Mono", monospace;
+      }
+      .arm .arm-guarantee {
+        margin-top: 22px;
+        font-size: 16px;
+        line-height: 1.5;
+        color: var(--fg2);
+        flex: 1;
+      }
+      .arm .arm-bar-track {
+        margin-top: auto;
+        width: 100%;
+        height: 6px;
+        background: rgba(255, 255, 255, 0.08);
+        border-radius: 3px;
+        overflow: hidden;
+      }
+      .arm .arm-bar-fill {
+        width: 100%;
+        height: 100%;
+        background: var(--fg);
+        transform-origin: 0% 50%;
+        transform: scaleX(0);
+      }
+      .arm.deny .arm-bar-fill {
+        background: var(--deny);
+      }
+      .arm .arm-bar-label {
+        margin-top: 10px;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 13px;
+        letter-spacing: 0.06em;
+        color: var(--faint);
+      }
+      #arms-caption {
+        position: absolute;
+        left: 96px;
+        top: 80px;
+        width: 1200px;
+      }
+      #arms-caption .display {
+        font-size: 56px;
+        margin-top: 14px;
+      }
+      #arms-verdict {
+        position: absolute;
+        left: 96px;
+        top: 900px;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 18px;
+        color: var(--muted);
+      }
+      #arms-verdict .deny {
+        color: var(--deny);
+      }
+
+      /* ---------- Act 6: claims / lease ---------- */
+      #a6 {
+        position: absolute;
+        inset: 0;
+      }
+      #claims-caption {
+        position: absolute;
+        left: 96px;
+        top: 80px;
+        width: 1200px;
+      }
+      #claims-caption .display {
+        font-size: 52px;
+        margin-top: 14px;
+      }
+      #claims-stage {
+        position: absolute;
+        left: 96px;
+        top: 300px;
+        width: 1728px;
+        height: 560px;
+      }
+      .agent-panel {
+        position: absolute;
+        top: 60px;
+        width: 480px;
+        height: 380px;
+        padding: 28px 30px;
+      }
+      #agent-a {
+        left: 60px;
+      }
+      #agent-b {
+        right: 60px;
+        left: auto;
+      }
+      .agent-panel .agent-id {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 20px;
+        color: var(--fg);
+      }
+      .agent-panel .agent-action {
+        margin-top: 18px;
+        font-size: 17px;
+        color: var(--fg2);
+        line-height: 1.6;
+      }
+      .agent-panel .agent-verdict {
+        margin-top: 26px;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 18px;
+        letter-spacing: 0.06em;
+        padding: 8px 14px;
+        border-radius: 5px;
+        display: inline-block;
+      }
+      .agent-panel.grant .agent-verdict {
+        background: rgba(255, 255, 255, 0.08);
+        color: var(--fg);
+      }
+      .agent-panel.deny .agent-verdict {
+        background: var(--deny-wash);
+        color: var(--deny);
+      }
+      #resource-lock {
+        position: absolute;
+        left: 50%;
+        top: 40px;
+        transform: translateX(-50%);
+        width: 300px;
+        text-align: center;
+      }
+      #lock-panel {
+        padding: 22px 20px;
+        height: 168px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+      }
+      #lock-path {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 16px;
+        color: var(--fg2);
+      }
+      #lock-state {
+        margin-top: 12px;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 14px;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--dim);
+      }
+      #lock-icon {
+        margin-top: 12px;
+        width: 26px;
+        height: 26px;
+      }
+      #claims-arrow-a {
+        position: absolute;
+        left: 540px;
+        top: 250px;
+        width: 260px;
+        height: 2px;
+        background: rgba(255, 255, 255, 0.4);
+        transform-origin: 0% 50%;
+        transform: scaleX(0);
+      }
+      #claims-arrow-b {
+        position: absolute;
+        right: 540px;
+        top: 250px;
+        width: 260px;
+        height: 2px;
+        background: var(--deny-wash);
+        transform-origin: 100% 50%;
+        transform: scaleX(0);
+      }
+      #claims-record {
+        position: absolute;
+        left: 96px;
+        top: 900px;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 17px;
+        color: var(--muted);
+      }
+      #claims-record .deny {
+        color: var(--deny);
+      }
+      #claims-slit {
+        position: absolute;
+        inset: auto;
+        left: 792px;
+        top: 90px;
+        width: 336px;
+        height: 900px;
+        background: #ffffff;
+        box-shadow: 0 0 70px rgba(255, 255, 255, 0.6);
+        opacity: 0;
+      }
+
+      /* ---------- Act 7: portal ---------- */
       #plate-wrap {
         position: absolute;
         inset: 0;
@@ -499,10 +779,10 @@
       }
       #bloom {
         position: absolute;
-        left: 290px;
-        top: 460px;
-        width: 500px;
-        height: 1140px;
+        left: 660px;
+        top: 100px;
+        width: 600px;
+        height: 880px;
         border-radius: 50%;
         background: radial-gradient(closest-side, rgba(255, 250, 240, 0.3), rgba(255, 250, 240, 0));
         mix-blend-mode: screen;
@@ -511,18 +791,27 @@
       #plate-fade {
         position: absolute;
         inset: 0;
+        /* Stops re-tuned for the 1080px-tall 16:9 canvas: #lockup's content
+           (mark, wordmark, tagline, stat line) spans roughly 62%-83% of the
+           frame height, so the "to top" wash must stay near-opaque out to
+           ~55% before easing off, not 34% (a leftover from the 1920-tall
+           layout where the same content sat much further down proportionally). */
         background:
-          linear-gradient(to top, var(--stage) 0%, rgba(5, 5, 5, 0.92) 17%, rgba(5, 5, 5, 0) 31%),
-          linear-gradient(to bottom, rgba(5, 5, 5, 0.88) 0%, rgba(5, 5, 5, 0) 22%);
+          linear-gradient(to top, var(--stage) 0%, rgba(5, 5, 5, 0.94) 30%, rgba(5, 5, 5, 0.55) 55%, rgba(5, 5, 5, 0) 72%),
+          linear-gradient(to bottom, rgba(5, 5, 5, 0.95) 0%, rgba(5, 5, 5, 0.86) 20%, rgba(5, 5, 5, 0) 38%);
       }
       #a4-title {
         position: absolute;
         left: 0;
         right: 0;
-        top: 196px;
+        top: 108px;
         text-align: center;
-        font-size: 104px;
-        line-height: 1.14;
+        font-size: 68px;
+        line-height: 1.12;
+        /* Guarantees contrast against the portal footage regardless of what
+           plays underneath (the plate is real captured video, not a flat
+           color the CSS wash can be perfectly tuned against). */
+        text-shadow: 0 2px 18px rgba(0, 0, 0, 0.85), 0 1px 3px rgba(0, 0, 0, 0.9);
       }
       #a4-title .ln {
         display: block;
@@ -535,7 +824,7 @@
         position: absolute;
         left: 0;
         right: 0;
-        top: 1540px;
+        top: 720px;
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -544,26 +833,26 @@
         position: relative;
         display: flex;
         align-items: center;
-        gap: 28px;
+        gap: 24px;
       }
       #mark-glow {
         position: absolute;
-        left: -70px;
-        top: -80px;
-        width: 260px;
-        height: 260px;
+        left: -64px;
+        top: -68px;
+        width: 220px;
+        height: 220px;
         border-radius: 50%;
         background: radial-gradient(closest-side, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0));
         opacity: 0;
       }
       #mark {
         position: relative;
-        width: 96px;
-        height: 96px;
+        width: 80px;
+        height: 80px;
         overflow: visible;
       }
       #wordmark {
-        font-size: 92px;
+        font-size: 76px;
         font-weight: 400;
         letter-spacing: -0.045em;
         line-height: 1.1;
@@ -575,8 +864,8 @@
         color: transparent;
       }
       #tagline {
-        margin-top: 20px;
-        font-size: 34px;
+        margin-top: 16px;
+        font-size: 27px;
         font-weight: 300;
         letter-spacing: -0.02em;
         color: var(--fg2);
@@ -585,15 +874,15 @@
         display: inline-block;
       }
       #stat {
-        margin-top: 26px;
+        margin-top: 20px;
         display: flex;
         align-items: center;
-        gap: 14px;
+        gap: 12px;
       }
       #stat i {
         display: block;
-        width: 9px;
-        height: 9px;
+        width: 8px;
+        height: 8px;
         border-radius: 50%;
         background: var(--fg);
       }
@@ -631,20 +920,20 @@
       .hud-t {
         position: absolute;
         font-family: "JetBrains Mono", monospace;
-        font-size: 17px;
+        font-size: 15px;
         letter-spacing: 0.16em;
         text-transform: uppercase;
         color: var(--dim);
       }
-      #hud-name { left: 84px; top: 52px; }
-      #hud-tc { right: 84px; top: 52px; color: var(--fg2); font-variant-numeric: tabular-nums; }
-      #hud-scene { left: 84px; bottom: 52px; }
-      #hud-fmt { right: 84px; bottom: 52px; }
+      #hud-name { left: 84px; top: 44px; }
+      #hud-tc { right: 84px; top: 44px; color: var(--fg2); font-variant-numeric: tabular-nums; }
+      #hud-scene { left: 84px; bottom: 44px; }
+      #hud-fmt { right: 84px; bottom: 44px; }
       #hud-bar {
         position: absolute;
         left: 84px;
         right: 84px;
-        bottom: 96px;
+        bottom: 82px;
         height: 2px;
         background: rgba(255, 255, 255, 0.08);
       }
@@ -657,6 +946,29 @@
         background: var(--fg2);
         transform-origin: 0% 50%;
       }
+
+      /* ---------- Iris-blade transitions (ported from
+         compositions/components/iris-blade-transition.html): six blades
+         rotated 60deg apart around the shared center, each moving only
+         along its own translateY(reach) axis so the aperture stays a
+         regular hexagon at every step. Two uses: closing over the verified
+         chain, opening onto the arms; closing over the claims diagram
+         collapse is a plain slit match cut per the brief, not an iris. ---------- */
+      .iris {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+      }
+      .iris svg {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        overflow: visible;
+      }
+      .iris-blade {
+        transform-box: fill-box;
+      }
     </style>
   </head>
   <body>
@@ -665,14 +977,22 @@
       <filter id="whip-blur" x="-20%" y="0" width="140%" height="100%">
         <feGaussianBlur id="whip-blur-node" stdDeviation="0 0" />
       </filter>
+      <!-- Liquid-glass refraction filter (ported from liquid-glass-panel.html):
+           deterministic fractalNoise (fixed seed) feeding feDisplacementMap,
+           plus a light feGaussianBlur standing in for glass thickness. -->
+      <filter id="glass-displace" x="-20%" y="-20%" width="140%" height="140%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.012 0.02" numOctaves="2" seed="11" result="gd-noise" />
+        <feGaussianBlur in="SourceGraphic" stdDeviation="1" result="gd-soft" />
+        <feDisplacementMap in="gd-soft" in2="gd-noise" scale="16" xChannelSelector="R" yChannelSelector="G" />
+      </filter>
     </svg>
 
-    <div id="root" data-composition-id="main" data-start="0" data-width="1080" data-height="1920" data-duration="15" data-fps="30">
-      <div id="bg-grid" class="clip" data-start="0" data-duration="11.6" data-track-index="0"></div>
+    <div id="root" data-composition-id="main" data-start="0" data-width="1920" data-height="1080" data-duration="45" data-fps="30">
+      <div id="bg-grid" class="clip" data-start="0" data-duration="30" data-track-index="0"></div>
 
-      <!-- Act 4 plate sits under everything; untimed wrapper, timed video. -->
+      <!-- Act 7 plate sits under everything; untimed wrapper, timed video. -->
       <div id="plate-wrap">
-        <video id="portal" class="clip" src="assets/video/portal.mp4" data-start="11.5" data-duration="3.5" data-track-index="1" muted playsinline></video>
+        <video id="portal" class="clip" src="assets/video/portal.mp4" data-start="29.6" data-duration="15.4" data-track-index="1" muted playsinline></video>
         <div id="bloom"></div>
         <div id="plate-fade"></div>
       </div>
@@ -689,7 +1009,7 @@
                   <div id="cmd"><span class="p">$ </span><span id="cmd-text"></span><span id="caret"></span></div>
                   <div id="verdict">
                     <div id="stamp-row">
-                      <span id="stamp" class="glitch" data-layout-allow-overlap><span class="g g1">REFUSE</span><span class="g g2">REFUSE</span><span class="g0">REFUSE</span></span>
+                      <span id="stamp" class="glitch" data-layout-allow-overlap><span class="g g1" data-layout-allow-overlap>REFUSE</span><span class="g g2" data-layout-allow-overlap>REFUSE</span><span class="g0" data-layout-allow-overlap>REFUSE</span></span>
                       <span id="stamp-res">path:src/causalmesh/crypto/chain.py</span>
                     </div>
                     <div id="vdl">
@@ -703,16 +1023,16 @@
               </div>
             </div>
             <div id="wall" data-layout-allow-overflow>
-              <span id="wall-mask" data-layout-allow-overflow><span id="wall-glitch" class="glitch" data-layout-allow-overlap><span class="g g1">REFUSED.</span><span class="g g2">REFUSED.</span><span class="g0" id="wall-chars"></span></span></span>
+              <span id="wall-mask" data-layout-allow-overflow><span id="wall-glitch" class="glitch" data-layout-allow-overlap><span class="g g1" data-layout-allow-overlap>REFUSED.</span><span class="g g2" data-layout-allow-overlap>REFUSED.</span><span class="g0" id="wall-chars" data-layout-allow-overlap></span></span></span>
             </div>
             <div id="wall-sub">Kept, with its reason.</div>
           </div>
 
           <div id="p2" class="pane">
             <div id="slam-idx" class="label">Every action</div>
-            <div class="slam" id="s-1"><div class="w" style="font-size: 236px">Gated.</div><div class="bar"></div><div class="sub">01 &middot; one gate, one contract</div></div>
-            <div class="slam" id="s-2"><div class="w" style="font-size: 214px">Signed.</div><div class="bar"></div><div class="sub">02 &middot; Ed25519, hash-linked</div></div>
-            <div class="slam" id="s-3"><div class="w" style="font-size: 168px">Recorded.</div><div class="bar"></div><div class="sub">03 &middot; refusals included</div></div>
+            <div class="slam" id="s-1"><div class="w" style="font-size: 176px">Gated.</div><div class="bar"></div><div class="sub">01 &middot; one gate, one contract</div></div>
+            <div class="slam" id="s-2"><div class="w" style="font-size: 160px">Signed.</div><div class="bar"></div><div class="sub">02 &middot; Ed25519, hash-linked</div></div>
+            <div class="slam" id="s-3"><div class="w" style="font-size: 128px">Recorded.</div><div class="bar"></div><div class="sub">03 &middot; refusals included</div></div>
           </div>
           <div id="seam"></div>
         </div>
@@ -753,21 +1073,150 @@
             </div>
           </div>
           <div id="cards">
-            <div class="card panel" id="c0"><i class="card-edge"></i><div class="r1"><span class="seq">0</span><span class="ty">READ</span><span class="ag">agent_a</span><span class="t">+0.000s</span></div><div class="r2">src/config.py &middot; read_file</div><div class="h" id="h0">0c75065597</div><i class="link" id="l0"></i></div>
-            <div class="card panel" id="c1"><i class="card-edge"></i><div class="r1"><span class="seq">1</span><span class="ty">READ</span><span class="ag">agent_b</span><span class="t">+0.000s</span></div><div class="r2">src/config.py &middot; read_file</div><div class="h" id="h1">1f1c3ea9dd</div><i class="link" id="l1"></i></div>
-            <div class="card panel" id="c2"><i class="card-edge"></i><div class="r1"><span class="seq">2</span><span class="ty">WRITE</span><span class="ag">agent_a</span><span class="t">+1.000s</span></div><div class="r2">src/config.py &middot; write_file 301 B</div><div class="h" id="h2">c7a0cfc7c6</div><i class="link" id="l2"></i></div>
-            <div class="card panel deny" id="c3"><i class="card-edge"></i><div class="r1"><span class="seq">3</span><span id="fail-ty" class="ty glitch" data-layout-allow-overlap><span class="g g1">FAILURE</span><span class="g g2">FAILURE</span><span class="g0">FAILURE</span></span><span class="ag">agent_b</span><span class="t">+2.000s</span></div><div class="r2">write_file refused: held by 'agent_a'</div><div class="h" id="h3">e3c6c935a1</div></div>
+            <div class="card glass" id="c0">
+              <div class="glass-refract" data-layout-allow-overflow><div class="glass-source"></div></div><div class="glass-tint"></div>
+              <div class="glass-body"><i class="card-edge"></i><div class="r1"><span class="seq">0</span><span class="ty">READ</span><span class="ag">agent_a</span><span class="t">+0.000s</span></div><div class="r2">src/config.py &middot; read_file</div><div class="h" id="h0">0c75065597</div><i class="link" id="l0"></i></div>
+              <div class="glass-rim"></div>
+            </div>
+            <div class="card glass" id="c1">
+              <div class="glass-refract" data-layout-allow-overflow><div class="glass-source"></div></div><div class="glass-tint"></div>
+              <div class="glass-body"><i class="card-edge"></i><div class="r1"><span class="seq">1</span><span class="ty">READ</span><span class="ag">agent_b</span><span class="t">+0.000s</span></div><div class="r2">src/config.py &middot; read_file</div><div class="h" id="h1">1f1c3ea9dd</div><i class="link" id="l1"></i></div>
+              <div class="glass-rim"></div>
+            </div>
+            <div class="card glass" id="c2">
+              <div class="glass-refract" data-layout-allow-overflow><div class="glass-source"></div></div><div class="glass-tint"></div>
+              <div class="glass-body"><i class="card-edge"></i><div class="r1"><span class="seq">2</span><span class="ty">WRITE</span><span class="ag">agent_a</span><span class="t">+1.000s</span></div><div class="r2">src/config.py &middot; write_file 301 B</div><div class="h" id="h2">c7a0cfc7c6</div><i class="link" id="l2"></i></div>
+              <div class="glass-rim"></div>
+            </div>
+            <div class="card glass deny" id="c3">
+              <div class="glass-refract" data-layout-allow-overflow><div class="glass-source"></div></div><div class="glass-tint"></div>
+              <div class="glass-body"><i class="card-edge"></i><div class="r1"><span class="seq">3</span><span id="fail-ty" class="ty glitch" data-layout-allow-overlap><span class="g g1" data-layout-allow-overlap>FAILURE</span><span class="g g2" data-layout-allow-overlap>FAILURE</span><span class="g0" data-layout-allow-overlap>FAILURE</span></span><span class="ag">agent_b</span></div><div class="r2">write_file refused: held by 'agent_a'</div><div class="h" id="h3">e3c6c935a1</div></div>
+              <div class="glass-rim"></div>
+            </div>
             <i id="signal"></i>
           </div>
           <div id="verify"><span id="verify-word">chain verified</span> <span class="dim">&middot; <span id="vcount">0</span>/4 &middot; head e3c6c935a1da9f74</span></div>
-          <div id="run-id">run pilot_landing__concurrent_edit_collision__C3__r0000</div>
+          <div id="run-id">run pilot_landing__concurrent_edit_collision__C3__r0000 &middot; scripted mock agents</div>
         </div>
       </section>
 
       <div id="slit" class="clip" data-start="11.0" data-duration="1.3" data-track-index="6"></div>
 
-      <!-- Act 4: portal lockup -->
-      <section id="act4" class="clip" data-start="11.5" data-duration="3.5" data-track-index="4">
+      <!-- Iris close over the verified chain, opening onto the arms (11.6s hand-off). -->
+      <div id="iris1" class="iris clip" data-start="11.3" data-duration="0.9" data-track-index="41">
+        <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"></svg>
+      </div>
+
+      <!-- Act 5: isolation arms C0-C3 -->
+      <section id="act5" class="clip" data-start="11.6" data-duration="8.4" data-track-index="7">
+        <div id="a5">
+          <div id="arms-caption" class="head" style="position: absolute; left: 96px; top: 80px;">
+            <div id="a5-label" class="label">04 / Isolation</div>
+            <div class="display">
+              <span class="mask" data-layout-allow-overflow><span id="a5a">C0. C1. C2. C3.</span></span>
+              <span class="mask" data-layout-allow-overflow><span id="a5b" class="muted">A refusal is data.</span></span>
+            </div>
+          </div>
+          <div id="arms-row">
+            <div class="arm glass" id="arm-c0">
+              <div class="glass-refract" data-layout-allow-overflow><div class="glass-source"></div></div><div class="glass-tint"></div>
+              <div class="glass-body" style="display:flex; flex-direction:column; height:100%;">
+                <div class="arm-id">C0</div>
+                <div class="arm-mech">no information, no enforcement</div>
+                <div class="arm-guarantee">Fully isolated agents, no peer visibility. agent_b's write executes; the file ends up clobbered.</div>
+                <div class="arm-bar-track"><div class="arm-bar-fill" id="bar-c0"></div></div>
+                <div class="arm-bar-label">peer events observed: 0</div>
+              </div>
+              <div class="glass-rim"></div>
+            </div>
+            <div class="arm glass" id="arm-c1">
+              <div class="glass-refract" data-layout-allow-overflow><div class="glass-source"></div></div><div class="glass-tint"></div>
+              <div class="glass-body" style="display:flex; flex-direction:column; height:100%;">
+                <div class="arm-id">C1</div>
+                <div class="arm-mech">unbounded transcript, no enforcement</div>
+                <div class="arm-guarantee">Agents see a full conversational transcript. The write still executes; the file still ends up clobbered.</div>
+                <div class="arm-bar-track"><div class="arm-bar-fill" id="bar-c1"></div></div>
+                <div class="arm-bar-label">peer events observed: 2</div>
+              </div>
+              <div class="glass-rim"></div>
+            </div>
+            <div class="arm glass" id="arm-c2">
+              <div class="glass-refract" data-layout-allow-overflow><div class="glass-source"></div></div><div class="glass-tint"></div>
+              <div class="glass-body" style="display:flex; flex-direction:column; height:100%;">
+                <div class="arm-id">C2</div>
+                <div class="arm-mech">bounded structured metadata, no enforcement</div>
+                <div class="arm-guarantee">Agents see typed events describing what changed. Still no enforcement: the write executes, the file still ends up clobbered.</div>
+                <div class="arm-bar-track"><div class="arm-bar-fill" id="bar-c2"></div></div>
+                <div class="arm-bar-label">peer events observed: 2</div>
+              </div>
+              <div class="glass-rim"></div>
+            </div>
+            <div class="arm glass deny" id="arm-c3">
+              <div class="glass-refract" data-layout-allow-overflow><div class="glass-source"></div></div><div class="glass-tint"></div>
+              <div class="glass-body" style="display:flex; flex-direction:column; height:100%;">
+                <div class="arm-id">C3</div>
+                <div class="arm-mech">metadata plus enforced exclusive write claims</div>
+                <div class="arm-guarantee">agent_b's write is <span id="c3-verdict-word">denied</span>, not executed &mdash; the file stays intact.</div>
+                <div class="arm-bar-track"><div class="arm-bar-fill" id="bar-c3"></div></div>
+                <div class="arm-bar-label">peer events observed: 2 &middot; write: denied</div>
+              </div>
+              <div class="glass-rim"></div>
+            </div>
+          </div>
+          <div id="arms-verdict">DENIED &middot; agent_b &middot; schema.py &middot; recorded, not raised &middot; <span class="deny">exit 1</span></div>
+        </div>
+      </section>
+
+      <!-- Act 6: claims / lease -->
+      <section id="act6" class="clip" data-start="20.0" data-duration="10.0" data-track-index="8">
+        <div id="a6">
+          <div id="claims-caption" class="head" style="position: absolute; left: 96px; top: 80px;">
+            <div id="a6-label" class="label">05 / Claims</div>
+            <div class="display">
+              <span class="mask" data-layout-allow-overflow><span id="a6a">One lease. One writer.</span></span>
+              <span class="mask" data-layout-allow-overflow><span id="a6b" class="muted">Every attempt recorded.</span></span>
+            </div>
+          </div>
+          <div id="claims-stage">
+            <div id="claims-arrow-a"></div>
+            <div id="claims-arrow-b"></div>
+            <div id="resource-lock">
+              <div id="lock-panel" class="panel">
+                <div id="lock-path">schema.py</div>
+                <div id="lock-state">free</div>
+                <svg id="lock-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <rect id="lock-body" x="4" y="11" width="16" height="10" rx="2" stroke="#fafafa" stroke-width="1.6" />
+                  <path id="lock-shackle" d="M7 11V7a5 5 0 0 1 10 0v4" stroke="#fafafa" stroke-width="1.6" fill="none" />
+                </svg>
+              </div>
+            </div>
+            <div class="agent-panel glass grant" id="agent-a">
+              <div class="glass-refract" data-layout-allow-overflow><div class="glass-source"></div></div><div class="glass-tint"></div>
+              <div class="glass-body">
+                <div class="agent-id">agent_a</div>
+                <div class="agent-action">acquires the exclusive lease on <b>schema.py</b>, then writes.</div>
+                <div class="agent-verdict" id="a-verdict">may_write: granted</div>
+              </div>
+              <div class="glass-rim"></div>
+            </div>
+            <div class="agent-panel glass deny" id="agent-b">
+              <div class="glass-refract" data-layout-allow-overflow><div class="glass-source"></div></div><div class="glass-tint"></div>
+              <div class="glass-body">
+                <div class="agent-id">agent_b</div>
+                <div class="agent-action">read the old version, attempts the same write while the lease holds.</div>
+                <div class="agent-verdict" id="b-verdict">record_denial: blocked by agent_a</div>
+              </div>
+              <div class="glass-rim"></div>
+            </div>
+          </div>
+          <div id="claims-record">may_write is read-only, a question &middot; record_denial is a statement &middot; the file stays <span class="deny">byte-identical</span></div>
+        </div>
+      </section>
+
+      <div id="claims-slit" class="clip" data-start="29.4" data-duration="1.0" data-track-index="9"></div>
+
+      <!-- Act 7: portal lockup -->
+      <section id="act4" class="clip" data-start="29.6" data-duration="15.4" data-track-index="4">
         <div id="a4-title" class="display">
           <span class="ln"><span class="wd">The</span> <span class="wd">Next</span> <span class="wd">Layer</span></span>
           <span class="ln"><span class="wd">of</span> <span class="wd">Intelligence</span></span>
@@ -782,25 +1231,29 @@
             <span class="mask" data-layout-allow-overflow><span id="wordmark">CausalMesh</span></span>
           </div>
           <div id="tagline"><span class="wd">Every</span> <span class="wd">action</span> <span class="wd">gated,</span> <span class="wd">signed,</span> <span class="wd">and</span> <span class="wd">recorded.</span></div>
-          <div id="stat" class="label"><i></i><span>24 / 24 chains verified</span></div>
+          <div id="stat" class="label"><i></i><span>24 / 24 pilot chains verified offline &middot; scripted agents</span></div>
         </div>
       </section>
 
-      <div id="grain" class="clip" data-start="0" data-duration="15" data-track-index="7"><div id="grain-tex"></div></div>
-      <div id="vignette" class="clip" data-start="0" data-duration="15" data-track-index="8"></div>
+      <div id="grain" class="clip" data-start="0" data-duration="45" data-track-index="70"><div id="grain-tex"></div></div>
+      <div id="vignette" class="clip" data-start="0" data-duration="45" data-track-index="71"></div>
 
-      <div id="hud" class="clip" data-start="0" data-duration="15" data-track-index="9">
+      <div id="hud" class="clip" data-start="0" data-duration="45" data-track-index="72">
         <i class="corner c-tl"></i><i class="corner c-tr"></i><i class="corner c-bl"></i><i class="corner c-br"></i>
-        <div id="hud-name" class="hud-t">CausalMesh &mdash; Motion Reel</div>
+        <div id="hud-name" class="hud-t">CausalMesh &mdash; Launch Film</div>
         <div id="hud-tc" class="hud-t">00:00:00:00</div>
-        <div id="hud-scene" class="hud-t">01 / 05 &nbsp;The gate</div>
-        <div id="hud-fmt" class="hud-t">1080 &times; 1920 &middot; 30 fps</div>
+        <div id="hud-scene" class="hud-t">01 / 07 &nbsp;The gate</div>
+        <div id="hud-fmt" class="hud-t">1920 &times; 1080 &middot; 30 fps</div>
         <div id="hud-bar"><i id="hud-prog"></i></div>
       </div>
 
-      <!-- Audio: bed on a volume lane; SFX on the frames they sound with. -->
-      <audio id="music" src="assets/music/happy-beats-business-moves-vol-9-by-ende-dot-app.mp3" data-start="0" data-duration="15" data-track-index="10" data-volume="0.55"
-        data-automation='{"version":1,"lanes":[{"target":"volume","points":[{"t":0,"v":0},{"t":0.4,"v":1},{"t":13.9,"v":1},{"t":15,"v":0}]}]}'></audio>
+      <!-- Audio: bed on a volume lane; SFX on the frames they sound with.
+           All SFX across 0-45s are beat-matched to assets/audio-data.js,
+           which now carries real measured per-frame band energy for the
+           full 45s (1350 frames @ 30fps, hyperframes-creative
+           extract-audio-data.py). See BRIEF.md > Beat map. -->
+      <audio id="music" src="assets/music/happy-beats-business-moves-vol-9-by-ende-dot-app.mp3" data-start="0" data-duration="45" data-track-index="10" data-volume="0.55"
+        data-automation='{"version":1,"lanes":[{"target":"volume","points":[{"t":0,"v":0},{"t":0.4,"v":1},{"t":43.6,"v":1},{"t":45,"v":0}]}]}'></audio>
       <audio id="sfx-k1" src="assets/sfx/keypress-003.wav" data-start="0.28" data-duration="0.25" data-track-index="20" data-volume="0.45"></audio>
       <audio id="sfx-k2" src="assets/sfx/keypress-007.wav" data-start="0.4" data-duration="0.25" data-track-index="21" data-volume="0.45"></audio>
       <audio id="sfx-k3" src="assets/sfx/keypress-011.wav" data-start="0.52" data-duration="0.25" data-track-index="22" data-volume="0.45"></audio>
@@ -817,17 +1270,31 @@
       <audio id="sfx-gate" src="assets/sfx/rollover2.ogg" data-start="6.34" data-duration="0.06" data-track-index="18" data-volume="0.7"></audio>
       <audio id="sfx-dive" src="assets/sfx/card-slide-6.ogg" data-start="7.45" data-duration="0.60" data-track-index="19" data-volume="0.75"></audio>
       <audio id="sfx-card0" src="assets/sfx/drop_002.ogg" data-start="8.05" data-duration="0.19" data-track-index="26" data-volume="0.55"></audio>
+      <audio id="sfx-card1" src="assets/sfx/drop_002.ogg" data-start="8.25" data-duration="0.19" data-track-index="32" data-volume="0.45"></audio>
       <audio id="sfx-card2" src="assets/sfx/drop_002.ogg" data-start="8.44" data-duration="0.19" data-track-index="27" data-volume="0.55"></audio>
       <audio id="sfx-card3" src="assets/sfx/impactSoft_heavy_002.ogg" data-start="8.96" data-duration="0.58" data-track-index="28" data-volume="0.7"></audio>
       <audio id="sfx-verify" src="assets/sfx/impactGlass_light_002.ogg" data-start="10.54" data-duration="0.21" data-track-index="29" data-volume="0.65"></audio>
       <audio id="sfx-slit" src="assets/sfx/rollover2.ogg" data-start="11.1" data-duration="0.06" data-track-index="30" data-volume="0.6"></audio>
       <audio id="sfx-bell" src="assets/sfx/impactBell_heavy_004.ogg" data-start="12.65" data-duration="0.30" data-track-index="31" data-volume="0.85"></audio>
+      <!-- 15-45s cues (real beat grid): reuse existing CC0 SFX at the
+           measured beats in shot-plan.json's beats array, matching the same
+           sound vocabulary as 0-15s. -->
+      <audio id="sfx-arm0" src="assets/sfx/drop_002.ogg" data-start="15.28" data-duration="0.19" data-track-index="33" data-volume="0.5"></audio>
+      <audio id="sfx-arm1" src="assets/sfx/drop_002.ogg" data-start="15.81" data-duration="0.19" data-track-index="34" data-volume="0.5"></audio>
+      <audio id="sfx-arm2" src="assets/sfx/drop_002.ogg" data-start="16.3" data-duration="0.19" data-track-index="35" data-volume="0.5"></audio>
+      <audio id="sfx-arm3" src="assets/sfx/impactSoft_heavy_002.ogg" data-start="16.83" data-duration="0.58" data-track-index="36" data-volume="0.7"></audio>
+      <audio id="sfx-arms-verdict" src="assets/sfx/impactSoft_medium_000.ogg" data-start="16.83" data-duration="0.12" data-track-index="37" data-volume="0.55"></audio>
+      <audio id="sfx-claims-lock" src="assets/sfx/rollover2.ogg" data-start="22.1" data-duration="0.06" data-track-index="38" data-volume="0.7"></audio>
+      <audio id="sfx-claims-deny" src="assets/sfx/impactSoft_heavy_002.ogg" data-start="24.2" data-duration="0.58" data-track-index="39" data-volume="0.75"></audio>
+      <audio id="sfx-claims-slit" src="assets/sfx/card-slide-1.ogg" data-start="29.47" data-duration="0.6" data-track-index="40" data-volume="0.75"></audio>
+      <audio id="sfx-portal-in" src="assets/sfx/impactGlass_light_002.ogg" data-start="30.0" data-duration="0.21" data-track-index="42" data-volume="0.6"></audio>
+      <audio id="sfx-mark-lock" src="assets/sfx/impactBell_heavy_004.ogg" data-start="31.57" data-duration="0.30" data-track-index="43" data-volume="0.85"></audio>
     </div>
 
     <script>
       (function () {
         var FPS = 30;
-        var DURATION = 15;
+        var DURATION = 45;
         var TOTAL = Math.round(DURATION * FPS);
         var EASE = "power4.out";
         var SOFT = "expo.out";
@@ -848,8 +1315,23 @@
           var s = document.createElement("span");
           s.className = "ch";
           s.id = "wc-" + i;
+          s.setAttribute("data-layout-allow-overlap", "");
           s.textContent = c;
           wallChars.appendChild(s);
+        });
+
+        /* ---- Setup: glass source fills for every .glass panel (liquid-glass
+           technique: a background clone sampled through the shared
+           feDisplacementMap filter, never native backdrop-filter). ---- */
+        document.querySelectorAll(".glass-refract").forEach(function (refract) {
+          var src = refract.querySelector(".glass-source");
+          if (!src) return;
+          src.style.position = "absolute";
+          src.style.inset = "0";
+          src.style.background =
+            "repeating-linear-gradient(90deg, rgba(255,255,255,0.07) 0 1px, transparent 1px 30px)," +
+            "repeating-linear-gradient(0deg, rgba(255,255,255,0.07) 0 1px, transparent 1px 30px)," +
+            "#0c0c0c";
         });
 
         /* ---- Setup: architecture diagram (site geometry) ---- */
@@ -924,23 +1406,57 @@
         var halos = [0, 1].map(function () {
           return el("rect", { x: gateNode.x - 85, y: gateNode.y - 23, width: 170, height: 46, rx: 3, fill: "none", stroke: "#ffffff", "stroke-width": "1.3", opacity: "0" });
         });
-        // Gate's screen position, for the camera dive: diagram at (40,560), viewBox scale 1000/690.
-        var S = 1000 / 690;
-        var GATE_X = 40 + (gateNode.x - 40) * S;
-        var GATE_Y = 560 + (gateNode.y - 10) * S;
+        // Gate's screen position, for the camera dive: diagram at (right:130,top:210)
+        // sized 849x800, which matches the 690x650 viewBox aspect exactly, so
+        // one uniform scale factor S is accurate on both axes.
+        var S = 849 / 690;
+        var DIA_LEFT = 1920 - 130 - 849;
+        var GATE_X = DIA_LEFT + (gateNode.x - 40) * S;
+        var GATE_Y = 210 + (gateNode.y - 10) * S;
+
+        /* ---- Setup: iris-blade geometry (ported from
+           compositions/components/iris-blade-transition.html). Builds six
+           blade <g> wrappers inside a given .iris element's <svg>, each
+           rotated 60deg apart around the shared center (50,50) in a
+           0-100 viewBox, with a "reach" custom driver moving each blade
+           only along its own local translateY axis so the hexagonal
+           aperture stays regular through the whole sweep. ---- */
+        function buildIris(svgEl, fill) {
+          var CX = 50, CY = 50, HALF_WIDTH = 34, REACH = 95;
+          var blades = [];
+          for (var i = 0; i < 6; i++) {
+            var g = document.createElementNS(NS, "g");
+            g.setAttribute("class", "iris-blade");
+            var poly = document.createElementNS(NS, "polygon");
+            var bx = CX - HALF_WIDTH, ax = CX + HALF_WIDTH, tipY = CY, baseY = CY - REACH - 20;
+            poly.setAttribute("points", [CX + "," + tipY, bx + "," + baseY, ax + "," + baseY].join(" "));
+            poly.setAttribute("fill", fill);
+            g.appendChild(poly);
+            svgEl.appendChild(g);
+            blades.push({ g: g, angle: i * 60 });
+          }
+          blades.forEach(function (b) {
+            b.write = function (reach) {
+              b.g.setAttribute("transform", "rotate(" + b.angle + " " + CX + " " + CY + ") translate(0 " + (-reach * REACH) + ")");
+            };
+            b.write(1); // fully retracted at rest (no iris covering the frame)
+          });
+          return blades;
+        }
+        var iris1Blades = buildIris(document.querySelector("#iris1 svg"), "#050505");
 
         var tl = gsap.timeline({ paused: true });
 
         /* ===================== ACT 1 — the refusal (0 – 2.65) ===================== */
-        tl.fromTo("#bg-grid", { backgroundPosition: "0px 0px" }, { backgroundPosition: "0px -540px", duration: 11.6, ease: "none" }, 0);
+        tl.fromTo("#bg-grid", { backgroundPosition: "0px 0px" }, { backgroundPosition: "0px -540px", duration: 30, ease: "none" }, 0);
         tl.fromTo("#p1-label", { opacity: 0, x: -20 }, { opacity: 1, x: 0, duration: 0.5, ease: EASE }, 0.08);
         // 3D swing-in: the terminal falls forward into the frame.
-        tl.fromTo("#term", { rotationX: 34, y: 150, scale: 0.84, opacity: 0, transformOrigin: "50% 100%" },
+        tl.fromTo("#term", { rotationX: 34, y: 120, scale: 0.84, opacity: 0, transformOrigin: "50% 100%" },
           { rotationX: 0, y: 0, scale: 1, opacity: 1, duration: 0.7, ease: EASE }, 0);
         var CMD = "causalmesh policy check --agent docs --kind path --name src/causalmesh/crypto/chain.py";
         var cmdEl = document.getElementById("cmd-text");
         var typing = { n: 0 };
-        tl.fromTo(typing, { n: 0 }, { n: CMD.length, duration: 0.7, ease: "none",
+        tl.fromTo(typing, { n: 0 }, { n: CMD.length, duration: 0.7, ease: "none", immediateRender: false,
           onUpdate: function () { cmdEl.textContent = CMD.slice(0, Math.round(typing.n)); } }, 0.22);
         tl.fromTo("#verdict", { opacity: 0 }, { opacity: 1, duration: 0.01 }, 1.05);
         // beat-locked 1.07: REFUSE slams, the frame takes the hit.
@@ -965,8 +1481,8 @@
         var blur = { v: 0 };
         function writeBlur() { blurNode.setAttribute("stdDeviation", blur.v + " 0"); }
         writeBlur();
-        tl.fromTo("#strip", { x: 0 }, { x: -1080, duration: WHIP, ease: "power3.inOut" }, WHIP_AT);
-        tl.fromTo(blur, { v: 0 }, { v: PEAK_BLUR, duration: WHIP / 2, ease: "power3.in", onUpdate: writeBlur }, WHIP_AT);
+        tl.fromTo("#strip", { x: 0 }, { x: -1920, duration: WHIP, ease: "power3.inOut" }, WHIP_AT);
+        tl.fromTo(blur, { v: 0 }, { v: PEAK_BLUR, duration: WHIP / 2, ease: "power3.in", immediateRender: false, onUpdate: writeBlur }, WHIP_AT);
         tl.to(blur, { v: 0, duration: WHIP / 2, ease: "power3.out", onUpdate: writeBlur }, WHIP_AT + WHIP / 2);
         tl.fromTo("#seam", { opacity: 0 }, { opacity: 1, duration: 0.08, immediateRender: false }, WHIP_AT);
         tl.to("#seam", { opacity: 0, duration: 0.12 }, WHIP_AT + WHIP - 0.12);
@@ -1038,8 +1554,8 @@
         tl.fromTo("#a3b", { yPercent: 115 }, { yPercent: 0, duration: 0.8, ease: EASE }, 8.12);
         var CARD_T = [8.05, 8.25, 8.44, 8.96]; // 8.44 and 8.96 beat-locked
         CARD_T.forEach(function (t, k) {
-          tl.fromTo("#c" + k, { rotationX: -78, y: 80, opacity: 0, transformOrigin: "50% 0%" }, { rotationX: 0, y: 0, opacity: 1, duration: 0.55, ease: EASE }, t);
-          if (k < 3) tl.fromTo("#l" + k, { scaleY: 0 }, { scaleY: 1, duration: 0.25, ease: "power2.out" }, t + 0.32);
+          tl.fromTo("#c" + k, { rotationX: -78, y: 60, opacity: 0, transformOrigin: "50% 0%" }, { rotationX: 0, y: 0, opacity: 1, duration: 0.55, ease: EASE }, t);
+          if (k < 3) tl.fromTo("#l" + k, { scaleX: 0 }, { scaleX: 1, duration: 0.2, ease: "power2.out" }, t + 0.32);
         });
         // The refused event lands hard: sand edge flash and a tear on FAILURE.
         tl.fromTo("#c3 .card-edge", { opacity: 0 }, { opacity: 1, duration: 0.1 }, 8.96);
@@ -1047,9 +1563,11 @@
         tl.fromTo("#fail-ty .g", { opacity: 0 }, { opacity: 0.85, duration: 0.01 }, 9.0);
         tl.to("#fail-ty", { "--gr": "-8px", "--gb": "8px", duration: 0.05, repeat: 5, yoyo: true, ease: "steps(1)" }, 9.0);
         tl.to("#fail-ty .g", { opacity: 0, duration: 0.01 }, 9.3);
-        // A single signal runs the links, lighting each event as it passes.
-        tl.fromTo("#signal", { opacity: 0, y: 84 }, { opacity: 1, duration: 0.1, immediateRender: false }, 9.45);
-        tl.fromTo("#signal", { y: 84 }, { y: 84 + 3 * 208, duration: 0.9, ease: "power1.inOut", immediateRender: false }, 9.5);
+        // A single signal runs the links left-to-right across the row (16:9
+        // reflow: cards are a row, not a stack), lighting each as it passes.
+        var SIGNAL_X0 = 0, SIGNAL_X3 = 3 * (1728 / 4 + 26);
+        tl.fromTo("#signal", { opacity: 0, x: SIGNAL_X0 }, { opacity: 1, duration: 0.1, immediateRender: false }, 9.45);
+        tl.fromTo("#signal", { x: SIGNAL_X0 }, { x: SIGNAL_X3, duration: 0.9, ease: "power1.inOut", immediateRender: false }, 9.5);
         tl.to("#signal", { opacity: 0, duration: 0.15 }, 10.4);
         [0, 1, 2].forEach(function (k) {
           var at = 9.5 + 0.9 * (k / 3);
@@ -1059,31 +1577,136 @@
         // beat-locked 10.54: verified, with a count and a shimmer pass.
         tl.fromTo("#verify", { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.4, ease: EASE }, 10.54);
         var vc = { n: 0 }, vcEl = document.getElementById("vcount");
-        tl.fromTo(vc, { n: 0 }, { n: 4, duration: 0.35, ease: "power1.out", onUpdate: function () { vcEl.textContent = String(Math.round(vc.n)); } }, 10.56);
+        tl.fromTo(vc, { n: 0 }, { n: 4, duration: 0.35, ease: "power1.out", immediateRender: false, onUpdate: function () { vcEl.textContent = String(Math.round(vc.n)); } }, 10.56);
         tl.to("#verify-word", { backgroundPosition: "0% 50%", duration: 0.7, ease: "sine.inOut" }, 10.62);
         tl.fromTo("#run-id", { opacity: 0 }, { opacity: 1, duration: 0.35 }, 10.64);
         // Collapse toward the doorway 11.06 – 11.36.
         tl.to("#a3", { opacity: 0, scale: 0.88, duration: 0.3, ease: "power3.in", transformOrigin: "50% 53.2%" }, 11.06);
 
-        /* ---- Slit match cut into the portal ---- */
+        /* ---- Slit match cut into the portal-of-arms (kept from the 15s cut) ---- */
         tl.fromTo("#slit", { opacity: 0, scaleX: 0.012, scaleY: 0 }, { opacity: 1, scaleY: 1, duration: 0.3, ease: "power3.out" }, 11.1);
         tl.to("#slit", { scaleX: 1.04, scaleY: 1.03, duration: 0.38, ease: "power3.inOut" }, 11.42);
         tl.to("#slit", { opacity: 0, duration: 0.5, ease: "power1.out" }, 11.78);
 
-        /* ===================== ACT 4 — portal lockup (11.5 – 15) ===================== */
-        tl.fromTo("#plate-wrap", { opacity: 0, scale: 1.04, transformOrigin: "50% 53%" }, { opacity: 1, scale: 1, duration: 1.1, ease: SOFT }, 11.55);
-        tl.to("#plate-wrap", { scale: 1.035, duration: 2.35, ease: "none" }, 12.65);
-        tl.fromTo("#a4-title .wd", { opacity: 0, y: 26, filter: "blur(14px)" }, { opacity: 1, y: 0, filter: "blur(0px)", duration: 0.7, ease: EASE, stagger: 0.08 }, 11.85);
-        tl.fromTo("#bar-a", { x: 40, opacity: 0 }, { x: 0, opacity: 1, duration: 0.25, ease: "power3.in" }, 12.4);
-        tl.fromTo("#bar-b", { x: -40, opacity: 0 }, { x: 0, opacity: 1, duration: 0.25, ease: "power3.in" }, 12.4);
-        // beat-locked 12.65: the mark locks with a glow bloom (logo-outro language).
-        tl.fromTo("#mark", { scale: 1.12 }, { scale: 1, duration: 0.5, ease: EASE }, 12.65);
-        tl.fromTo("#mark-glow", { opacity: 0.9, scale: 0.5 }, { opacity: 0, scale: 1.7, duration: 0.9, ease: SOFT }, 12.65);
-        tl.fromTo("#wordmark", { yPercent: 115 }, { yPercent: 0, duration: 0.85, ease: EASE }, 12.7);
-        tl.fromTo("#tagline .wd", { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.5, ease: EASE, stagger: 0.06 }, 12.95);
-        tl.fromTo("#stat", { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.6, ease: EASE }, 13.3);
+        /* ---- Iris close over the verified chain / open onto the arms (11.3-12.2) ----
+           Iris-blade technique (ported from compositions/components/iris-blade-transition.html):
+           close sweeps the six blades in (reach 1 -> 0) to seal the frame, a brief
+           hold on black, then open sweeps them back out (reach 0 -> 1). Closing and
+           opening share identical geometry so a loop point exists at the sealed pose. */
+        (function () {
+          var CLOSE_AT = 11.3, SWEEP = 0.32, STAGGER = 0.025, HOLD = 0.12;
+          var OPEN_AT = CLOSE_AT + 5 * STAGGER + SWEEP + HOLD;
+          iris1Blades.forEach(function (b, i) {
+            var proxy = { r: 1 };
+            tl.to(proxy, { r: 0, duration: SWEEP, ease: "power3.inOut", onUpdate: function () { b.write(proxy.r); } }, CLOSE_AT + i * STAGGER);
+          });
+          iris1Blades.forEach(function (b, i) {
+            var proxy = { r: 0 };
+            tl.to(proxy, { r: 1, duration: SWEEP, ease: "power3.inOut", onUpdate: function () { b.write(proxy.r); } }, OPEN_AT + i * STAGGER);
+          });
+        })();
+
+        /* ===================== ACT 5 — isolation arms C0-C3 (11.6 – 20.0) =====================
+           Beat grid past 11.6s now real (shot-plan.json's beats array, measured
+           from assets/audio-data.js's full 0-45s extraction; the four ARM_T
+           entries below are the nearest real onsets to the scene's four beats). */
+        tl.fromTo("#a5-label", { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.5, ease: EASE }, 11.85);
+        tl.fromTo("#a5a", { yPercent: 115 }, { yPercent: 0, duration: 0.8, ease: EASE }, 11.9);
+        tl.fromTo("#a5b", { yPercent: 115 }, { yPercent: 0, duration: 0.8, ease: EASE }, 12.05);
+        var ARM_IDS = ["c0", "c1", "c2", "c3"];
+        // Each arm's bar fill is a motion-design read of README.md's factor
+        // table, not a metric from the docs: C0 has neither information nor
+        // enforcement (near-zero fill); C1 and C2 both add information but
+        // NEITHER enforces (README.md: only C3's row carries "write claims"
+        // under Enforcement), so they draw to the SAME partial width, not a
+        // false gradient between them; C3 alone reaches full width, the one
+        // arm whose write is actually enforced (docs/isolation.md's
+        // AllowAllGate on C0-C2 vs ClaimGate on C3).
+        var ARM_FILL = { c0: 0.06, c1: 0.55, c2: 0.55, c3: 1.0 };
+        var ARM_T = [12.12, 12.65, 15.28, 15.81]; // all four beat-locked to shot-plan.json's measured beats array
+        ARM_IDS.forEach(function (id, k) {
+          var at = ARM_T[k];
+          tl.fromTo("#arm-" + id, { opacity: 0, y: 30, scale: 0.96 }, { opacity: 1, y: 0, scale: 1, duration: 0.5, ease: EASE }, at);
+          tl.fromTo("#bar-" + id, { scaleX: 0 }, { scaleX: ARM_FILL[id], duration: 0.55, ease: "power3.out" }, at + 0.2);
+        });
+        // C3's denial lands as a statement, not a raise: the word "denied"
+        // ties directly to docs/claims.md's "Denials are data, not exceptions."
+        tl.fromTo("#c3-verdict-word", { opacity: 0.3 }, { opacity: 1, duration: 0.01 }, 16.3);
+        tl.to("#c3-verdict-word", { color: "#d2a676", duration: 0.2, ease: EASE }, 16.3);
+        tl.fromTo("#arms-verdict", { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.4, ease: EASE }, 16.83);
+        // Hold, then contract the whole panel toward center ahead of the
+        // claims scene (the shape this scene leaves behind for the next).
+        tl.to("#arms-row", { opacity: 0, scale: 0.94, duration: 0.4, ease: "power3.in" }, 19.47);
+        tl.to("#arms-caption", { opacity: 0, duration: 0.3, ease: "power2.in" }, 19.42);
+        tl.to("#arms-verdict", { opacity: 0, duration: 0.3, ease: "power2.in" }, 19.42);
+
+        /* ===================== ACT 6 — claims / lease (20.0 – 30.0) =====================
+           Beat grid real throughout (shot-plan.json's measured beats array). */
+        tl.fromTo("#a6-label", { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.5, ease: EASE }, 20.0);
+        tl.fromTo("#a6a", { yPercent: 115 }, { yPercent: 0, duration: 0.8, ease: EASE }, 20.05);
+        tl.fromTo("#a6b", { yPercent: 115 }, { yPercent: 0, duration: 0.8, ease: EASE }, 20.2);
+        tl.fromTo("#agent-a", { opacity: 0, x: -40 }, { opacity: 1, x: 0, duration: 0.5, ease: EASE }, 21.07);
+        tl.fromTo("#agent-b", { opacity: 0, x: 40 }, { opacity: 1, x: 0, duration: 0.5, ease: EASE }, 21.07);
+        tl.fromTo("#resource-lock", { opacity: 0, y: -14 }, { opacity: 1, y: 0, duration: 0.4, ease: EASE }, 21.47);
+        // Two agents reach for the same resource: arrows draw in toward the lock.
+        tl.fromTo("#claims-arrow-a", { scaleX: 0 }, { scaleX: 1, duration: 0.4, ease: "power2.out" }, 21.6);
+        tl.fromTo("#claims-arrow-b", { scaleX: 0 }, { scaleX: 1, duration: 0.4, ease: "power2.out" }, 21.6);
+        // agent_a's lease acquires: the glass lock panel closes with a click (22.1, beat-locked).
+        tl.fromTo("#lock-shackle", { attr: { d: "M7 11V7a5 5 0 0 1 10 0v4" } }, { attr: { d: "M7 11V9a5 5 0 0 1 10 0v2" }, duration: 0.18, ease: "power3.in" }, 22.1);
+        tl.to("#lock-panel", { scale: 0.96, duration: 0.08, ease: "power2.in" }, 22.1);
+        tl.to("#lock-panel", { scale: 1, duration: 0.22, ease: "back.out(2.4)" }, 22.18);
+        tl.fromTo(
+          "#lock-state",
+          { opacity: 1 },
+          {
+            opacity: 1,
+            duration: 0.01,
+            immediateRender: false,
+            onStart: function () { document.getElementById("lock-state").textContent = "granted · agent_a"; },
+            onReverseComplete: function () { document.getElementById("lock-state").textContent = "free"; }
+          },
+          22.12
+        );
+        tl.to("#lock-path", { color: "#fafafa", duration: 0.2 }, 22.1);
+        tl.fromTo("#a-verdict", { opacity: 0, scale: 0.9 }, { opacity: 1, scale: 1, duration: 0.3, ease: "back.out(2)" }, 22.2);
+        // agent_b's attempt: denied and recorded, not silently dropped (24.2, beat-locked).
+        tl.fromTo("#claims-arrow-b", { backgroundColor: "rgba(210,166,118,0.14)" }, { backgroundColor: "rgba(210,166,118,0.7)", duration: 0.15 }, 24.2);
+        tl.fromTo("#b-verdict", { opacity: 0, scale: 0.9 }, { opacity: 1, scale: 1, duration: 0.3, ease: "back.out(2)" }, 24.3);
+        tl.fromTo("#agent-b", { x: 0 }, { keyframes: [{ x: 10 }, { x: -6 }, { x: 3 }, { x: 0 }], duration: 0.28, ease: "none" }, 24.2);
+        tl.fromTo("#claims-record", { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.4, ease: EASE }, 24.73);
+        // Hold on the recorded denial, then contract into a slit (the shape
+        // this scene leaves behind, matching the earlier chain->arms cut).
+        tl.to("#claims-stage", { opacity: 0, scale: 0.9, duration: 0.3, ease: "power3.in", transformOrigin: "50% 30%" }, 28.97);
+        tl.to("#claims-caption", { opacity: 0, duration: 0.25, ease: "power2.in" }, 28.92);
+        tl.to("#claims-record", { opacity: 0, duration: 0.25, ease: "power2.in" }, 28.92);
+        tl.fromTo("#claims-slit", { opacity: 0, scaleX: 0.012, scaleY: 0 }, { opacity: 1, scaleY: 1, duration: 0.3, ease: "power3.out" }, 29.47);
+        tl.to("#claims-slit", { scaleX: 1.04, scaleY: 1.03, duration: 0.3, ease: "power3.inOut" }, 29.77);
+        tl.to("#claims-slit", { opacity: 0, duration: 0.4, ease: "power1.out" }, 29.97);
+
+        /* ===================== ACT 7 — portal lockup (29.6 – 45.0) =====================
+           Beat grid real throughout (shot-plan.json's measured beats array).
+           The 0-15s portal lockup content and timing shape is extended/retimed
+           here rather than rebuilt: same title, mark assembly, tagline, stat
+           line, held longer to fill the extended runtime. */
+        tl.fromTo("#plate-wrap", { opacity: 0, scale: 1.04, transformOrigin: "50% 53%" }, { opacity: 1, scale: 1, duration: 1.1, ease: SOFT }, 29.65);
+        tl.to("#plate-wrap", { scale: 1.05, duration: 15, ease: "none" }, 30.0);
+        tl.fromTo("#a4-title .wd", { opacity: 0, y: 26, filter: "blur(14px)" }, { opacity: 1, y: 0, filter: "blur(0px)", duration: 0.7, ease: EASE, stagger: 0.08 }, 30.0);
+        tl.fromTo("#bar-a", { x: 40, opacity: 0 }, { x: 0, opacity: 1, duration: 0.25, ease: "power3.in" }, 31.07);
+        tl.fromTo("#bar-b", { x: -40, opacity: 0 }, { x: 0, opacity: 1, duration: 0.25, ease: "power3.in" }, 31.07);
+        // beat-locked 31.57: the mark locks with a glow bloom (logo-outro language).
+        tl.fromTo("#mark", { scale: 1.12 }, { scale: 1, duration: 0.5, ease: EASE }, 31.57);
+        tl.fromTo("#mark-glow", { opacity: 0.9, scale: 0.5 }, { opacity: 0, scale: 1.7, duration: 0.9, ease: SOFT }, 31.57);
+        tl.fromTo("#wordmark", { yPercent: 115 }, { yPercent: 0, duration: 0.85, ease: EASE }, 31.62);
+        tl.fromTo("#tagline .wd", { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.5, ease: EASE, stagger: 0.06 }, 31.87);
+        tl.fromTo("#stat", { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.6, ease: EASE }, 32.2);
         // One specular pass across the wordmark (text-shimmer recipe), then clean.
-        tl.to("#wordmark", { backgroundPosition: "0% 50%", duration: 0.9, ease: "sine.inOut" }, 13.55);
+        tl.to("#wordmark", { backgroundPosition: "0% 50%", duration: 0.9, ease: "sine.inOut" }, 32.45);
+        // A second, slower shimmer pass late in the extended hold — the film
+        // rests here rather than adding new motion, per the brief's "no held
+        // frame longer than ~1s without a beat-motivated reason": each pass
+        // below sits on a real measured beat.
+        tl.to("#wordmark", { backgroundPosition: "-40% 50%", duration: 1.1, ease: "sine.inOut" }, 37.37);
+        tl.fromTo("#stat i", { scale: 1 }, { scale: 1.6, opacity: 0.4, duration: 0.5, ease: "sine.out", repeat: 3, yoyo: true }, 38.97);
 
         /* ---- HUD progress ---- */
         tl.fromTo("#hud-prog", { scaleX: 0 }, { scaleX: 1, duration: DURATION, ease: "none" }, 0);
@@ -1095,7 +1718,15 @@
         var caret = document.getElementById("caret");
         var bloom = document.getElementById("bloom");
         var grain = document.getElementById("grain-tex");
-        var SCENES = [[0, "01 / 05  The gate"], [2.4, "02 / 05  The claim"], [4.23, "03 / 05  Architecture"], [7.92, "04 / 05  Evidence"], [11.5, "05 / 05  CausalMesh"]];
+        var SCENES = [
+          [0, "01 / 07  The gate"],
+          [2.65, "02 / 07  Every action"],
+          [4.23, "03 / 07  Architecture"],
+          [7.92, "04 / 07  Evidence"],
+          [11.6, "05 / 07  Isolation"],
+          [20.0, "06 / 07  Claims"],
+          [29.6, "07 / 07  CausalMesh"]
+        ];
         var HASHES = ["0c75065597", "1f1c3ea9dd", "c7a0cfc7c6", "e3c6c935a1"];
         var hashEls = HASHES.map(function (_, k) { return document.getElementById("h" + k); });
         var HEX = "0123456789abcdef";
@@ -1129,7 +1760,9 @@
           var gp = GRAIN_POS[Math.floor(frame / 2) % GRAIN_POS.length];
           grain.style.transform = "translate(" + gp[0] + "%," + gp[1] + "%)";
           var e = energy(frame);
-          bloom.style.opacity = t >= 11.9 ? String(0.3 + 0.45 * e) : "0";
+          // Real per-frame audio energy now covers the full 0-45s
+          // (assets/audio-data.js, 1350 frames @ 30fps) — no fallback needed.
+          bloom.style.opacity = t >= 29.9 ? String(0.3 + 0.45 * e) : "0";
           pulse.setAttribute("stroke-opacity", String(0.72 + 0.28 * e));
         }
         for (var fr = 0; fr < TOTAL; fr++) {

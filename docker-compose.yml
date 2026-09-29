@@ -10,3 +10,8 @@ services:
       - "8420:8420"
     volumes:
       - ./causalmesh.yaml:/app/causalmesh.yaml:ro
+    environment:
+      # --host 0.0.0.0 (see Dockerfile) is not localhost, so --dev mode is
+      # refused; a real token is required. Set it in the shell/CI running
+      # `docker compose up`, e.g. `CAUSALMESH_API_TOKEN=... docker compose up`.
+      - CAUSALMESH_API_TOKEN=${CAUSALMESH_API_TOKEN}
