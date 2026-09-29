@@ -39,6 +39,8 @@ from causalmesh.hooks.lifecycle import (
 )
 from causalmesh.hooks.policy_gate import ContractGate
 from causalmesh.policy.gate import Verdict
+from causalmesh.policy.ledger import Ledger
+from causalmesh.policy.resource import Resource, ResourceKind
 from causalmesh.relay import Relay
 
 from .resolver import ResourceResolver
@@ -69,6 +71,9 @@ class ToolGateway:
         gate:       The ``ContractGate`` behind ``boundary``, when there is
                     one.  Supplying it lets a result report the refusal an
                     unenforced arm recorded but did not act on.
+        ledger:     Where consumption is recorded once a spend or budget call
+                    has run.  Without one, a declared total cannot be enforced
+                    and the gate refuses the call (see ``Gate(require_ledger)``).
     """
 
     def __init__(
@@ -79,7 +84,9 @@ class ToolGateway:
         agent_id: str = "sdk-agent",
         identity_factory: Any | None = None,
         gate: ContractGate | None = None,
+        ledger: Ledger | None = None,
     ) -> None:
+        self._ledger = ledger
         self._boundary = boundary
         self._relay = relay
         self._agent_id = agent_id
@@ -188,6 +195,7 @@ class ToolGateway:
         # Extract paths using ResourceResolver instead of guessing "path".
         if paths is None:
             paths = self._resolver.resolve(tool, args)
+        resources = self._resolver.resolve_resources(tool, args)
 
         # Override is_mutating based on the Tool's own declaration.
         # LifecycleBoundary only gates calls whose .is_mutating is True,
@@ -199,6 +207,7 @@ class ToolGateway:
             agent_id=agent_id,
             paths=paths,
             arguments=args,
+            resources=resources,
             _mutating=tool.mutating,
         )
 
@@ -223,6 +232,9 @@ class ToolGateway:
             ts=ts,
             mutating=tool.mutating,
             shadow=shadow,
+        )
+        audit_error = self._record_consumption(
+            internal_result, resources, agent_id, ts, event_id, audit_error
         )
         return GatewayResult(
             internal_result, event_id=event_id, audit_error=audit_error, shadow=shadow
@@ -266,12 +278,14 @@ class ToolGateway:
 
         if paths is None:
             paths = self._resolver.resolve(tool_obj, args)
+        resources = self._resolver.resolve_resources(tool_obj, args)
 
         aware_call: ToolCall = _MutatingAwareCall(  # type: ignore[assignment]
             tool=tool,
             agent_id=agent_id,
             paths=paths,
             arguments=args,
+            resources=resources,
             _mutating=tool_obj.mutating,
         )
 
@@ -295,9 +309,45 @@ class ToolGateway:
             mutating=tool_obj.mutating,
             shadow=shadow,
         )
+        audit_error = self._record_consumption(
+            internal_result, resources, agent_id, ts, event_id, audit_error
+        )
         return GatewayResult(
             internal_result, event_id=event_id, audit_error=audit_error, shadow=shadow
         )
+
+    def _record_consumption(
+        self,
+        result: InternalToolResult,
+        resources: tuple[Resource, ...],
+        agent_id: str,
+        ts: int,
+        event_id: str | None,
+        audit_error: str | None,
+    ) -> str | None:
+        """Write what a completed spend or budget call consumed to the ledger.
+
+        Only a call that ran is recorded, and only after it ran: a refused
+        call spent nothing, and recording on intent would count a refusal
+        against the allowance it never touched. A handler that raised is not
+        recorded either, which under-counts if it failed after the money left;
+        the handler is the only thing that knows, and `docs/backlog.md` says
+        so. A ledger that cannot be written is reported on the result rather
+        than raised, so it cannot mask the outcome.
+        """
+        if self._ledger is None or result.outcome != ToolOutcome.EXECUTED:
+            return audit_error
+        for resource in resources:
+            if resource.kind not in (ResourceKind.SPEND, ResourceKind.BUDGET):
+                continue
+            try:
+                self._ledger.record(
+                    agent_id=agent_id, resource=resource, now_us=ts, reference=event_id
+                )
+            except Exception as exc:  # noqa: BLE001 - see docstring
+                note = f"ledger: {type(exc).__name__}: {exc}"
+                audit_error = note if audit_error is None else f"{audit_error}; {note}"
+        return audit_error
 
     # ------------------------------------------------------------------ #
     # Event emission (mirrors tools/executor.py pattern)                  #
@@ -340,6 +390,7 @@ class ToolGateway:
         """
         event_id = self._next_event_id(agent_id)
         identity = self._identity_for(agent_id)
+        resources: tuple[Resource, ...] = getattr(result.call, "resources", ())
 
         if result.outcome == ToolOutcome.EXECUTED:
             event_type = _MUTATING_EVENT_TYPE if mutating else _READ_EVENT_TYPE
@@ -351,6 +402,8 @@ class ToolGateway:
                 payload["would_refuse"] = True
                 payload["shadow_rule"] = shadow.rule
                 payload["shadow_reason"] = shadow.reason
+            if resources:
+                payload["resources"] = [resource.to_dict() for resource in resources]
         else:
             event_type = _FAILURE_EVENT_TYPE
             payload = {
@@ -367,6 +420,8 @@ class ToolGateway:
                 payload["blocked_path"] = result.decision.blocked_path
                 if result.decision.rule:
                     payload["rule"] = result.decision.rule
+            if resources:
+                payload["resources"] = [resource.to_dict() for resource in resources]
 
         try:
             ingested = self._relay.ingest(
@@ -396,7 +451,7 @@ class _MutatingAwareCall:
     the same interface ``LifecycleBoundary.invoke`` needs without inheriting.
     """
 
-    __slots__ = ("_mutating", "agent_id", "arguments", "paths", "tool")
+    __slots__ = ("_mutating", "agent_id", "arguments", "paths", "resources", "tool")
 
     def __init__(
         self,
@@ -405,12 +460,14 @@ class _MutatingAwareCall:
         agent_id: str,
         paths: tuple[str, ...] = (),
         arguments: dict[str, Any] | None = None,
+        resources: tuple[Resource, ...] = (),
         _mutating: bool = False,
     ) -> None:
         self.tool = tool
         self.agent_id = agent_id
         self.paths = paths
         self.arguments = arguments or {}
+        self.resources = resources
         self._mutating = _mutating
 
     @property

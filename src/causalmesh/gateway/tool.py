@@ -18,6 +18,20 @@ but are allowed unconditionally by the gate.
 ``mutating`` defaults to ``True``: a tool is gated unless it is declared
 read-only.  Skipping the gate has to be a statement someone made, not the
 result of a forgotten argument.
+
+What the gate is asked about is declared, never inferred:
+
+- ``resource_args`` names the arguments that carry the resource.
+- ``resource_kind`` says what they are: ``"path"`` (the default), ``"endpoint"``
+  (a host or URL), ``"spend"`` (a destination that money goes to) or
+  ``"budget"`` (the name of a consumable allowance).
+- ``amount_arg`` names the argument carrying the amount, required for
+  ``spend`` and ``budget`` and refused for the others.
+
+A tool that declares no resources is checked against nothing and runs: the
+contract states exceptions, so a call it names nothing about is not refused.
+``mutating=False`` skips the gate altogether, for every kind, so a read-only
+tool that reaches a network is not held to an endpoint allowlist.
 """
 
 from __future__ import annotations
@@ -25,6 +39,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
+
+from causalmesh.policy.resource import ResourceKind
 
 __all__ = ["Tool"]
 
@@ -50,6 +66,9 @@ class Tool:
     resource_args: list[str] = field(default_factory=list)
     description: str = ""
     metadata: dict[str, Any] = field(default_factory=dict)
+    resource_kind: str = "path"
+    amount_arg: str | None = None
+    unit: str = ""
 
     def __post_init__(self) -> None:
         if not isinstance(self.name, str) or not self.name.strip():
@@ -57,6 +76,43 @@ class Tool:
         if not callable(self.handler):
             raise TypeError(f"Tool.handler must be callable, got {type(self.handler).__name__}")
         self.name = self.name.strip()
+        self._validate_resource_declaration()
+
+    def _validate_resource_declaration(self) -> None:
+        """Refuse a declaration that could not be enforced, at registration.
+
+        Each of these would otherwise surface on the first call, or worse,
+        never: a spend tool with no amount would simply not be checked.
+        """
+        try:
+            kind = ResourceKind(self.resource_kind)
+        except ValueError:
+            known = ", ".join(sorted(member.value for member in ResourceKind))
+            raise ValueError(
+                f"Tool {self.name!r}: unknown resource_kind {self.resource_kind!r}; "
+                f"known kinds: {known}"
+            ) from None
+        self.resource_kind = kind.value
+        consumable = kind in (ResourceKind.SPEND, ResourceKind.BUDGET)
+        if consumable and not self.amount_arg:
+            raise ValueError(
+                f"Tool {self.name!r}: resource_kind={kind.value!r} needs amount_arg, "
+                "the name of the argument carrying the amount"
+            )
+        if not consumable and self.amount_arg is not None:
+            raise ValueError(
+                f"Tool {self.name!r}: amount_arg only applies to spend and budget tools"
+            )
+        if kind is not ResourceKind.PATH and not self.resource_args:
+            raise ValueError(
+                f"Tool {self.name!r}: resource_kind={kind.value!r} needs resource_args, "
+                "or nothing would be checked"
+            )
+        if consumable and not self.mutating:
+            raise ValueError(
+                f"Tool {self.name!r}: a {kind.value} tool cannot be mutating=False, "
+                "because that skips the gate and the amount would go unchecked"
+            )
 
     def __call__(self, **arguments: Any) -> Any:
         """Invoke the underlying handler with keyword arguments."""

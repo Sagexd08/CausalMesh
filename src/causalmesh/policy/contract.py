@@ -29,7 +29,7 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 
-from causalmesh.policy.resource import Resource, ResourceKind
+from causalmesh.policy.resource import Resource, ResourceKind, path_match_key
 
 __all__ = ["Checkpoint", "Contract", "ContractError", "Role"]
 
@@ -115,14 +115,32 @@ class Contract:
         `src/config.py` for another agent would be impossible to express —
         and carving out one contested file is the common case.
         """
-        normalized = Resource.path(path).to_dict()["name"]
+        normalized = self._path_key(path)
         best: tuple[int, str] | None = None
         for role in self.roles:
             for owned in role.owns:
-                owned_name = Resource.path(owned).to_dict()["name"]
+                owned_name = path_match_key(owned)
                 if _covers(owned_name, normalized) and (best is None or len(owned_name) > best[0]):
                     best = (len(owned_name), role.agent_id)
         return str(best[1]) if best else None
+
+    def _path_key(self, path: str) -> str:
+        """The key a path is compared under, relative to this contract's directory.
+
+        Declarations are relative to the directory holding `causalmesh.yaml`.
+        An absolute spelling of a file inside it (`/repo/forbidden/x`) is the
+        same file as `forbidden/x` and must be decided as that file, or naming
+        it absolutely walks around every declaration. An absolute path outside
+        the directory is not something this contract speaks for.
+        """
+        key = path_match_key(path)
+        if self.source is None:
+            return key
+        root = path_match_key(str(self.source.resolve().parent))
+        prefix = root if root.endswith("/") else f"{root}/"
+        if key.startswith(prefix):
+            return key[len(prefix) :] or "."
+        return key
 
     def allowlist_for(self, agent_id: str) -> set[str] | None:
         """Hosts this agent may reach, or None for unrestricted."""
@@ -154,11 +172,8 @@ class Contract:
 
     def is_contested(self, path: str) -> bool:
         """Whether this path is declared as needing an exclusive lease."""
-        normalized = Resource.path(path).to_dict()["name"]
-        return any(
-            _covers(Resource.path(declared).to_dict()["name"], normalized)
-            for declared in self.contested
-        )
+        normalized = self._path_key(path)
+        return any(_covers(path_match_key(declared), normalized) for declared in self.contested)
 
     def to_dict(self) -> dict[str, Any]:
         return {

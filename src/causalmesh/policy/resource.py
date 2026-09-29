@@ -39,6 +39,7 @@ __all__ = [
     "Resource",
     "ResourceError",
     "ResourceKind",
+    "path_match_key",
 ]
 
 
@@ -158,10 +159,63 @@ def _normalize_name(kind: ResourceKind, name: str) -> str:
     """
     text = normalize_text(name.strip())
     if kind is ResourceKind.PATH:
-        return text.replace("\\", "/")
+        return _lexical_path(text)
     if kind in (ResourceKind.ENDPOINT, ResourceKind.SPEND):
         return text.lower()
     return text
+
+
+def _lexical_path(text: str) -> str:
+    """Resolve `.`, `..` and repeated separators without touching the filesystem.
+
+    `allowed/../forbidden/x` and `forbidden/x` are the same file, and an
+    ownership rule that compares the spellings would refuse one and allow the
+    other. A `..` that would climb above the start of a relative path is kept,
+    because dropping it would make `../x` and `x` the same resource.
+
+    Symlinks cannot be seen from here: `a/link/../b` resolves lexically, and
+    a handler that follows the link may land elsewhere. That belongs to the
+    handler, and `docs/security.md` says so.
+    """
+    text = text.replace("\\", "/")
+    absolute = text.startswith("/")
+    parts: list[str] = []
+    for segment in text.split("/"):
+        if segment in ("", "."):
+            continue
+        if segment == "..":
+            if parts and parts[-1] != "..":
+                parts.pop()
+            elif not absolute:
+                parts.append("..")
+            continue
+        parts.append(segment)
+    joined = "/".join(parts)
+    if absolute:
+        return "/" + joined
+    return joined or "."
+
+
+def path_match_key(name: str) -> str:
+    """The key two spellings of one path share, for deciding who owns it.
+
+    Stricter than `Resource.identity`, and used only to compare. On Windows
+    and macOS `Forbidden/x` is `forbidden/x`, and Windows drops a trailing dot
+    or space from every segment, so `forbidden./x` and `forbidden /x` name the
+    same directory. A rule that matched only the exact spelling would let an
+    agent walk around an ownership declaration by changing its case. Folding
+    can only ever refuse more, so it fails closed; on a case-sensitive
+    filesystem it means `Docs/` and `docs/` share an owner.
+
+    Identities recorded in the chain keep their case: this key never leaves
+    the comparison.
+    """
+    normalized = _lexical_path(normalize_text(name.strip()))
+    segments = []
+    for segment in normalized.split("/"):
+        stripped = segment.rstrip(" .") if segment not in ("", "..") else segment
+        segments.append((stripped or segment).casefold())
+    return "/".join(segments)
 
 
 def _to_decimal(amount: Decimal | str | int) -> Decimal:

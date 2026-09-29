@@ -58,6 +58,7 @@ from causalmesh.events.schema import EventIdentity
 from causalmesh.hooks.lifecycle import LifecycleBoundary
 from causalmesh.hooks.policy_gate import ContractGate
 from causalmesh.policy.contract import Contract, ContractError
+from causalmesh.policy.ledger import Ledger
 from causalmesh.relay import NullDelivery, Relay
 
 from ..gateway.gateway import ToolGateway
@@ -108,6 +109,10 @@ class CausalMesh:
         seed:       Master seed for deriving agent keys.  Keep it secret:
                     anyone holding it can sign as any agent.
         agents:     Additional agent ids to issue keys to.
+        ledger:     Where spend and budget consumption is recorded. A contract
+                    that declares a total (``usd_total``, ``tokens``, ...)
+                    needs one: without it the gate refuses the spend, since a
+                    total nothing records is a total nothing enforces.
     """
 
     def __init__(
@@ -118,6 +123,7 @@ class CausalMesh:
         run_id: str | None = None,
         seed: bytes | None = None,
         agents: Iterable[str] = (),
+        ledger: Ledger | None = None,
         _sdk_config: SDKConfig | None = None,
     ) -> None:
         self._agent_id = agent_id
@@ -131,6 +137,7 @@ class CausalMesh:
             run_id=self._run_id,
             agent_ids=agent_ids,
             seed=seed,
+            ledger=ledger,
         )
 
         def _identity_factory(aid: str) -> EventIdentity:
@@ -142,6 +149,7 @@ class CausalMesh:
             agent_id=agent_id,
             identity_factory=_identity_factory,
             gate=self._gate,
+            ledger=ledger,
         )
 
     # ------------------------------------------------------------------ #
@@ -156,6 +164,7 @@ class CausalMesh:
         run_id: str | None = None,
         seed: bytes | None = None,
         agents: Iterable[str] = (),
+        ledger: Ledger | None = None,
     ) -> CausalMesh:
         """Build a ``CausalMesh`` from a ``causalmesh.yaml`` file.
 
@@ -182,6 +191,7 @@ class CausalMesh:
                 run_id=run_id,
                 seed=seed,
                 agents=agents,
+                ledger=ledger,
                 _sdk_config=sdk_config,
             )
         except SignatureError as exc:
@@ -333,6 +343,7 @@ def _build_runtime(
     run_id: str,
     agent_ids: list[str],
     seed: bytes | None,
+    ledger: Ledger | None = None,
 ) -> tuple[Relay, LifecycleBoundary, ContractGate]:
     """Assemble the relay, boundary, and gate for one SDK session.
 
@@ -350,6 +361,8 @@ def _build_runtime(
         run_id=run_id,
         registry=None,  # No claim registry in Phase 1 SDK mode
         enforcing=contract.arm == "C3",
+        ledger=ledger,
+        require_ledger=True,
     )
 
     boundary = LifecycleBoundary(gate=gate)
