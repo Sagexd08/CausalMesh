@@ -1,0 +1,80 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "low-contrast",
+        "value": "*",
+        "files": [
+          "compositions/components/liquid-glass-panel.html"
+        ],
+        "createdAt": "2026-09-28T08:49:14.696Z",
+        "reason": "static scan assumes a default white page background; this panel's .lgp-content sits over .lgp-tint (rgba(12,12,12,.38)) atop the dark .lgp-source (#0c0c0c) refraction clone, so #fafafa text is high-contrast in the real composited scene. Demo placeholder text only."
+      },
+      {
+        "rule": "clipped-overflow-container",
+        "value": "*",
+        "files": [
+          "compositions/components/liquid-glass-panel.html"
+        ],
+        "createdAt": "2026-09-28T08:49:15.209Z",
+        "reason": "intentional: .lgp-panel's overflow:hidden clips the refraction/rim layers to the panel's own rounded rect, which is this primitive's job. No tooltip/menu/popover involved."
+      },
+      {
+        "rule": "gradient-text",
+        "value": "*",
+        "files": [
+          "index.html"
+        ],
+        "createdAt": "2026-09-28T08:55:32.847Z",
+        "reason": "pre-existing technique carried over unchanged from the original 15s cut (text-shimmer.html recipe): #wordmark and #verify-word use a moving background-position gradient clipped to text as the single specular shimmer sweep GSAP animates across, not static decorative gradient fill."
+      },
+      {
+        "rule": "wide-tracking",
+        "value": "*",
+        "files": [
+          "index.html"
+        ],
+        "createdAt": "2026-09-28T08:55:33.539Z",
+        "reason": "pre-existing .label class carried over unchanged from the original 15s cut: short uppercase JetBrains Mono scene/panel labels (e.g. '02 / ARCHITECTURE'), which the tool's own guidance says wide tracking is fine for."
+      },
+      {
+        "rule": "all-caps-body",
+        "value": "*",
+        "files": [
+          "index.html"
+        ],
+        "createdAt": "2026-09-28T08:55:34.236Z",
+        "reason": "pre-existing .slam .w treatment carried over unchanged from the original 15s cut: GATED/SIGNED/RECORDED full-screen kinetic-slam words (caption-kinetic-slam recipe), short single words not a body-text passage."
+      },
+      {
+        "rule": "buried-raster",
+        "value": "*",
+        "files": [
+          "index.html"
+        ],
+        "createdAt": "2026-09-28T08:55:34.775Z",
+        "reason": "pre-existing #grain-tex carried over unchanged from the original 15s cut (grain-overlay.html recipe): a deliberately near-invisible film-grain texture at 0.07 opacity, the documented default for this primitive."
+      },
+      {
+        "rule": "repeated-container-text",
+        "value": "*",
+        "files": [
+          "index.html"
+        ],
+        "createdAt": "2026-09-28T08:55:35.357Z",
+        "reason": "pre-existing rgb-glitch-text technique carried over unchanged from the original 15s cut: REFUSE/FAILURE each render 3x as stacked ghost copies (red-shift, cyan-shift, solid) that GSAP offsets to produce the RGB tear, per rgb-glitch-text.html's documented three-copy structure."
+      },
+      {
+        "rule": "clipped-overflow-container",
+        "value": "*",
+        "files": [
+          "index.html"
+        ],
+        "createdAt": "2026-09-28T08:55:44.713Z",
+        "reason": "root html/body/#root overflow:hidden is the composition's own frame boundary (a fixed 1920x1080 video canvas cannot let content escape its own edge, that's the render surface, not a UI viewport with popovers). The .card.glass / .arm.glass / .agent-panel.glass clips are the liquid-glass technique itself (compositions/components/liquid-glass-panel.html): each panel's overflow:hidden confines its own .glass-refract/.card-edge/.link decorative children to the panel's own rounded rect, exactly like the registered component's .lgp-panel. No tooltip/menu/popover involved anywhere in this file."
+      }
+    ]
+  }
+}
