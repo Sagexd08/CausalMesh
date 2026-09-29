@@ -17,6 +17,7 @@ from enum import IntEnum
 from typing import Any
 
 from rich.console import Console
+from rich.markup import escape
 from rich.table import Table
 
 err_console = Console(stderr=True)
@@ -50,18 +51,22 @@ def emit(payload: dict[str, Any] | list[Any], *, as_json: bool) -> bool:
 
 
 def fail(message: str, *, hint: str = "") -> None:
-    """Report a problem to the operator, with what to do about it."""
-    err_console.print(f"[bold red]error[/bold red] {message}")
+    """Report a problem to the operator, with what to do about it.
+
+    Text is escaped: Rich reads `[server]` as a style tag and drops it, which
+    turned "pip install 'causalmesh[server]'" into "pip install 'causalmesh'".
+    """
+    err_console.print(f"[bold red]error[/bold red] {escape(message)}")
     if hint:
-        err_console.print(f"        [dim]{hint}[/dim]")
+        err_console.print(f"        [dim]{escape(hint)}[/dim]")
 
 
 def warn(message: str) -> None:
-    err_console.print(f"[bold yellow]warning[/bold yellow] {message}")
+    err_console.print(f"[bold yellow]warning[/bold yellow] {escape(message)}")
 
 
 def note(message: str) -> None:
-    err_console.print(f"[dim]{message}[/dim]")
+    err_console.print(f"[dim]{escape(message)}[/dim]")
 
 
 def _supports_ellipsis(console: Console) -> bool:
