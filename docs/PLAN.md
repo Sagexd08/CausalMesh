@@ -32,7 +32,7 @@ No new dependencies are required. Confirmed on this machine:
 
 Empirical check on this machine: `spawn`-only multiprocessing gives each agent a fresh interpreter with no inherited memory, and per-process `cwd` works as expected. However, **Windows has no `chroot` and no mount namespaces, so per-process `cwd` is process separation, not a filesystem jail.** A child process can still reach any path its user token permits.
 
-The implementation therefore uses three layers, each with a separately stated guarantee. `docs/security.md` will state precisely this rather than claiming a jail that does not exist:
+The implementation therefore uses three layers, each with a separately stated guarantee. `docs/isolation.md` states precisely this rather than claiming a jail that does not exist:
 
 | Layer | Mechanism | What it actually guarantees |
 |---|---|---|
@@ -139,10 +139,10 @@ An absent outcome is counted as `unknown`, never as a failure — a crashed run 
 
 **Not built:** the staleness estimators. λ̂, δ̂ and Δ̂ are named here and defined nowhere in this repository; they come from §23 and §45, which are not checked in. The per-turn observations would support *an* estimator, but one derived from its own inputs would carry the specified symbol while possibly measuring something else. Recorded in `docs/backlog.md` rather than guessed.
 
-### Step 12 — Analytical module (§46, §47)
+### Step 12 — Analytical module (§46, §47) — **not built**
 Pure mathematics with zero storage dependency, unit-tested against hand-computed values: `C_tr`, `C_md`, `ρ(T)`, `T*`, `P_stale`, `P_floor`.
 
-### Step 13 — Statistics (§48–50)
+### Step 13 — Statistics (§48–50) — **not built**
 The preregistered mixed-effects logistic model with task random intercepts, the four primary contrasts, Holm–Bonferroni correction, 95% confidence intervals, TOST at ±10 percentage points (a non-significant difference is explicitly *not* an equivalence result), and configurable power analysis that states its assumptions.
 
 ### Step 14 — Provenance, manifests and reporting (§30–33, §60, §66–69) — **partially done**
@@ -163,7 +163,7 @@ All §62 commands with `--help` and meaningful exit codes. `doctor` reports PASS
 
 **Partially done.** Built and exercised: `doctor`, `task list`, `task validate`, `experiment plan`, `experiment run`, `experiment status`, `verify` (including `--run` for the §82 clean-room case). Every command takes `--json`; exit codes are 0 success, 1 negative result, 2 bad invocation, 3 could not run. A failed *run* exits 0, because §81 makes a failed run evidence.
 
-Not built: `report`. It waits on `reporting/`, which is empty. `causalmesh doctor` names the unbuilt subsystems rather than leaving them to be discovered by use.
+Later built and exercised (this paragraph previously said otherwise): `analyze` (descriptive, on `metrics/`), `manifest write` and `audit` (on `provenance/`), `watch`, `connectors list`, `policy`, `serve`, `quickstart` and `agreement`. Not built: `report`. It waits on `reporting/`, which is empty. `causalmesh doctor` names the unbuilt subsystems rather than leaving them to be discovered by use.
 
 `analysis/` is no longer empty: `agreement.py` (multi-rater kappa coding, §53 — see `docs/backlog.md`) is built and exposed as `causalmesh agreement`. It computes over an operator-supplied judgement file only; no run in this repository has been coded by a real rater.
 

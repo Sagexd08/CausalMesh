@@ -296,7 +296,7 @@ export const FAQ = [
   },
   {
     q: 'What does it cost to install?',
-    a: 'Python 3.11 or newer. The runtime core depends on `cryptography` for Ed25519 and `PyYAML` for the contract, and nothing else. The analysis stack is a separate extra.',
+    a: 'Python 3.11 or newer. The runtime core depends on `cryptography` for Ed25519, `PyYAML` for the contract, and `typer` and `rich` for the CLI. The analysis stack and the FastAPI server are separate extras.',
   },
   {
     q: 'What is not built yet?',

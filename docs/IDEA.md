@@ -165,7 +165,7 @@ Three layers, each with a separately stated guarantee:
 | **L3 Context** | Single typed injection point, per-turn digest, byte counter | Provable account of everything that entered an agent's context |
 
 **We do not claim a filesystem jail on Windows.** There is no `chroot` and no
-mount namespaces, so L1 is process separation. `docs/security.md` states this
+mount namespaces, so L1 is process separation. `docs/isolation.md` states this
 precisely rather than overclaiming. Docker is wired in as the stronger
 boundary for Linux and CI.
 
@@ -246,8 +246,9 @@ the one you deploy.
 | Task system + empirical sensitivity gate | ✅ |
 | Scheduler, state machine, run index | ✅ resume-tested |
 
-**1,148 tests passing.** Not merely compiling — executed, with artifacts read
-back and inspected.
+Not merely compiling — executed, with artifacts read back and inspected. The
+suite has grown past the 1,148 tests this page once quoted; `pytest
+--collect-only` found 1425 on 2026-09-30. See the README for the exact run.
 
 ### The critical gap: the agent layer
 
