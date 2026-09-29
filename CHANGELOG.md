@@ -39,16 +39,42 @@ inside it is in the commit log, and what is deliberately absent is in
   carry a stable rule identifier, so analysis can group refusals by rule
   instead of parsing an English sentence that changes when the wording
   improves.
-- **CI.** Lint, format, the suite across Linux, Windows and macOS on two
-  Python versions, a security scan, an evidence job that produces a
-  collection and verifies it, and the site build.
 - **Contributor documentation.** `CONTRIBUTING.md`, `SECURITY.md`,
   `AGENTS.md`, issue and pull-request templates.
 - **A contract for this repository.** The project argues that AGENTS.md
   enforces nothing and a contract is the enforcement half, so it ships both.
+- **A local gate.** `python scripts/check.py` (or `make check`) runs lint,
+  format, mypy on the enforced modules, bandit and the full suite. There is
+  no CI, so this is the only enforcement; a tool that is not installed fails
+  it rather than being skipped.
 
 ### Fixed
 
+- **An async tool call ran for an agent the session had no key for.**
+  `execute_async` skipped the unknown-agent check `execute` makes, so the
+  handler ran and the call went unrecorded, and `/v1/tools/{name}/execute`
+  answered 200 for it. That path is also the one every adapter's async method
+  takes. Both paths now share one check and raise `UnknownAgentError` (HTTP
+  400) before the gate or the handler is reached.
+- **`/v1/chat/completions` trusted the caller's agent name.** An agent with no
+  key matched no role, so it skipped that role's allowlist, was forwarded, and
+  left no record. It is refused with 400. A body that is not a JSON object, or
+  a `model` that is not a string (a float has no canonical form in the chain),
+  returns 400 instead of 500, and an unreachable or non-JSON upstream returns
+  502 instead of 200 with an error body.
+- **`--upstream` accepted any URL scheme, and the allowlisted host came from a
+  string split.** `file://` and other non-HTTP schemes are refused at startup.
+  The host is taken from the parsed URL, so `http://evil.example#.api.example.com`
+  is checked as `evil.example` and not as a subdomain of the allowed host.
+- **`create_app` served without authentication when called without
+  `api_tokens`.** Authentication is now an explicit choice (`api_tokens=` or
+  `auth_disabled=True`), blank tokens are refused, tokens are compared in
+  constant time, and a 401 carries `WWW-Authenticate: Bearer`.
+  `serve --dev --api-token X` no longer switches the supplied token off.
+- **`OpenAIAdapter` raised on model mistakes.** An unknown tool name, a missing
+  resource argument or non-object arguments now come back as an `Action
+  failed:` tool message, as malformed JSON already did. An unknown *agent*
+  still raises, because the developer chose it, not the model.
 - **The Docker image could not start `serve`.** It installed no
   `fastapi`/`uvicorn`, and `docker-compose.yml` passed no API token. It now
   installs `.[server]` and reads `CAUSALMESH_API_TOKEN`.
@@ -92,6 +118,13 @@ inside it is in the commit log, and what is deliberately absent is in
   whole. Vercel's framework detection was also failing, because it looks for
   `next` in the root `package.json` and a workspace layout does not put it
   there.
+
+### Removed
+
+- **The GitHub Actions workflow.** Hosted runners were not worth paying for, and
+  the workflow had not started a job since 2026-09-28 (the account's payments
+  had failed). Nothing replaces the remote runs; `python scripts/check.py` is
+  the local gate. See `docs/backlog.md` for what that no longer covers.
 
 ## Before this file existed
 

@@ -6,6 +6,7 @@ import pytest
 from causalmesh import CausalMesh, Tool
 from causalmesh.integrations.openai import OpenAIAdapter
 from causalmesh.policy.contract import Contract
+from causalmesh.sdk.errors import UnknownAgentError
 
 MINIMAL_CONTRACT_YAML = """
 version: 1
@@ -262,3 +263,68 @@ async def test_openai_adapter_ahandle_tool_calls_multiple(mesh: CausalMesh) -> N
     assert len(events) == 2
     assert events[0]["event"]["event_type"] == "WRITE"
     assert events[1]["event"]["event_type"] == "FAILURE"
+
+
+# --- what the model can get wrong is an answer, not an exception ------------
+
+_ERRORS = [
+    pytest.param("nope", "{}", "not registered", id="unknown-tool"),
+    pytest.param("write_file", "{}", "argument 'path' was not provided", id="missing-resource"),
+    pytest.param("write_file", "[1]", "must be a JSON object", id="args-are-a-list"),
+    pytest.param("write_file", "null", "must be a JSON object", id="args-are-null"),
+    pytest.param("write_file", '"text"', "must be a JSON object", id="args-are-a-string"),
+]
+
+
+def _call(name: str, arguments: str) -> dict:
+    return {"id": "c1", "type": "function", "function": {"name": name, "arguments": arguments}}
+
+
+@pytest.mark.parametrize(("name", "arguments", "expected"), _ERRORS)
+def test_a_bad_model_call_becomes_a_tool_message_and_nothing_runs(
+    mesh: CausalMesh, name: str, arguments: str, expected: str
+) -> None:
+    # Unknown tool, missing resource and non-object arguments used to raise
+    # out of the caller's loop, though malformed JSON was already translated.
+    message = OpenAIAdapter(mesh).handle_tool_call(_call(name, arguments))
+
+    assert message["role"] == "tool"
+    assert message["tool_call_id"] == "c1"
+    assert message["content"].startswith("Action failed:")
+    assert expected in message["content"]
+    assert mesh._called == []
+    assert mesh.audit_events() == []
+
+
+@pytest.mark.parametrize(("name", "arguments", "expected"), _ERRORS)
+async def test_a_bad_model_call_becomes_a_tool_message_on_the_async_path(
+    mesh: CausalMesh, name: str, arguments: str, expected: str
+) -> None:
+    message = await OpenAIAdapter(mesh).ahandle_tool_call(_call(name, arguments))
+
+    assert message["content"].startswith("Action failed:")
+    assert expected in message["content"]
+    assert mesh._called == []
+    assert mesh.audit_events() == []
+
+
+def test_an_unknown_agent_still_raises_because_the_developer_chose_it(mesh: CausalMesh) -> None:
+    # The agent id is configuration, not model output: hiding a misspelled one
+    # inside a tool message would leave every call failing with no error.
+    call = _call("write_file", json.dumps({"path": "allowed/x.txt"}))
+    with pytest.raises(UnknownAgentError):
+        OpenAIAdapter(mesh).handle_tool_call(call, agent_id="imposter")
+    assert mesh._called == []
+
+
+async def test_an_unknown_agent_is_refused_on_the_async_path_and_nothing_runs(
+    mesh: CausalMesh,
+) -> None:
+    # Both tools, because `write_file` is synchronous and takes the async path
+    # through a different branch than `async_write`.
+    for tool in ("write_file", "async_write"):
+        call = _call(tool, json.dumps({"path": "unowned/x.txt"}))
+        with pytest.raises(UnknownAgentError):
+            await OpenAIAdapter(mesh).ahandle_tool_call(call, agent_id="imposter")
+    assert mesh._called == []
+    assert mesh.audit_events() == []

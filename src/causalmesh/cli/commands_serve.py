@@ -86,14 +86,20 @@ def serve_command(
 
     mesh = CausalMesh(contract=contract, run_id=run_id, agent_id="agent")
 
+    # A token that was given is always enforced, `--dev` or not: `--dev` only
+    # permits running without one, it does not switch a supplied one off.
     tokens = {api_token} if api_token else None
-    fastapi_app = create_app(
-        mesh=mesh,
-        api_tokens=tokens,
-        auth_disabled=dev or api_token is None,
-        upstream_base_url=upstream,
-        upstream_api_key=upstream_api_key,
-    )
+    try:
+        fastapi_app = create_app(
+            mesh=mesh,
+            api_tokens=tokens,
+            auth_disabled=tokens is None,
+            upstream_base_url=upstream,
+            upstream_api_key=upstream_api_key,
+        )
+    except ValueError as exc:
+        fail(str(exc), hint="Check --upstream: it must be an http:// or https:// URL.")
+        raise typer.Exit(Exit.USAGE) from None
 
     out_console.print(f"causalmesh serve  [bold]http://{host}:{port}[/bold]  arm={contract.arm}")
     if upstream:
