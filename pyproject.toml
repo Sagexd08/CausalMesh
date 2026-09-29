@@ -81,6 +81,7 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+norecursedirs = ["tests/fixtures", ".git", "node_modules", "*.egg"]
 addopts = "-ra --strict-markers --strict-config"
 markers = [
     "unit: isolated component tests",
