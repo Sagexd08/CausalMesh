@@ -50,6 +50,33 @@ inside it is in the commit log, and what is deliberately absent is in
 
 ### Fixed
 
+- **Ownership could be walked around by spelling.** `allowed/../forbidden/x`,
+  `./forbidden/x`, `Forbidden/x`, `forbidden./x` and an absolute path inside the
+  repository were all allowed where `forbidden/x` was refused. Paths are now decided
+  on the canonical file, and a resource argument that is not text is refused (a list
+  used to be checked as one odd string while the handler received both paths).
+- **The SDK could not express a spend, an endpoint or a budget.** A tool that reached
+  a network or spent money ran with no policy decision. `Tool(resource_kind=...,
+  amount_arg=...)` now hands the gate every kind; totals need `CausalMesh(ledger=)`
+  and are refused without one.
+- **A checkout at an ordinary Windows path failed every run.** The run id was in the
+  workspace path twice, so 48 characters of checkout plus a 29-character experiment
+  id overflowed MAX_PATH with an error that did not mention length. Fixed, and a
+  run that still cannot fit is refused up front with the numbers.
+- **`/v1/chat/completions` lost records under concurrency.** Event ids came from the
+  clock, so two requests in one tick shared an id and the second went unrecorded
+  while still being forwarded. Ids carry a sequence number, and an allowed call that
+  cannot be recorded is not forwarded.
+- **Server hardening.** Non-root container with a health check; docs and schema only
+  in dev mode; 1 MiB body limit; opt-in rate limit; slow handlers and upstream calls
+  no longer stall the event loop; a handler's exception text, an object's attributes
+  and the known-agent list no longer reach clients; upstream redirects are refused.
+- **Dependency floors admitted known advisories and unbuildable versions.**
+  `cryptography>=41.0` (14 advisories), `starlette` 0.37 (7), `PyYAML>=6.0` and the
+  analysis floors had no wheel for Python 3.12 or 3.13. Raised deliberately; the
+  suite passes at exactly the floors.
+- **The gate could pass while skipping the server tests.** `scripts/check.py` now
+  fails when an optional dependency the tests need is missing.
 - **An async tool call ran for an agent the session had no key for.**
   `execute_async` skipped the unknown-agent check `execute` makes, so the
   handler ran and the call went unrecorded, and `/v1/tools/{name}/execute`
@@ -111,8 +138,18 @@ inside it is in the commit log, and what is deliberately absent is in
   text to LF. On a bit-reproducible chain, a fixture whose line endings
   change underfoot hashes differently on one platform than another.
 
+### Added (agent identity)
+
+- **Per-agent tokens.** `causalmesh serve --agent-token AGENT=TOKEN` (repeatable, or
+  `CAUSALMESH_AGENT_TOKENS`) binds a token to one agent: the server takes the agent
+  from the token and refuses a request that names another. `--max-body-bytes`,
+  `--rate-limit` and a `langchain` extra are new. `/execute` returns the handler's
+  value.
+
 ### Changed
 
+- `/execute` and chat answer `502`, not `200`, when the upstream fails, and `400`
+  for an unknown agent, with no list of the agents that do exist.
 - The website moved from `docs-site/` to `frontend/`. The directory held the
   whole site, landing page included, so the old name described a part as the
   whole. Vercel's framework detection was also failing, because it looks for
@@ -121,6 +158,11 @@ inside it is in the commit log, and what is deliberately absent is in
 
 ### Removed
 
+- **`adapters/serve.py`**, the stdlib `http.server` implementation of `serve`, with
+  the tests that existed only for it. Nothing reached it, it had no authentication,
+  and it still carried defects fixed in the live server.
+- The Makefile's `report` and `reproduce` targets, which called commands that do not
+  exist, and seven session artifacts at the repository root.
 - **The GitHub Actions workflow.** Hosted runners were not worth paying for, and
   the workflow had not started a job since 2026-09-28 (the account's payments
   had failed). Nothing replaces the remote runs; `python scripts/check.py` is

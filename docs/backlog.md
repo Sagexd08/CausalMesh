@@ -884,14 +884,22 @@ What was fixed is in `CHANGELOG.md` (async unknown-agent bypass, chat-completion
 agent and body handling, upstream scheme and host, `create_app` fail-open,
 OpenAI adapter error translation). These are the gaps that remain, and why.
 
-### Identity on the HTTP surface is asserted, not proven
+### Identity on the HTTP surface: bound tokens built, proof not
 
-**Status:** not built. One shared bearer token authenticates every client, and
-the agent is named by the caller (`agent_id`, `causalmesh_agent`). Any holder
-of the token can act as any agent that has a key, within that agent's
-contract. **What it would take:** a token-to-agent map in the contract, or
-mutual TLS, so the server can tell which agent a request came from instead of
-believing it.
+**Status: partly built (2026-09-30).** A bearer token authenticates the client.
+`--agent-token AGENT=TOKEN` (or `create_app(agent_tokens=...)`) binds a token to
+one agent: the server takes the agent from the token and refuses a request that
+names another (403). An unbound `--api-token` is still the operator's, and still
+asserts; chat events record `identity_source` (`token-bound` or `asserted`) so
+the chain can tell a credential from a claim.
+
+**What remains.** Tokens are shared secrets over plain HTTP, so they prove nothing
+to anyone who did not see the request, and the server holds every agent's signing
+key, so a signature attests that the server recorded an event, not that the agent
+did. `/execute` events do not yet record `identity_source`. A token is compared
+in constant time, but there is no rotation, expiry or revocation. **What it would
+take:** per-agent signing keys held by the agents (so a signature is theirs), or
+mutual TLS; either is a protocol decision this project has not made.
 
 ### `causalmesh serve` registers no tools
 
@@ -903,54 +911,91 @@ actual function today is gating `/v1/chat/completions`. **What it would take:**
 a declared way to load tools, which is an operator-code question (importing
 arbitrary callables from a config file) that this project has not answered.
 
-### The SDK gate knows paths only
+### Non-path resources through the SDK: built, with these limits
 
-**Status:** not built. `ContractGate.check` turns each declared resource into
-`Resource.path`, so allowlists, per-call ceilings and budgets cannot be
-reached through `CausalMesh.execute()`, and a mutating tool that declares no
-`resource_args` and has no `path` argument is checked against nothing. Checked
-by running it: a `buyer` role with an allowlist called a `kind="network"` tool
-on an unlisted host and it executed. `/v1/chat/completions` is the only
-surface that consults endpoint rules. **What it would take:** a resource kind
-on `Tool`, resolved by `ResourceResolver`, and a gate call per kind.
+**Status: built (2026-09-30).** `Tool(resource_kind="endpoint"|"spend"|"budget",
+amount_arg=...)` hands the gate every kind the policy layer supports, with URL host
+extraction, strict argument types and a per-call amount. Paths are decided on the
+canonical file (`..`, `./`, case, a trailing dot or space, an absolute spelling
+inside the contract's directory). A declared total needs a ledger
+(`CausalMesh(ledger=...)`): consumption is recorded after a successful call, and a
+total with no ledger is refused, since nothing could enforce it.
 
-### HTTP hardening not done
+**Limits, stated rather than hidden:**
 
-- `/docs`, `/redoc` and `/openapi.json` are served without authentication.
-- The Docker image runs as root and has no `HEALTHCHECK`. A non-root user was
-  not added: a bind-mounted `causalmesh.yaml` owned by another uid and mode
-  0600 could then be unreadable to it, which was not tested, and the trade-off
-  is the operator's to make.
-- No request-size or rate limit. `execute_tool` calls sync handlers on the
-  event loop, so one slow handler stalls every request.
-- `/v1/tools/{name}/execute` never returns the handler's value
-  (`ExecuteResponse` has no field for it), and a handler that raises is `200`
-  with `failed: true`. A client learns that the call ran, not what it returned.
+- A tool that declares no resource is checked against nothing and runs (the
+  contract states exceptions), and `mutating=False` skips the gate for every kind,
+  so a read-only tool that reaches a network is not held to an allowlist.
+- Totals are check-then-record: two callers can both pass the check before either
+  records. Executions through `serve` are serial, so it does not arise there.
+- A handler that raises is not recorded as spent, which under-counts if it failed
+  after the money left. Only the handler knows.
+- A budget name nobody declared is unlimited: absent means unrestricted, so a
+  misspelt name is too. Keep the name in the tool, not in the model's arguments.
+- Case is folded for ownership, so on a case-sensitive filesystem `Docs/` and
+  `docs/` share an owner (fail closed). Symlinks are invisible to a lexical check.
+- An absolute path outside the contract's directory is not this contract's to
+  decide, and is not refused.
 
-### The stdlib server is dead code with live tests
+### HTTP hardening: what is built, what is not
 
-`adapters/serve.py` is reached by nothing in `src/`; `tests/integration/test_serve.py`
-exercises it (apart from `TestCliWiring`). It answers an unreachable upstream
-with `200`, where the live server answers `502`. Left in place, as its
-docstring already says; deleting it is a separate decision.
+**Built (2026-09-30):** the container runs as non-root and declares a
+`HEALTHCHECK`; `/docs`, `/redoc` and `/openapi.json` exist only in dev mode; request
+bodies over 1 MiB are refused (413, also for chunked bodies); an opt-in per-credential
+rate limit (`--rate-limit`, 429 with `Retry-After`); sync handlers and the upstream
+call run off the event loop, with one lock keeping executions serial so the chain
+stays in one order; `/execute` returns the handler's plain-JSON value; a handler's
+exception text and the list of known agents no longer reach clients; upstream
+redirects are refused so the upstream key cannot be sent to another host; an
+allowed chat call that could not be recorded is not forwarded.
 
-### Windows path depth
+**Not built:**
 
-The run workspace is `data/work/<experiment>/<run_id>/<run_id>/<agent>/...`,
-which repeats the run id. From a checkout nested about 150 characters deep the
-run fails with `WinError 206` (found by running from a deep scratch path). The
-failure is not silent: the run is recorded as `failed` with its error and
-traceback, `status` reports the outcome as unknown rather than zero, and
-`verify` refuses to certify it. But an experiment cannot run from a deep path.
+- TLS. `serve` speaks plain HTTP; the operator's proxy provides TLS.
+- The rate limit is per process, opt-in, and counts only authenticated requests. A
+  throttle on failed logins is deliberately absent: keyed on an address it lets one
+  attacker lock out real users behind the same NAT. Use a long random token
+  (`serve` warns under 16 characters) and a proxy for floods.
+- Serial execution bounds throughput at one tool call at a time per server.
+- A `causalmesh.yaml` bind-mounted into the container must be readable by uid 10001
+  (mode 0644): a 0600 file owned by another uid looks like a missing contract.
+- `HEALTHCHECK` assumes the default port 8420.
 
-### The Makefile has two dead targets
+### The stdlib server was removed
 
-`make report` and `make reproduce` call `causalmesh report` and
-`causalmesh reproduce`, which do not exist (`report` is already listed as
-unbuilt in `frontend/content/docs/limitations.mdx`). `make typecheck` runs
-`mypy src`, which reports 14 errors in 11 files that predate this audit;
-`make check` gates the enforced subset instead. `make` is not installed on a
-stock Windows machine, which is why `scripts/check.py` exists.
+**Status: removed 2026-09-30.** `adapters/serve.py`, the `http.server`
+implementation of `serve`, was reached by nothing in `src/`, had no
+authentication, derived the allowlisted host by string-splitting (the bypass
+fixed in `server/app.py`) and answered an unreachable upstream with `200`.
+Its tests went with it; `tests/integration/test_serve.py` now covers only the
+command's own wiring, and the server is covered in `tests/server`.
+
+### Windows path depth: fixed, one residual
+
+**Status: fixed (2026-09-30).** The scheduler passed the runner a base that already
+ended in the run id, so the id appeared twice in every workspace path
+(`data/work/<experiment>/<run_id>/<run_id>/<agent>/...`). At a typical 48-character
+checkout with a 29-character experiment id all four smoke runs failed, with
+`FileNotFoundError` or a `shutil.Error`, not a message about length. The id now
+appears once, and `check_path_budget` refuses, before anything is copied and in
+plain words, a run whose deepest known path exceeds 259 characters. Verified at 48,
+60 and 99 characters.
+
+**Residual.** The check counts the workspace root plus the deepest fixture file, and
+refuses only what is certain to fail. Something written below the fixture (a
+`__pycache__` entry, a file an agent adds) can still overflow a checkout within a
+few dozen characters of the limit, and would fail as it always did. A margin for it
+was tried and refused checkouts whose runs all completed. Enabling Windows long
+paths removes the limit.
+
+### The Makefile's dead targets were removed
+
+**Status: removed 2026-09-30.** `make report` and `make reproduce` called
+`causalmesh report` and `causalmesh reproduce`, which do not exist (`report` is
+listed as unbuilt in `frontend/content/docs/limitations.mdx`). `make typecheck`
+still runs `mypy src`, which reports 14 errors in 11 files that predate the
+audit; `make check` gates the enforced subset instead. `make` is not installed
+on a stock Windows machine, which is why `scripts/check.py` exists.
 
 ### The pilot manifest names a person's host and username
 

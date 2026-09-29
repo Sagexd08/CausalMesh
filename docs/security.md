@@ -166,6 +166,16 @@ a row is only here if a test runs it.
 | Without `--dev`, `/v1/tools` and `/v1/chat/completions` refuse a missing or wrong bearer token | `tests/server/test_auth.py`, `tests/server/test_openai_compat.py` |
 | `--dev` is refused for a non-localhost host; a token is required otherwise | `tests/integration/test_serve.py::TestCliWiring` |
 | A blank or whitespace `--api-token` is treated as no token, never as auth-off (found and fixed 2026-09-30; mutation-checked) | `tests/integration/test_serve.py::TestCliWiring::test_a_blank_token_is_no_token_and_never_disables_auth` |
+| Every spelling of a protected path (`..`, `./`, case, trailing dot/space, absolute inside the contract directory) is decided as the same file, and a neighbouring name is not swallowed | `tests/gateway/test_resource_kinds.py::TestPathSpellings` |
+| A resource argument that is not text (list, `None`, bytes, number) is refused, because the handler would receive the raw object while the gate checked `str(value)` | `tests/gateway/test_resource_kinds.py::TestMalformedPathArguments`, `tests/gateway/test_resolver.py` |
+| Endpoint, spend and budget resources reach the gate: allowlist, per-call ceiling, exact-at-the-limit totals, no ledger means refused, refused calls never counted, unknown amount forms refused | `tests/gateway/test_resource_kinds.py::TestEndpoint`, `::TestSpend`, `::TestBudget` |
+| A token bound to an agent cannot act as another (403), chain events say whether the agent was token-bound or asserted, and bad token configuration is refused | `tests/server/test_identity_and_hardening.py::TestABoundTokenFixesTheAgent`, `::TestAnUnboundTokenAssertsAndSaysSo`, `::TestTokenConfigurationIsRefusedWhenItWouldMeanLess` |
+| `/docs`, `/redoc` and `/openapi.json` are absent when auth is on | `tests/server/test_identity_and_hardening.py::TestDocsAndSchemaAreNotPublic` |
+| Bodies over the limit are 413, including chunked ones a handler's broad `except` cannot absorb | `tests/server/test_identity_and_hardening.py::TestBodyLimit` |
+| A slow sync handler or upstream does not stall the server, concurrent calls never overlap and the chain still verifies | `tests/server/test_identity_and_hardening.py::TestASlowHandlerDoesNotStallTheServer`, `::TestConcurrentCallsShareOneChain` |
+| A handler's exception text, an object's attributes and the list of known agents stay off the wire; logs never carry a credential | `tests/server/test_identity_and_hardening.py::TestResponses`, `::TestLogsNeverCarryACredential` |
+| An upstream redirect is not followed and every allowed chat call is recorded or not forwarded | `tests/server/test_identity_and_hardening.py::TestTheUpstreamIsNotFollowedElsewhere`, `::TestEveryAllowedChatCallIsRecordedOrNotForwarded` |
+| The image runs as non-root, declares a health check and cannot start unauthenticated | `tests/unit/test_docker_config.py` |
 | An unhandled error on `/execute` returns a generic 500 with no exception text or traceback | `tests/server/test_errors.py::test_an_unhandled_error_is_a_generic_500_without_detail` (execute route only; other routes share the handler but are not separately tested) |
 
 Not protected:
@@ -178,15 +188,13 @@ Not protected:
   `audit_error`. An undeclared `causalmesh_agent` no longer reaches that
   point (it is refused with 400), so the remaining way for an event to go
   unrecorded is a relay failure on a known agent.
-- **Identity.** One shared bearer token authenticates every client, and the
-  agent is named by the caller (`agent_id`, `causalmesh_agent`). A token
-  holder can act as any agent that has a key, within that agent's rules.
-- **Discovery.** `/docs`, `/redoc` and `/openapi.json` are served without
-  authentication.
-- **Resource kinds through the SDK.** `execute()` checks paths only. A
-  mutating tool that declares no `resource_args` and has no `path` argument
-  is checked against nothing. Allowlists, ceilings and budgets are reached
-  only through `/v1/chat/completions` (see `docs/backlog.md`).
+- **Identity.** A bearer token is a shared secret over plain HTTP. A token bound
+  to an agent fixes which agent a request is (`--agent-token`); an unbound token
+  asserts one. Neither proves anything to a third party, and the server holds every
+  agent's signing key (see `docs/backlog.md`).
+- **Resources through the SDK.** A tool that declares no resource is checked against
+  nothing, `mutating=False` skips the gate for every kind, and totals are
+  check-then-record (see `docs/backlog.md` for the full list).
 - **Key custody in SDK sessions.** With `seed=`, anyone holding the seed can
   sign as any agent. Without it, keys are random per session and the chain is
   not reproducible.

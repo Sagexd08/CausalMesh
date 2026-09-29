@@ -248,7 +248,7 @@ the one you deploy.
 
 Not merely compiling — executed, with artifacts read back and inspected. The
 suite has grown past the 1,148 tests this page once quoted; `pytest
---collect-only` found 1492 on 2026-09-30. See the README for the exact run.
+--collect-only` found 1733 on 2026-09-30. See the README for the exact run.
 
 ### The critical gap: the agent layer
 
