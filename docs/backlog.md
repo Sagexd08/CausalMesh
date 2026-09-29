@@ -876,3 +876,87 @@ format, mypy on the enforced modules, bandit and the full suite.
   the manifest and audit tests in `test_cli.py`), and the same flow was run by
   hand on 2026-09-30, including a tampered signed event being rejected. It is
   not one command any more.
+
+## Product-readiness audit (2026-09-30)
+
+Found by auditing the tree against its own claims, not by a failing test.
+What was fixed is in `CHANGELOG.md` (async unknown-agent bypass, chat-completions
+agent and body handling, upstream scheme and host, `create_app` fail-open,
+OpenAI adapter error translation). These are the gaps that remain, and why.
+
+### Identity on the HTTP surface is asserted, not proven
+
+**Status:** not built. One shared bearer token authenticates every client, and
+the agent is named by the caller (`agent_id`, `causalmesh_agent`). Any holder
+of the token can act as any agent that has a key, within that agent's
+contract. **What it would take:** a token-to-agent map in the contract, or
+mutual TLS, so the server can tell which agent a request came from instead of
+believing it.
+
+### `causalmesh serve` registers no tools
+
+**Status:** by construction. The command builds a `CausalMesh` and never calls
+`register_tool`, so `/v1/tools` is empty and `/v1/tools/{name}/execute`
+answers 404 for every name, in the Docker image too. Tools reach the server
+only when it is embedded from Python (`create_app(mesh=...)`). The command's
+actual function today is gating `/v1/chat/completions`. **What it would take:**
+a declared way to load tools, which is an operator-code question (importing
+arbitrary callables from a config file) that this project has not answered.
+
+### The SDK gate knows paths only
+
+**Status:** not built. `ContractGate.check` turns each declared resource into
+`Resource.path`, so allowlists, per-call ceilings and budgets cannot be
+reached through `CausalMesh.execute()`, and a mutating tool that declares no
+`resource_args` and has no `path` argument is checked against nothing. Checked
+by running it: a `buyer` role with an allowlist called a `kind="network"` tool
+on an unlisted host and it executed. `/v1/chat/completions` is the only
+surface that consults endpoint rules. **What it would take:** a resource kind
+on `Tool`, resolved by `ResourceResolver`, and a gate call per kind.
+
+### HTTP hardening not done
+
+- `/docs`, `/redoc` and `/openapi.json` are served without authentication.
+- The Docker image runs as root and has no `HEALTHCHECK`. A non-root user was
+  not added: a bind-mounted `causalmesh.yaml` owned by another uid and mode
+  0600 could then be unreadable to it, which was not tested, and the trade-off
+  is the operator's to make.
+- No request-size or rate limit. `execute_tool` calls sync handlers on the
+  event loop, so one slow handler stalls every request.
+- `/v1/tools/{name}/execute` never returns the handler's value
+  (`ExecuteResponse` has no field for it), and a handler that raises is `200`
+  with `failed: true`. A client learns that the call ran, not what it returned.
+
+### The stdlib server is dead code with live tests
+
+`adapters/serve.py` is reached by nothing in `src/`; `tests/integration/test_serve.py`
+exercises it (apart from `TestCliWiring`). It answers an unreachable upstream
+with `200`, where the live server answers `502`. Left in place, as its
+docstring already says; deleting it is a separate decision.
+
+### Windows path depth
+
+The run workspace is `data/work/<experiment>/<run_id>/<run_id>/<agent>/...`,
+which repeats the run id. From a checkout nested about 150 characters deep the
+run fails with `WinError 206` (found by running from a deep scratch path). The
+failure is not silent: the run is recorded as `failed` with its error and
+traceback, `status` reports the outcome as unknown rather than zero, and
+`verify` refuses to certify it. But an experiment cannot run from a deep path.
+
+### The Makefile has two dead targets
+
+`make report` and `make reproduce` call `causalmesh report` and
+`causalmesh reproduce`, which do not exist (`report` is already listed as
+unbuilt in `frontend/content/docs/limitations.mdx`). `make typecheck` runs
+`mypy src`, which reports 14 errors in 11 files that predate this audit;
+`make check` gates the enforced subset instead. `make` is not installed on a
+stock Windows machine, which is why `scripts/check.py` exists.
+
+### The pilot manifest names a person's host and username
+
+`data/manifests/pilot_landing.manifest.json` records `machine_id` and
+`operator_id` of a real contributor. It has been in history since the
+provenance commits, so removing it from the tree would not remove it from
+history, and editing the manifest may invalidate what `causalmesh audit`
+checks. Left as found: it is the owner's decision, and a history rewrite is
+not this audit's to make.
