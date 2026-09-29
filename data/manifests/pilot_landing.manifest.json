@@ -129,8 +129,8 @@
       "commit": "743a69ebfff02046bfeb13de8b2b45e9500e7462",
       "dirty": null
     },
-    "machine_id": "Sohom",
-    "operator_id": "sohom",
+    "machine_id": "unknown",
+    "operator_id": "unknown",
     "platform": "Windows 11 (AMD64)",
     "python_version": "3.13.5"
   },
