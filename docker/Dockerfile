@@ -14,7 +14,20 @@ COPY pyproject.toml ./
 COPY src/ ./src/
 RUN pip install --no-cache-dir ".[server]"
 
+# Not root. `serve` needs to read the contract and open a socket above 1024,
+# and nothing else, so a compromise of the process should not be a compromise
+# of the container. A bind-mounted `causalmesh.yaml` must therefore be readable
+# by "other" (mode 0644) or by uid 10001: a file that is 0600 and owned by a
+# different uid would look, to this user, like a missing contract.
+RUN useradd --system --uid 10001 --no-create-home --shell /usr/sbin/nologin causalmesh
+USER 10001
+
 EXPOSE 8420
+
+# `/health` needs no token and reveals nothing. The port is the image default;
+# an operator who runs `--port` on another should override this check.
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+    CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8420/health', timeout=2).status == 200 else 1)"
 
 # --host 0.0.0.0 so Docker's port mapping actually reaches the process
 # inside the container; --root . resolves against /app, where the

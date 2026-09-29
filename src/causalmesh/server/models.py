@@ -34,3 +34,8 @@ class ExecuteResponse(BaseModel):
     rule: str
     audit_error: str | None
     would_refuse: bool
+    # What the handler returned, when it ran and the value is JSON-encodable.
+    # `value_omitted` says why it is absent otherwise. Additive: a client that
+    # ignores both behaves as it did before.
+    value: Any = None
+    value_omitted: str | None = None

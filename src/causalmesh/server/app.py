@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import asyncio
+import functools
 import inspect
+import itertools
 import json
 import logging
 import os
@@ -8,21 +11,44 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from collections.abc import Mapping
 from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
 
+from causalmesh import __version__
 from causalmesh.events.schema import EventIdentity, EventType
 from causalmesh.policy.resource import Resource, ResourceError
 from causalmesh.sdk.errors import MissingResourceError, ToolNotFoundError, UnknownAgentError
 from causalmesh.sdk.mesh import CausalMesh
 
-from .auth import make_auth_checker
+from .auth import Principal, make_auth_checker
 from .errors import register_error_handlers
+from .middleware import BodyLimitMiddleware
 from .models import ExecuteRequest, ExecuteResponse, ToolListResponse, ToolMeta
 
 log = logging.getLogger(__name__)
+
+# One megabyte covers any chat request a gate-and-record proxy should carry and
+# any tool arguments an agent should send; a larger limit is the operator's call.
+DEFAULT_MAX_BODY_BYTES = 1_048_576
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Refuse to follow a redirect from the upstream.
+
+    `urllib` re-sends the request headers to the redirect target, which would
+    hand the upstream API key to whatever host the redirect names, and the
+    allowlist only ever saw the host the operator configured.
+    """
+
+    def redirect_request(self, *args: Any, **kwargs: Any) -> None:
+        return None
+
+
+_UPSTREAM = urllib.request.build_opener(_NoRedirect)
 
 
 def _upstream_host(url: str) -> str:
@@ -44,53 +70,109 @@ def _upstream_host(url: str) -> str:
     return parts.hostname if parts.port is None else f"{parts.hostname}:{parts.port}"
 
 
+def _forward(url: str, headers: dict[str, str], data: bytes) -> dict[str, Any]:
+    """POST to the upstream and return its JSON object. Blocking: run it in a thread."""
+    request = urllib.request.Request(url, data=data, headers=headers, method="POST")
+    with _UPSTREAM.open(request, timeout=60) as response:  # nosec B310
+        payload = json.loads(response.read())
+    if not isinstance(payload, dict):
+        raise ValueError("upstream did not return a JSON object")
+    return payload
+
+
 def create_app(
     *,
     mesh: CausalMesh | None = None,
     config_path: str | os.PathLike[str] | None = None,
     api_tokens: set[str] | None = None,
+    agent_tokens: Mapping[str, str] | None = None,
     auth_disabled: bool = False,
     upstream_base_url: str | None = None,
     upstream_api_key: str | None = None,
+    max_body_bytes: int = DEFAULT_MAX_BODY_BYTES,
+    rate_limit_per_minute: int | None = None,
 ) -> FastAPI:
     """Application factory.
 
     Exactly one of `mesh` or `config_path` must be provided.
     `mesh` takes precedence when both are given (for testing).
 
-    api_tokens: set of valid bearer tokens.
+    api_tokens: unbound bearer tokens. A holder may name any agent that has a
+        key, so the agent is asserted, not proven (see `server/auth.py`).
+    agent_tokens: `{agent_id: token}`. A token bound to one agent: the server
+        takes the agent from the token and refuses a request that names another.
     auth_disabled: the explicit switch for dev mode (no auth).
+    max_body_bytes: requests larger than this are refused with 413.
+    rate_limit_per_minute: when set, at most this many requests a minute per
+        credential, in this process, with 429 and `Retry-After` beyond it.
 
-    Authentication is fail-closed: one of the two must be given. A factory
-    that quietly served without auth when a caller forgot `api_tokens` would
-    make the unauthenticated server the default rather than a choice.
-    `api_tokens=set()` refuses every request.
+    Authentication is fail-closed: tokens, or `auth_disabled=True`, must be
+    given, and giving both is a contradiction that is refused rather than
+    resolved in favour of "no auth". `api_tokens=set()` refuses every request.
+    The interactive docs and the OpenAPI schema are served only in dev mode.
     """
     if mesh is None and config_path is None:
         raise ValueError("Either mesh or config_path must be provided")
-    if api_tokens is None and not auth_disabled:
+    tokens_given = api_tokens is not None or bool(agent_tokens)
+    if auth_disabled and tokens_given:
+        raise ValueError("auth_disabled=True contradicts the tokens that were given")
+    if not auth_disabled and not tokens_given:
         raise ValueError(
-            "authentication is required: pass api_tokens={...}, "
+            "authentication is required: pass api_tokens={...} or agent_tokens={...}, "
             "or auth_disabled=True to serve without it (dev only)"
         )
+    if max_body_bytes < 1:
+        raise ValueError("max_body_bytes must be at least 1")
     upstream_host = _upstream_host(upstream_base_url) if upstream_base_url else None
     if mesh is None:
         mesh = CausalMesh.from_config(str(config_path))
+    unknown_agents = sorted(set(agent_tokens or {}) - set(mesh.agents))
+    if unknown_agents:
+        raise ValueError(
+            f"agent_tokens names agents this session has no key for: {unknown_agents}; "
+            "declare them under `roles` in causalmesh.yaml"
+        )
 
-    effective_tokens = None if auth_disabled else api_tokens
-    auth_dep = make_auth_checker(effective_tokens)
+    auth_dep = make_auth_checker(
+        None if auth_disabled else api_tokens,
+        None if auth_disabled else agent_tokens,
+        rate_limit_per_minute=rate_limit_per_minute,
+    )
 
     app = FastAPI(
         title="CausalMesh Gateway",
-        version="2.0.0",
+        version=__version__,
         description="FastAPI transport layer over CausalMesh authorization",
+        # The schema names every route and field. With auth on, that is
+        # information for exactly the callers who have not proved anything.
+        docs_url="/docs" if auth_disabled else None,
+        redoc_url="/redoc" if auth_disabled else None,
+        openapi_url="/openapi.json" if auth_disabled else None,
     )
+    app.add_middleware(BodyLimitMiddleware, max_bytes=max_body_bytes)
     register_error_handlers(app)
 
     # Store state on app state for access in routes
     app.state.mesh = mesh
     app.state.upstream_base_url = upstream_base_url
     app.state.upstream_api_key = upstream_api_key
+
+    # `CausalMesh` is not thread-safe: the relay's chain head, the gate's
+    # verdict list and the event counter are plain state, and a call reads
+    # them on both sides of the handler. Sync handlers run in a thread so a
+    # slow one does not stall the event loop, and this lock is what stops two
+    # calls interleaving on that state. Executions are therefore serial, which
+    # is also what keeps the chain in one order.
+    exec_lock = asyncio.Lock()
+    chat_sequence = itertools.count(1)
+
+    def _require_agent(principal: Principal, requested: str | None) -> None:
+        """A token bound to an agent cannot be used to act as another."""
+        if principal.agent_id is not None and requested not in (None, principal.agent_id):
+            log.warning(
+                "refused: a token bound to %r asked to act as %r", principal.agent_id, requested
+            )
+            raise HTTPException(status_code=403, detail="this token is bound to a different agent")
 
     @app.get("/health")
     async def health() -> dict[str, str]:
@@ -108,16 +190,14 @@ def create_app(
         tools = [ToolMeta(**m.get_tool(t).to_dict()) for t in m.registered_tools()]
         return ToolListResponse(tools=tools)
 
-    @app.post(
-        "/v1/tools/{tool_name}/execute",
-        response_model=ExecuteResponse,
-        dependencies=[Depends(auth_dep)],
-    )
+    @app.post("/v1/tools/{tool_name}/execute", response_model=ExecuteResponse)
     async def execute_tool(
         tool_name: str,
         body: ExecuteRequest,
+        principal: Principal = Depends(auth_dep),  # noqa: B008
     ) -> ExecuteResponse:
         m: CausalMesh = app.state.mesh
+        _require_agent(principal, body.agent_id)
         # Look up first to give 404 before any execution attempt
         try:
             tool = m.get_tool(tool_name)
@@ -125,20 +205,24 @@ def create_app(
             raise HTTPException(status_code=404, detail=str(exc)) from exc
 
         try:
-            if inspect.iscoroutinefunction(tool.handler):
-                result = await m.execute_async(
-                    agent_id=body.agent_id,
-                    tool=tool_name,
-                    arguments=body.arguments,
-                )
-            else:
-                result = m.execute(
-                    agent_id=body.agent_id,
-                    tool=tool_name,
-                    arguments=body.arguments,
-                )
+            async with exec_lock:
+                if inspect.iscoroutinefunction(tool.handler):
+                    result = await m.execute_async(
+                        agent_id=body.agent_id,
+                        tool=tool_name,
+                        arguments=body.arguments,
+                    )
+                else:
+                    result = await run_in_threadpool(
+                        functools.partial(
+                            m.execute,
+                            agent_id=body.agent_id,
+                            tool=tool_name,
+                            arguments=body.arguments,
+                        )
+                    )
         except UnknownAgentError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+            raise HTTPException(status_code=400, detail="unknown agent") from exc
         except MissingResourceError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -153,6 +237,29 @@ def create_app(
                 },
             )
 
+        reason = result.reason
+        if result.failed:
+            # The handler's exception text can carry paths, queries and secrets.
+            # The client learns that it failed and how; the text is in the log.
+            log.warning("tool %r failed for agent %r: %s", tool_name, body.agent_id, result.reason)
+            reason = f"the tool raised {result.reason.split(':', 1)[0]}"
+
+        value: Any = None
+        value_omitted: str | None = None
+        if result.executed and result.value is not None:
+            try:
+                # Plain JSON types only. `jsonable_encoder` would fall back to
+                # `vars(obj)` for an arbitrary object, so a handler that returned
+                # a client or a connection would send its attributes, credentials
+                # included, to the caller.
+                value = json.loads(json.dumps(result.value, allow_nan=False))
+            except (TypeError, ValueError) as exc:
+                # The tool has run and been recorded; failing the response now
+                # would tell the client it did not.
+                value_omitted = (
+                    f"not plain JSON ({type(exc).__name__}); return str, numbers, lists or dicts"
+                )
+
         return ExecuteResponse(
             allowed=result.allowed,
             executed=result.executed,
@@ -162,14 +269,19 @@ def create_app(
             agent_id=result.agent_id,
             event_id=result.event_id,
             recorded=result.recorded,
-            reason=result.reason,
+            reason=reason,
             rule=result.rule,
             audit_error=result.audit_error,
             would_refuse=result.would_refuse,
+            value=value,
+            value_omitted=value_omitted,
         )
 
-    @app.post("/v1/chat/completions", dependencies=[Depends(auth_dep)])
-    async def chat_completions(request: Request) -> JSONResponse:
+    @app.post("/v1/chat/completions")
+    async def chat_completions(
+        request: Request,
+        principal: Principal = Depends(auth_dep),  # noqa: B008
+    ) -> JSONResponse:
         m: CausalMesh = app.state.mesh
         upstream_url = app.state.upstream_base_url
         upstream_key = app.state.upstream_api_key
@@ -188,66 +300,91 @@ def create_app(
         if not isinstance(model, str):
             return JSONResponse(status_code=400, content={"error": "`model` must be a string"})
 
-        # The caller names the agent, so an agent this session has no key for
-        # must be refused here, as `/execute` refuses it. Left to the gate it
-        # would match no role, skip that role's allowlist, and be forwarded
-        # with no record of the call.
-        agent_id = str(body.get("causalmesh_agent") or m.agent_id)
+        requested = body.get("causalmesh_agent")
+        if requested is not None and not isinstance(requested, str):
+            return JSONResponse(
+                status_code=400, content={"error": "`causalmesh_agent` must be a string"}
+            )
+        _require_agent(principal, requested or None)
+
+        # The caller names the agent (or the token does), so an agent this
+        # session has no key for must be refused here, as `/execute` refuses
+        # it. Left to the gate it would match no role, skip that role's
+        # allowlist, and be forwarded with no record of the call.
+        agent_id = principal.agent_id or requested or m.agent_id
         if agent_id not in m.agents:
             return JSONResponse(
                 status_code=400,
                 content={
                     "error": {
-                        "message": f"agent {agent_id!r} is not known to this session",
+                        "message": "agent is not known to this session",
                         "type": "causalmesh_unknown_agent",
                     }
                 },
             )
-        now_us = time.time_ns() // 1_000
 
-        # Check gate
-        if not upstream_url:
-            allowed = True
-            resource = Resource.endpoint("none")
-            reason = "no upstream configured; recorded only"
-            rule = "no-upstream"
-        else:
-            try:
-                resource = Resource.endpoint(upstream_host or "")
-                verdict = m._gate.policy.check(agent_id=agent_id, resource=resource, now_us=now_us)
-                allowed = verdict.allowed
-                reason = verdict.reason
-                rule = verdict.rule
-            except ResourceError as exc:
-                allowed = False
-                resource = Resource.endpoint("invalid")
-                reason = str(exc)
-                rule = "malformed"
+        # Gate and record under the lock, so this cannot interleave with a tool
+        # call mutating the same chain. The upstream call is made after it.
+        async with exec_lock:
+            now_us = time.time_ns() // 1_000
+            if not upstream_url:
+                allowed = True
+                reason = "no upstream configured; recorded only"
+                rule = "no-upstream"
+            else:
+                try:
+                    resource = Resource.endpoint(upstream_host or "")
+                    verdict = m._gate.policy.check(
+                        agent_id=agent_id, resource=resource, now_us=now_us
+                    )
+                    allowed = verdict.allowed
+                    reason = verdict.reason
+                    rule = verdict.rule
+                except ResourceError as exc:
+                    allowed = False
+                    reason = str(exc)
+                    rule = "malformed"
 
-        # Record event
-        identity = EventIdentity(
-            experiment_id="serve",
-            task_id="serve",
-            run_id=m.run_id,
-            agent_id=agent_id,
-            arm=m._contract.arm,
-        )
-        event_type = EventType.INTENT if allowed else EventType.FAILURE
+            identity = EventIdentity(
+                experiment_id="serve",
+                task_id="serve",
+                run_id=m.run_id,
+                agent_id=agent_id,
+                arm=m._contract.arm,
+            )
+            # The id carries a sequence number, not just the clock: two requests in
+            # one clock tick (Windows ticks are coarse) would share an id, and the
+            # relay refuses a duplicate id, so the second call would go unrecorded.
+            ingested = m._relay.ingest(
+                event_id=f"serve-{agent_id}-{now_us}-{next(chat_sequence)}",
+                agent_id=agent_id,
+                event_type=EventType.INTENT if allowed else EventType.FAILURE,
+                identity=identity,
+                timestamp_us=now_us,
+                payload={
+                    "model": model,
+                    "allowed": allowed,
+                    "reason": reason,
+                    "rule": rule,
+                    # How the agent was established, so a reader of the chain
+                    # can tell a claim from a credential.
+                    "identity_source": "token-bound" if principal.agent_id else "asserted",
+                },
+            )
 
-        # Ingest directly without checking if actor is registered to match legacy behavior
-        m._relay.ingest(
-            event_id=f"serve-{agent_id}-{now_us}",
-            agent_id=agent_id,
-            event_type=event_type,
-            identity=identity,
-            timestamp_us=now_us,
-            payload={
-                "model": model,
-                "allowed": allowed,
-                "reason": reason,
-                "rule": rule,
-            },
-        )
+        if allowed and not ingested.accepted:
+            # Gated and recorded is the promise. A call that could not be recorded
+            # is not forwarded: the alternative is an action with no evidence.
+            log.error("could not record an allowed call for %r: %s", agent_id, ingested.reason)
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "error": {
+                        "message": "the call could not be recorded, so it was not forwarded",
+                        "type": "causalmesh_audit_unavailable",
+                    }
+                },
+            )
 
         if not allowed:
             status_code = 402 if rule in ("allowlist", "ceiling", "budget") else 403
@@ -289,27 +426,23 @@ def create_app(
         if upstream_key:
             headers["Authorization"] = f"Bearer {upstream_key}"
 
-        req = urllib.request.Request(
-            url, data=json.dumps(body).encode("utf-8"), headers=headers, method="POST"
-        )
         try:
-            with urllib.request.urlopen(req, timeout=60) as resp:  # nosec B310
-                payload = json.loads(resp.read())
-            if not isinstance(payload, dict):
-                raise ValueError("upstream did not return a JSON object")
+            payload = await run_in_threadpool(_forward, url, headers, json.dumps(body).encode())
         except (OSError, ValueError) as exc:
             # URLError, HTTPError and socket timeouts are OSError; a body that
             # is not JSON is ValueError. Either way the call was allowed and
             # recorded but produced no reply, which is a gateway failure, not
-            # a success carrying an error message.
+            # a success carrying an error message. The detail (which can name
+            # the upstream host) stays in the log.
+            log.warning("upstream failed for agent %r: %s: %s", agent_id, type(exc).__name__, exc)
+            message = (
+                f"upstream returned HTTP {exc.code}"
+                if isinstance(exc, urllib.error.HTTPError)
+                else f"upstream request failed ({type(exc).__name__})"
+            )
             return JSONResponse(
                 status_code=502,
-                content={
-                    "error": {
-                        "message": f"upstream failed: {type(exc).__name__}: {exc}",
-                        "type": "causalmesh_upstream_error",
-                    }
-                },
+                content={"error": {"message": message, "type": "causalmesh_upstream_error"}},
             )
 
         payload.setdefault("causalmesh", {})["gated"] = True
