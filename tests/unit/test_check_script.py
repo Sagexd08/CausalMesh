@@ -85,3 +85,29 @@ def test_the_gate_output_is_ascii(
     check, _ = nothing_installed
     check.main([])
     capsys.readouterr().out.encode("ascii")
+
+
+def test_a_missing_optional_dependency_fails_the_gate_because_its_tests_would_skip(
+    nothing_installed: tuple[ModuleType, list[object]], capsys: pytest.CaptureFixture[str]
+) -> None:
+    check, _ = nothing_installed
+    assert check.main([]) == 1
+    out = capsys.readouterr().out
+    assert "test dependencies" in out
+    for name in ("fastapi", "langchain_core", "httpx or httpx2"):
+        assert name in out
+
+
+def test_the_dependency_list_covers_what_the_tests_importorskip() -> None:
+    # A test that skips for want of a module the gate does not check is the
+    # silent gap this exists to close.
+    import re
+
+    needed: set[str] = set()
+    for path in (ROOT / "tests").rglob("test_*.py"):
+        if "fixtures" in path.parts:
+            continue
+        text = path.read_text(encoding="utf-8")
+        needed |= set(re.findall(r'importorskip\(\s*"([\w.]+)"', text))
+    covered = {name for alternatives in _load().TEST_DEPENDENCIES for name in alternatives}
+    assert needed <= covered, f"unchecked: {sorted(needed - covered)}"

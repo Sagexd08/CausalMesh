@@ -58,6 +58,10 @@ class TestFreezeHash:
 
 class TestGitState:
     def test_a_real_checkout_reports_a_commit(self) -> None:
+        if not (REPO / ".git").exists():
+            # A source archive or sdist has no repository to attribute a commit
+            # to; `test_a_non_repository_is_unknown...` covers that answer.
+            pytest.skip("not a git checkout (no .git directory)")
         state = GitState.capture(REPO)
         assert state.commit != "unknown"
         assert len(state.commit) == 40

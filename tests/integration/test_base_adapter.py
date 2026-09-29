@@ -6,6 +6,8 @@ from causalmesh import CausalMesh, Tool
 from causalmesh.gateway.result import GatewayResult
 from causalmesh.integrations import BaseFrameworkAdapter
 
+pytestmark = pytest.mark.integration
+
 
 @pytest.fixture
 def mesh(tmp_path) -> CausalMesh:

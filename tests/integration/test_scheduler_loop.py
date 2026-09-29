@@ -226,6 +226,7 @@ class TestResume:
         assert runner.index.is_complete("exp_partial")
         runner.close()
 
+    @pytest.mark.failure
     async def test_a_crashed_run_is_recovered_and_re_executed(
         self, task: TaskDefinition, tmp_path: Path
     ) -> None:
@@ -256,6 +257,7 @@ class TestResume:
         assert resumed.index.get(stranded.run_id).state == RunState.COMPLETED
         resumed.close()
 
+    @pytest.mark.failure
     async def test_a_resumed_run_is_visible_as_resumed(
         self, task: TaskDefinition, tmp_path: Path
     ) -> None:
@@ -276,6 +278,7 @@ class TestResume:
 
 
 class TestFailureHandling:
+    @pytest.mark.failure
     async def test_a_harness_crash_becomes_a_recorded_failure(
         self, task: TaskDefinition, tmp_path: Path, monkeypatch
     ) -> None:
@@ -300,6 +303,7 @@ class TestFailureHandling:
         assert runner.index.counts("exp_boom")[RunState.FAILED] == 4
         runner.close()
 
+    @pytest.mark.failure
     async def test_a_failed_run_still_writes_an_artifact(
         self, task: TaskDefinition, tmp_path: Path, monkeypatch
     ) -> None:
@@ -323,6 +327,7 @@ class TestFailureHandling:
             assert payload["state"] == RunState.FAILED
         runner.close()
 
+    @pytest.mark.failure
     async def test_a_failed_run_is_not_retried(
         self, task: TaskDefinition, tmp_path: Path, monkeypatch
     ) -> None:
@@ -345,6 +350,7 @@ class TestFailureHandling:
         assert runner.index.counts("exp_noretry")[RunState.FAILED] == 4
         runner.close()
 
+    @pytest.mark.failure
     async def test_a_failure_leaves_no_run_stranded(
         self, task: TaskDefinition, tmp_path: Path, monkeypatch
     ) -> None:

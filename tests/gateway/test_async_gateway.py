@@ -24,6 +24,8 @@ from causalmesh.gateway.tool import Tool
 from causalmesh.hooks.lifecycle import Gate, GateDecision, LifecycleBoundary
 from causalmesh.relay import Relay
 
+pytestmark = pytest.mark.unit
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

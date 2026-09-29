@@ -3,6 +3,8 @@ from fastapi.testclient import TestClient
 
 from causalmesh.server import create_app
 
+pytestmark = pytest.mark.integration
+
 
 def test_no_auth_required_in_dev_mode(client):
     # App was created with auth_disabled=True in this fixture

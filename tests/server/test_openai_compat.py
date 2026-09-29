@@ -10,6 +10,8 @@ from causalmesh import CausalMesh
 from causalmesh.policy.contract import Contract
 from causalmesh.server import create_app
 
+pytestmark = pytest.mark.integration
+
 
 class UpstreamStub:
     def __init__(
@@ -240,6 +242,7 @@ def _free_port() -> int:
         return int(s.getsockname()[1])
 
 
+@pytest.mark.failure
 def test_an_unreachable_upstream_is_502_and_the_call_is_still_recorded(mesh):
     app = create_app(
         mesh=mesh, upstream_base_url=f"http://127.0.0.1:{_free_port()}", auth_disabled=True
@@ -254,6 +257,7 @@ def test_an_unreachable_upstream_is_502_and_the_call_is_still_recorded(mesh):
 
 
 @pytest.mark.parametrize("raw_body", [b"<html>not json</html>", b"[1, 2]", b'"text"'])
+@pytest.mark.failure
 def test_an_upstream_reply_that_is_not_a_json_object_is_502(mesh, raw_body):
     with UpstreamStub(raw_body=raw_body) as upstream:
         app = create_app(mesh=mesh, upstream_base_url=upstream.base_url, auth_disabled=True)

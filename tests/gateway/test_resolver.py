@@ -40,6 +40,8 @@ from causalmesh.gateway.resolver import ResourceResolver
 from causalmesh.gateway.tool import Tool
 from causalmesh.sdk.errors import InvalidResourceError, MissingResourceError
 
+pytestmark = pytest.mark.unit
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

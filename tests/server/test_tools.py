@@ -1,3 +1,8 @@
+import pytest
+
+pytestmark = pytest.mark.integration
+
+
 def test_list_tools(client):
     response = client.get("/v1/tools")
     assert response.status_code == 200
