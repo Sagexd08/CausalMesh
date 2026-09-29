@@ -47,17 +47,104 @@ happened, which is a different property from being able to repeat it.
 
 ### CooperBench import (§54)
 
-**Status:** not built.
+**Status: loader built and proven end-to-end on one synthetic worked
+example, including a real §37 gate run. The real 30-task / 652-pair
+CooperBench dataset has not been imported.**
 
-**Why:** the task system (§35–38) had to exist and be proven on a task
-whose coordination structure is known by construction before importing
-tasks whose structure has to be discovered. `schema_handler_widen` was
-built so the §37 gate could be validated against a task where the expected
-answer was known.
+**Why it was deferred until now:** the task system (§35–38) had to exist
+and be proven on a task whose coordination structure is known by
+construction before importing tasks whose structure has to be discovered.
+`schema_handler_widen` was built so the §37 gate could be validated against
+a task where the expected answer was known.
 
-**What it would take:** a loader mapping CooperBench tasks onto
-`TaskDefinition`, and a §37 sensitivity run per imported task — most of the
-cost is the gate, not the loader.
+**What is built.** `causalmesh.tasks.cooperbench` (`import_task`,
+`import_dataset`) reads a CooperBench-shaped
+`dataset/<repo>/task<id>/feature{1,2}/{feature.md,feature.patch,tests.patch}`
+directory and produces a `TaskDefinition`, mapping `feature1` -> `agent_a`
+and `feature2` -> `agent_b` — CooperBench's own two-feature structure
+matches this project's two-agent floor directly. Two design decisions,
+recorded in the module's own docstring rather than only here:
+
+- **Patches are materialized at import time, not applied at run time.**
+  `agents/script.py`'s `Action` DSL has no diff-applying action kind, only
+  literal `write`/`create` content. Adding one (`ActionKind.PATCH`) was
+  considered and rejected: it would mean shelling out to `git apply` while
+  a scripted run is in flight, making what actually lands in a workspace
+  depend on the machine's `git` version rather than solely on the YAML —
+  exactly the "task that could execute arbitrary-ish operations" risk
+  `tasks/definition.py`'s own module docstring argues against. Instead the
+  loader applies each feature's `feature.patch` once, at import time,
+  against the supplied base-repo state, and bakes the resulting literal
+  content into ordinary `write` actions. The shipped task YAML stays pure
+  data with no runtime patch application, so §33's reproducibility
+  property is untouched.
+- **Contested paths are discovered, not assumed.** `touched_paths` parses
+  unified-diff `--- a/`/`+++ b/` headers out of each feature's patch;
+  `contested_paths` is the intersection of the two features' touched-path
+  sets, and `AgentRole.owns` excludes any contested path from either
+  role — this is exactly the "structure has to be discovered" property
+  that distinguishes a CooperBench import from `schema_handler_widen`.
+
+**A fifth `TaskFamily`, `COOPERBENCH_IMPORT`, was added** rather than
+reusing one of the four §35 families. All four existing families name a
+coordination shape chosen by the task's *author* in advance; a CooperBench
+import's defining property is that its shape — contested or not, which
+paths — is discovered from real patches, not declared. See
+`TaskFamily`'s own docstring for the full argument.
+
+**Divergence has no fabricated marker.** CooperBench's real success
+criterion ("both patches merge cleanly AND pass tests") has no single
+scalar the way `schema_handler_widen`'s `HANDLED_FIELDS` marker does.
+`divergence_file`/`divergence_marker` are left `None` on an imported task
+unless a caller supplies real ones by hand for a specific pair; an import
+with no marker validates as a task with no divergence check, not a task
+with an invented one. This is a genuine limitation of the import, not
+patched over.
+
+**The one worked example.** No real CooperBench data is vendored in this
+repository and this sandbox has no network access to clone it, so the
+loader is proven against a small, clearly-labeled SYNTHETIC sample built by
+hand at `tests/fixtures/cooperbench_sample/` — one fake repo, two tiny
+features, real `git diff` output against that fake repo (not hand-typed
+diff text). The full pipeline was run end to end from that sample: loader
+-> `tasks/cb_tinyrepo_task1.yaml` (checked in) -> `fixtures/cb_tinyrepo_task1/`
+(checked in) -> `validate_structure` (passes) -> `check_sensitivity`, the
+real §37 gate, executed for real rather than asserted.
+
+**The real §37 verdict for this worked example: NOT SENSITIVE** — C0 0/1,
+C2 0/1. Both arms fail identically. This is a real, reportable property of
+this specific synthetic example, not a defect in the gate or the loader:
+both synthetic features add a different key to the same dict in
+`src/greeter.py`, and this platform's contested-path merge
+(`tasks/runner.py::_integrate_workspaces`) resolves a contested path to a
+single last-writer from the signed chain rather than merging both
+features' changes, so whichever agent wrote last, the other's key is lost
+regardless of what either agent was told. A same-region, non-overlapping-
+key edit like this is exactly the shape the information-only C0-vs-C2
+contrast cannot rescue with this platform's winner-take-all merge — it
+would need finer-grained content merging (e.g. actually merging the two
+patches, or a real `git merge`) to succeed, which this platform does not
+attempt for any task, imported or authored. Reported honestly rather than
+tuned toward a "sensitive" result: the task asked for this explicitly, and
+"a refusal is data" applies here as much as anywhere else in this project.
+`tests/integration/test_cooperbench_import.py::TestQualityGate` pins this
+verdict as the expected, current behaviour.
+
+**What this does not claim.** Nothing here says anything about any real
+CooperBench task's coordination sensitivity, coordination structure, or
+whether a real repository's patches would produce a different verdict —
+there is no real CooperBench data behind this entry's numbers, only the
+one synthetic worked example described above.
+
+**What it would still take:** a real CooperBench checkout (clone
+`github.com/cooperbench/CooperBench`, supply each task's pre-patch base
+repo state as `base_files`) and a §37 run per imported task — the
+loader itself needs no further work to accept one; see
+`causalmesh.tasks.cooperbench`'s module docstring, "Pointing this at a
+real dataset," for the exact call shape. Batch import across all 30 tasks
+/ 652 feature pairs is `import_dataset` iterating the dataset root, already
+implemented and unit-tested against the synthetic sample, but not run
+against real data.
 
 ### Multi-rater kappa coding (§53)
 
