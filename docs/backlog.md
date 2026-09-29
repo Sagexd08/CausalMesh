@@ -841,30 +841,122 @@ mutation-checked: reverting the fix makes a test there fail.
   §20 defines for the experiment. An operator who wants reads checked has
   to declare those tools mutating.
 
-## CI cannot currently run (external blocker, recorded 2026-09-30)
+## CI was removed (2026-09-30)
 
-**Status: blocked outside the repository.** None of the 7 most recent GitHub
-Actions runs on `main` (2026-09-28 15:39 UTC through 2026-09-29 17:33 UTC)
-started a job: every job shows no runner and no recorded steps, and the
-check-run annotation reads *"The job was not started because recent account
-payments have failed or your spending limit needs to be increased."* The
-failures at the top of `main`'s history are therefore not test failures, and
-a green check has not been possible to obtain since then. Fixing it is an
-account and billing action for the repository owner, not a code change, and
-nothing in this repository should be edited to hide it.
+**Status: removed by decision (commit `2b88814`).** GitHub Actions had not
+started a job since 2026-09-28: every run failed before its first step with
+*"The job was not started because recent account payments have failed or your
+spending limit needs to be increased."* The owner removed the workflow instead
+of paying for hosted runners. `python scripts/check.py` is the gate now: lint,
+format, mypy on the enforced modules, bandit and the full suite.
 
-**What that means for every test claim here.** The counts in the README are
-from a local run on one Windows machine. The Linux and macOS legs, Python
-3.11 and 3.13, the security scan and the site build have had no remote
-execution in that window. The site build was run separately, in a Linux Node
-22 container, on 2026-09-30, and passed.
+**What that no longer covers, stated rather than hidden.**
 
-**A related gap, closed in this change but unproven remotely.** The
-`test` job installs only `.[dev,analysis]`, so `tests/server`, the `serve`
-CLI tests and the LangChain adapter tests skipped there rather than ran.
-A `server-and-adapters` job now installs the `server` extra and
-`langchain-core` and runs them with `-rs`; it has been run locally, not on
-GitHub.
+- **Remote execution.** No result is corroborated by a second machine. The
+  numbers in the README are from one Windows 11, Python 3.12 machine.
+- **The platform matrix.** The workflow ran Linux, Windows and macOS on Python
+  3.11 and 3.13. The gate tests only the machine it runs on, so the claim in
+  `pyproject.toml` (3.11 to 3.13, three platforms) is untested apart from the
+  Windows 3.12 runs recorded here.
+- **`pip-audit`.** Not in the gate, because it needs the network and a clean
+  environment. `pip-audit .` reported no known vulnerabilities in the project's
+  own dependencies on 2026-09-30, and a fresh resolve of the runtime plus the
+  `server` extra was also clean. The audit machine's older environment was not:
+  it held starlette 1.0.0, cryptography 46.0.7, anyio 4.13.0 and click 8.3.2,
+  each with advisories fixed in later releases. The floors in `pyproject.toml`
+  (for example `cryptography>=41.0`) sit well below those fixes, so an
+  environment held at old versions is not protected by them. Not changed.
+- **The site build.** Not in the gate. `npm run types:check && npm run build`
+  passed in a Linux Node 22 container on 2026-09-30. On the Windows audit
+  machine `next build` fails because Windows Application Control blocks the
+  unsigned `yuku-analyzer` native binding; that is the machine's policy, not
+  the repository.
+- **The evidence job.** The workflow produced a smoke collection and verified
+  it. The suite covers the substance (`tests/integration/test_cleanroom_verification.py`,
+  the manifest and audit tests in `test_cli.py`), and the same flow was run by
+  hand on 2026-09-30, including a tampered signed event being rejected. It is
+  not one command any more.
 
-**Heads-up from the same annotation:** `ubuntu-latest` migrates to Ubuntu 26
-from 2026-10-19.
+## Product-readiness audit (2026-09-30)
+
+Found by auditing the tree against its own claims, not by a failing test.
+What was fixed is in `CHANGELOG.md` (async unknown-agent bypass, chat-completions
+agent and body handling, upstream scheme and host, `create_app` fail-open,
+OpenAI adapter error translation). These are the gaps that remain, and why.
+
+### Identity on the HTTP surface is asserted, not proven
+
+**Status:** not built. One shared bearer token authenticates every client, and
+the agent is named by the caller (`agent_id`, `causalmesh_agent`). Any holder
+of the token can act as any agent that has a key, within that agent's
+contract. **What it would take:** a token-to-agent map in the contract, or
+mutual TLS, so the server can tell which agent a request came from instead of
+believing it.
+
+### `causalmesh serve` registers no tools
+
+**Status:** by construction. The command builds a `CausalMesh` and never calls
+`register_tool`, so `/v1/tools` is empty and `/v1/tools/{name}/execute`
+answers 404 for every name, in the Docker image too. Tools reach the server
+only when it is embedded from Python (`create_app(mesh=...)`). The command's
+actual function today is gating `/v1/chat/completions`. **What it would take:**
+a declared way to load tools, which is an operator-code question (importing
+arbitrary callables from a config file) that this project has not answered.
+
+### The SDK gate knows paths only
+
+**Status:** not built. `ContractGate.check` turns each declared resource into
+`Resource.path`, so allowlists, per-call ceilings and budgets cannot be
+reached through `CausalMesh.execute()`, and a mutating tool that declares no
+`resource_args` and has no `path` argument is checked against nothing. Checked
+by running it: a `buyer` role with an allowlist called a `kind="network"` tool
+on an unlisted host and it executed. `/v1/chat/completions` is the only
+surface that consults endpoint rules. **What it would take:** a resource kind
+on `Tool`, resolved by `ResourceResolver`, and a gate call per kind.
+
+### HTTP hardening not done
+
+- `/docs`, `/redoc` and `/openapi.json` are served without authentication.
+- The Docker image runs as root and has no `HEALTHCHECK`. A non-root user was
+  not added: a bind-mounted `causalmesh.yaml` owned by another uid and mode
+  0600 could then be unreadable to it, which was not tested, and the trade-off
+  is the operator's to make.
+- No request-size or rate limit. `execute_tool` calls sync handlers on the
+  event loop, so one slow handler stalls every request.
+- `/v1/tools/{name}/execute` never returns the handler's value
+  (`ExecuteResponse` has no field for it), and a handler that raises is `200`
+  with `failed: true`. A client learns that the call ran, not what it returned.
+
+### The stdlib server is dead code with live tests
+
+`adapters/serve.py` is reached by nothing in `src/`; `tests/integration/test_serve.py`
+exercises it (apart from `TestCliWiring`). It answers an unreachable upstream
+with `200`, where the live server answers `502`. Left in place, as its
+docstring already says; deleting it is a separate decision.
+
+### Windows path depth
+
+The run workspace is `data/work/<experiment>/<run_id>/<run_id>/<agent>/...`,
+which repeats the run id. From a checkout nested about 150 characters deep the
+run fails with `WinError 206` (found by running from a deep scratch path). The
+failure is not silent: the run is recorded as `failed` with its error and
+traceback, `status` reports the outcome as unknown rather than zero, and
+`verify` refuses to certify it. But an experiment cannot run from a deep path.
+
+### The Makefile has two dead targets
+
+`make report` and `make reproduce` call `causalmesh report` and
+`causalmesh reproduce`, which do not exist (`report` is already listed as
+unbuilt in `frontend/content/docs/limitations.mdx`). `make typecheck` runs
+`mypy src`, which reports 14 errors in 11 files that predate this audit;
+`make check` gates the enforced subset instead. `make` is not installed on a
+stock Windows machine, which is why `scripts/check.py` exists.
+
+### The pilot manifest names a person's host and username
+
+`data/manifests/pilot_landing.manifest.json` records `machine_id` and
+`operator_id` of a real contributor. It has been in history since the
+provenance commits, so removing it from the tree would not remove it from
+history, and editing the manifest may invalidate what `causalmesh audit`
+checks. Left as found: it is the owner's decision, and a history rewrite is
+not this audit's to make.

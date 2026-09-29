@@ -88,6 +88,40 @@ class TestEveryDeclaredAgentIsRecorded:
         assert calls == []
         assert mesh.audit_events() == []
 
+    @pytest.mark.parametrize("async_handler", [True, False])
+    async def test_the_async_path_refuses_an_undeclared_agent_too(
+        self, tmp_path: Path, async_handler: bool
+    ) -> None:
+        """`execute_async` once skipped the check `execute` makes.
+
+        The handler ran for an agent with no key, unrecorded, and the result
+        said only `recorded is False`. The path is one nobody owns, so the
+        gate has nothing to refuse it on: the key check is the only thing
+        standing between the stranger and the handler.
+        """
+        mesh = CausalMesh.from_config(_contract(tmp_path))
+        calls: list[str] = []
+
+        async def async_handler_fn(path: str) -> None:
+            calls.append(path)
+
+        def sync_handler_fn(path: str) -> None:
+            calls.append(path)
+
+        mesh.register_tool(
+            Tool(
+                name="write_file",
+                handler=async_handler_fn if async_handler else sync_handler_fn,
+                resource_args=["path"],
+            )
+        )
+        with pytest.raises(UnknownAgentError, match="stranger"):
+            await mesh.execute_async(
+                agent_id="stranger", tool="write_file", arguments={"path": "unowned/a.py"}
+            )
+        assert calls == []
+        assert mesh.audit_events() == []
+
 
 class TestAMissingRecordIsReported:
     def test_a_relay_failure_leaves_the_outcome_and_reports_the_gap(

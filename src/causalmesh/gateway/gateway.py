@@ -122,6 +122,22 @@ class ToolGateway:
             )
         return self._tools[name]
 
+    def _require_known_agent(self, agent_id: str) -> None:
+        """Refuse a call the relay holds no signing key for, before anything runs.
+
+        Shared by ``execute`` and ``execute_async`` so the two cannot drift:
+        an agent that cannot be recorded must not reach the gate or the
+        handler on either path.
+        """
+        from causalmesh.sdk.errors import UnknownAgentError
+
+        if not self._relay.has_key(agent_id):
+            raise UnknownAgentError(
+                f"agent {agent_id!r} has no signing key in this session, so its "
+                f"calls cannot be recorded. Known agents: {list(self._relay.actors)}. "
+                "Declare it under `roles` in causalmesh.yaml or pass it in `agents=`."
+            )
+
     # ------------------------------------------------------------------ #
     # Execution                                                           #
     # ------------------------------------------------------------------ #
@@ -156,19 +172,14 @@ class ToolGateway:
                 Checked before the gate, so the handler never runs for a
                 call that could not be recorded.
         """
-        from causalmesh.sdk.errors import ToolNotFoundError, UnknownAgentError
+        from causalmesh.sdk.errors import ToolNotFoundError
 
         if tool_name not in self._tools:
             raise ToolNotFoundError(
                 f"tool {tool_name!r} is not registered. "
                 f"Known tools: {self.registered_tools() or ['(none)']}"
             )
-        if not self._relay.has_key(agent_id):
-            raise UnknownAgentError(
-                f"agent {agent_id!r} has no signing key in this session, so its "
-                f"calls cannot be recorded. Known agents: {list(self._relay.actors)}. "
-                "Declare it under `roles` in causalmesh.yaml or pass it in `agents=`."
-            )
+        self._require_known_agent(agent_id)
 
         tool = self._tools[tool_name]
         args = dict(arguments or {})
@@ -235,7 +246,11 @@ class ToolGateway:
         paths: tuple[str, ...] | None = None,
         now_us: int | None = None,
     ) -> GatewayResult:
-        """Route an async tool call through the policy boundary."""
+        """Route an async tool call through the policy boundary.
+
+        Raises the same ``ToolNotFoundError`` and ``UnknownAgentError`` as
+        ``execute()``, before the gate or the handler is reached.
+        """
         from causalmesh.sdk.errors import ToolNotFoundError
 
         if tool not in self._tools:
@@ -243,6 +258,7 @@ class ToolGateway:
                 f"tool {tool!r} is not registered. "
                 f"Known tools: {self.registered_tools() or ['(none)']}"
             )
+        self._require_known_agent(agent_id)
 
         tool_obj = self._tools[tool]
         args = dict(arguments or {})

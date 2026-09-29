@@ -372,3 +372,63 @@ class TestCliWiring:
         assert started == [], "the server started with a blank token"
         assert result.exit_code == 2
         assert "--api-token is required" in result.output
+
+    @staticmethod
+    def _serve_and_capture(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch, args: list[str]
+    ) -> tuple[Any, list[Any]]:
+        """Run `serve` with uvicorn stubbed out, returning the result and the apps it built."""
+        uvicorn = pytest.importorskip("uvicorn")
+        pytest.importorskip("fastapi")
+        apps: list[Any] = []
+        monkeypatch.setattr(uvicorn, "run", lambda application, **_: apps.append(application))
+        (tmp_path / "causalmesh.yaml").write_text(
+            "version: 1\nroles: []\npolicy:\n  arm: C3\nevidence:\n  sign: false\n"
+        )
+        return runner.invoke(app, ["serve", "--root", str(tmp_path), *args]), apps
+
+    def test_dev_with_a_token_still_enforces_the_token(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        result, apps = self._serve_and_capture(
+            tmp_path, monkeypatch, ["--dev", "--api-token", "secret"]
+        )
+        assert result.exit_code == 0, result.output
+        client = TestClient(apps[0], raise_server_exceptions=False)
+        assert client.get("/v1/tools").status_code == 401
+        assert client.get("/v1/tools", headers={"Authorization": "Bearer nope"}).status_code == 401
+        assert (
+            client.get("/v1/tools", headers={"Authorization": "Bearer secret"}).status_code == 200
+        )
+
+    def test_dev_without_a_token_serves_openly_on_localhost(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        result, apps = self._serve_and_capture(tmp_path, monkeypatch, ["--dev"])
+        assert result.exit_code == 0, result.output
+        assert TestClient(apps[0]).get("/v1/tools").status_code == 200
+
+    def test_a_token_is_enforced_without_dev(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        result, apps = self._serve_and_capture(tmp_path, monkeypatch, ["--api-token", "secret"])
+        assert result.exit_code == 0, result.output
+        assert TestClient(apps[0]).get("/v1/tools").status_code == 401
+
+    @pytest.mark.parametrize("upstream", ["file:///etc/passwd", "ftp://example.com", "example.com"])
+    def test_an_upstream_that_is_not_http_is_a_usage_error_not_a_traceback(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, upstream: str
+    ) -> None:
+        result, apps = self._serve_and_capture(
+            tmp_path, monkeypatch, ["--dev", "--upstream", upstream]
+        )
+        assert apps == [], "the server started with a non-HTTP upstream"
+        assert result.exit_code == 2
+        assert "upstream" in result.output
+        assert "Traceback" not in result.output

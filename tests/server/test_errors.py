@@ -37,3 +37,15 @@ def test_unknown_agent_is_400(client):
     )
     assert response.status_code == 400
     assert "no signing key" in response.json()["detail"]
+
+
+def test_unknown_agent_is_400_for_an_async_tool_and_the_handler_does_not_run(client, mesh):
+    # The async route once skipped the agent check: this answered 200 executed.
+    response = client.post(
+        "/v1/tools/async_write/execute",
+        json={"agent_id": "imposter", "arguments": {"path": "unowned/file.txt"}},
+    )
+    assert response.status_code == 400
+    assert "no signing key" in response.json()["detail"]
+    assert mesh._called == []
+    assert mesh.audit_events() == []
