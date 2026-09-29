@@ -132,7 +132,8 @@ class TestQuickstartEndToEnd:
             # splitting "already exists; skipping init" across lines.
             # Assert both substrings independently so the test is layout-stable.
             assert "already exists" in result.output
-            assert "skipping init" in result.output
+            assert "skipping" in result.output
+            assert "init" in result.output
             assert contract_path.read_text(encoding="utf-8") == before
         finally:
             _cleanup_experiment(experiment_id)
