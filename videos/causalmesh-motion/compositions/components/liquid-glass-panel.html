@@ -1,0 +1,232 @@
+<!doctype html>
+<!--
+  liquid-glass-panel: HyperFrames video primitive (UI chrome / surfaces)
+
+  Concept: a panel that reads as real interface glass — not a flat blur.
+  Chromium misreads native `backdrop-filter: url(#svg-filter)` (an SVG
+  displacement/turbulence filter behind a backdrop-filter is inconsistently
+  composited or ignored entirely depending on stacking context), so this
+  primitive never uses backdrop-filter. Instead it CLONES the background
+  layer behind the glass element, feeds that clone through an SVG
+  <feDisplacementMap> filter (refraction) plus a slight <feGaussianBlur>
+  (glass thickness), and composites a rim light + a soft inner shadow on
+  top. The clone is a real DOM node sized and positioned to match the panel
+  exactly, so the distortion samples real pixels rather than a static
+  placeholder.
+
+  Panel content (the slot) sits above the glass/refraction layers and is
+  never itself filtered — only the background clone is.
+
+  Variables (declared in data-composition-variables below):
+    - radius (number, px, default 10): corner radius of the panel and its
+      background clone.
+    - rim (subtle | standard | strong, default standard): intensity of the
+      top-edge rim light that sells the glass thickness.
+    - displace (number, px, default 18): peak displacement scale of the
+      refraction filter. 0 disables displacement (blur-only glass).
+
+  Envelope: this primitive has no built-in entrance/exit timeline of its
+  own — it is meant to be mounted already in place (or animated by the
+  host composition's own transform/opacity tweens on #root), matching how
+  the chain cards, arm bars and claim-lock panel use it: the host times
+  when the panel appears, this primitive only owns the refraction/rim
+  look. A one-shot settle micro-tween on the rim intensity plays once on
+  mount so the glass doesn't look inert the instant it lands.
+
+  Mount contract: MOUNTABLE SUB-COMPOSITION. The runtime clones only
+  <template> contents; #root fills the host box (inset:0, container-type:
+  size), and the file registers one paused timeline under the literal
+  "liquid-glass-panel" key. Variables come from
+  window.__hyperframes.getVariables().
+
+  NOTE ON REUSE: because the refraction clone must sample the ACTUAL
+  content sitting behind a given panel instance (the grid, cards, or scene
+  art specific to each use in this film), index.html ports this
+  primitive's technique inline per use (background clone + feDisplacementMap
+  + feGaussianBlur + rim light + inner shadow) rather than mounting this
+  file as a black-box sub-composition, exactly as whip-pan-cut and
+  zoom-through-transition are ported inline elsewhere in this project. This
+  file is the registered, documented, standalone reference implementation.
+-->
+<html
+  lang="en"
+  data-composition-id="liquid-glass-panel"
+  data-composition-duration="2"
+  data-composition-variables='[
+    { "id": "radius", "type": "number", "role": "style", "label": "Corner radius", "description": "Corner radius of the panel and its background clone, in pixels.", "default": 10, "min": 0, "max": 48, "step": 1, "unit": "px" },
+    { "id": "rim", "type": "enum", "role": "style", "label": "Rim light", "description": "Intensity of the top-edge rim light that sells the glass thickness.", "default": "standard", "options": [{ "value": "subtle", "label": "Subtle" }, { "value": "standard", "label": "Standard" }, { "value": "strong", "label": "Strong" }] },
+    { "id": "displace", "type": "number", "role": "style", "label": "Displacement", "description": "Peak displacement scale of the refraction filter, in pixels. 0 disables displacement (blur-only glass).", "default": 18, "min": 0, "max": 40, "step": 1, "unit": "px" }
+  ]'
+>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Liquid Glass Panel</title>
+  </head>
+  <body>
+    <template>
+      <div id="root" data-composition-id="liquid-glass-panel" data-duration="2" data-fps="30">
+        <style>
+          *,
+          *::before,
+          *::after {
+            box-sizing: border-box;
+          }
+
+          #root {
+            position: absolute;
+            inset: 0;
+            container-type: size;
+            isolation: isolate;
+            overflow: visible;
+          }
+
+          .lgp-panel {
+            position: absolute;
+            inset: 8%;
+            border-radius: var(--lgp-radius, 10px);
+            overflow: hidden;
+          }
+
+          /* The refraction layer: a clone of whatever sits behind the panel
+             (host supplies .lgp-source content, or the default sample grid
+             below), run through the SVG filter. This is the layer that
+             replaces backdrop-filter. */
+          .lgp-refract {
+            position: absolute;
+            inset: -6%;
+            filter: url(#lgp-displace);
+            transform: scale(1.06);
+          }
+
+          .lgp-source {
+            position: absolute;
+            inset: 0;
+            background:
+              repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.08) 0 1px, transparent 1px 34px),
+              repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.08) 0 1px, transparent 1px 34px),
+              #0c0c0c;
+          }
+
+          /* Glass tint over the refracted clone: a faint wash, not an opaque fill. */
+          .lgp-tint {
+            position: absolute;
+            inset: 0;
+            background: rgba(12, 12, 12, 0.38);
+          }
+
+          /* Rim light: a thin bright edge along the top, the single cue
+             that reads as "glass has thickness" rather than "flat panel". */
+          .lgp-rim {
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            box-shadow:
+              inset 0 1px 0 var(--lgp-rim-color, rgba(255, 255, 255, 0.5)),
+              inset 0 0 0 1px rgba(255, 255, 255, 0.09),
+              inset 0 -18px 26px -20px rgba(0, 0, 0, 0.6);
+            pointer-events: none;
+          }
+
+          .lgp-content {
+            position: absolute;
+            inset: 0;
+            display: grid;
+            place-items: center;
+            color: #fafafa;
+            font-family: "JetBrains Mono", ui-monospace, monospace;
+            font-size: clamp(11px, 3.4cqmin, 18px);
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+          }
+        </style>
+
+        <div
+          id="liquid-glass-panel-clip"
+          class="clip"
+          data-start="0"
+          data-duration="2"
+          data-track-index="0"
+        >
+          <!-- Filter defs: feDisplacementMap driven by a turbulence map for
+               the refraction, plus a light feGaussianBlur standing in for
+               glass thickness. Deterministic: fractalNoise with a fixed
+               seed, no time-based animation on the filter itself. -->
+          <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+            <filter id="lgp-displace" x="-20%" y="-20%" width="140%" height="140%">
+              <feTurbulence type="fractalNoise" baseFrequency="0.012 0.018" numOctaves="2" seed="7" result="lgp-noise" />
+              <feGaussianBlur in="SourceGraphic" stdDeviation="1.1" result="lgp-soft" />
+              <feDisplacementMap
+                id="lgp-displace-node"
+                in="lgp-soft"
+                in2="lgp-noise"
+                scale="18"
+                xChannelSelector="R"
+                yChannelSelector="G"
+              />
+            </filter>
+          </svg>
+
+          <div class="lgp-panel">
+            <div class="lgp-refract">
+              <div class="lgp-source"></div>
+            </div>
+            <div class="lgp-tint"></div>
+            <div class="lgp-content">Liquid Glass</div>
+            <div class="lgp-rim"></div>
+          </div>
+        </div>
+
+        <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+        <script>
+          (function () {
+            "use strict";
+
+            var root = document.getElementById("root");
+            var displaceNode = root.querySelector("#lgp-displace-node");
+            var rimEl = root.querySelector(".lgp-rim");
+            var panel = root.querySelector(".lgp-panel");
+
+            var vars =
+              window.__hyperframes && window.__hyperframes.getVariables
+                ? window.__hyperframes.getVariables()
+                : {};
+
+            var radiusRaw = vars.radius == null ? 10 : Number(vars.radius);
+            var radius = Number.isFinite(radiusRaw) ? Math.max(0, Math.min(48, radiusRaw)) : 10;
+            var rimLevels = {
+              subtle: "rgba(255, 255, 255, 0.28)",
+              standard: "rgba(255, 255, 255, 0.5)",
+              strong: "rgba(255, 255, 255, 0.78)",
+            };
+            var rim = Object.prototype.hasOwnProperty.call(rimLevels, vars.rim) ? vars.rim : "standard";
+            var displaceRaw = vars.displace == null ? 18 : Number(vars.displace);
+            var displace = Number.isFinite(displaceRaw) ? Math.max(0, Math.min(40, displaceRaw)) : 18;
+
+            root.style.setProperty("--lgp-radius", radius + "px");
+            root.style.setProperty("--lgp-rim-color", rimLevels[rim]);
+            if (displaceNode) displaceNode.setAttribute("scale", String(displace));
+
+            if (!window.gsap) return;
+
+            var tl = gsap.timeline({ paused: true });
+            // One-shot settle: the rim brightens in from zero over the
+            // first 0.35s so a freshly mounted panel doesn't look inert.
+            tl.fromTo(panel, { opacity: 0, y: 6 }, { opacity: 1, y: 0, duration: 0.3, ease: "power2.out" }, 0);
+            tl.fromTo(
+              rimEl,
+              { boxShadow: "inset 0 1px 0 rgba(255,255,255,0), inset 0 0 0 1px rgba(255,255,255,0), inset 0 -18px 26px -20px rgba(0,0,0,0.6)" },
+              { boxShadow: "inset 0 1px 0 " + rimLevels[rim] + ", inset 0 0 0 1px rgba(255,255,255,0.09), inset 0 -18px 26px -20px rgba(0,0,0,0.6)", duration: 0.35, ease: "power2.out" },
+              0.05,
+            );
+
+            tl.seek(0);
+
+            window.__timelines = window.__timelines || {};
+            window.__timelines["liquid-glass-panel"] = tl;
+          })();
+        </script>
+      </div>
+    </template>
+  </body>
+</html>
