@@ -68,12 +68,16 @@ class TestDoctor:
 
         A CLI that offers commands without saying which ones have no
         implementation behind them leaves the user to discover the gaps by
-        hitting them.
+        hitting them. `reporting` is asserted rather than `analysis`
+        because `analysis/agreement.py` (kappa coding, §53) shipped: the
+        mechanism that names subsystems here reads the package directory
+        directly, so a module landing in `analysis/` is exactly what is
+        supposed to remove it from this list.
         """
         result = invoke("doctor", "--root", str(REPO), "--json")
         coverage = next(c for c in payload(result)["checks"] if c["check"] == "coverage")
         assert coverage["status"] == "WARN"
-        assert "analysis" in coverage["detail"]
+        assert "reporting" in coverage["detail"]
 
     def test_doctor_fails_outside_a_checkout(self, tmp_path: Path) -> None:
         result = invoke("doctor", "--root", str(tmp_path), "--json")
