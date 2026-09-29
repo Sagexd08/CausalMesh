@@ -50,6 +50,16 @@
       "name": "vignette",
       "type": "hyperframes:component",
       "target": "compositions/components/vignette.html"
+    },
+    {
+      "name": "iris-blade-transition",
+      "type": "hyperframes:component",
+      "target": "compositions/components/iris-blade-transition.html"
+    },
+    {
+      "name": "liquid-glass-panel",
+      "type": "hyperframes:component",
+      "target": "compositions/components/liquid-glass-panel.html"
     }
   ]
 }
