@@ -997,11 +997,26 @@ still runs `mypy src`, which reports 14 errors in 11 files that predate the
 audit; `make check` gates the enforced subset instead. `make` is not installed
 on a stock Windows machine, which is why `scripts/check.py` exists.
 
-### The pilot manifest names a person's host and username
+### The pilot manifest named a person's host and username
 
-`data/manifests/pilot_landing.manifest.json` records `machine_id` and
-`operator_id` of a real contributor. It has been in history since the
-provenance commits, so removing it from the tree would not remove it from
-history, and editing the manifest may invalidate what `causalmesh audit`
-checks. Left as found: it is the owner's decision, and a history rewrite is
-not this audit's to make.
+**In the current tree: removed.** `data/manifests/pilot_landing.manifest.json` recorded
+a contributor's hostname and OS username in its `environment` block
+(`machine_id`, `operator_id`); both are now `"unknown"`, which is the value the
+project uses for a field it does not have. No other tracked file carried either
+(checked with `git grep`, case-insensitively). Editing the manifest does not affect
+`causalmesh audit`: the manifest hashes the artifacts it lists, not itself, and no
+document cites its own hash.
+
+**In history: still present.** The original values are in three commits of that
+one file: `54cd3f4`, `743a69e` and `9d258f6` (all 2026-09-15). No other file in any
+commit contains them. A normal commit cannot remove them; only rewriting those
+commits (`git filter-repo`) can, and that changes every later commit hash and
+invalidates every clone and fork. That is a separate decision for the repository
+owner and has not been made or attempted.
+
+**The default that caused it.** `Environment.capture` records `platform.node()` and
+the OS username, and `.gitignore` keeps `data/manifests/**` tracked, so anyone who
+runs `manifest write` and commits publishes their own. Hashing or omitting both by
+default, with an opt-in to record them, is not built: where a run happened is what
+the field is for.
+
