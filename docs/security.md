@@ -146,6 +146,40 @@ An operator controlling the relay and the master seed can construct any log
 they wish before it is anchored. An agent that never joins the relay produces
 no events, and its absence is not detectable from the log alone.
 
+## The gateway and `causalmesh serve`
+
+Added after the chain layer above, and covered by separate tests. Same rule:
+a row is only here if a test runs it.
+
+| Property | Test |
+|---|---|
+| A denied mutating call never runs the handler (sync) | `tests/gateway/test_deny.py::TestHandlerNeverCalled`, `tests/gateway/test_async_gateway.py::test_sync_deny_gate_handler_never_called` |
+| A denied async call never awaits the handler | `tests/gateway/test_async_gateway.py::test_async_deny_gate_handler_never_awaited` |
+| An agent with no signing key is refused before the gate or handler | `tests/sdk/test_evidence.py::TestEveryDeclaredAgentIsRecorded` |
+| A declared `resource_args` name that is absent fails closed | `tests/gateway/test_resolver.py::TestMissingResourceFailsClosed` |
+| Without `--dev`, `/v1/tools` and `/v1/chat/completions` refuse a missing or wrong bearer token | `tests/server/test_auth.py`, `tests/server/test_openai_compat.py` |
+| `--dev` is refused for a non-localhost host; a token is required otherwise | `tests/integration/test_serve.py::TestCliWiring` |
+| A blank or whitespace `--api-token` is treated as no token, never as auth-off (found and fixed 2026-09-30; mutation-checked) | `tests/integration/test_serve.py::TestCliWiring::test_a_blank_token_is_no_token_and_never_disables_auth` |
+| An unhandled error on `/execute` returns a generic 500 with no exception text or traceback | `tests/server/test_errors.py::test_an_unhandled_error_is_a_generic_500_without_detail` (execute route only; other routes share the handler but are not separately tested) |
+
+Not protected:
+
+- **Reads.** A tool registered `mutating=False` bypasses the gate by design.
+- **Unenforced arms.** On C0-C2 the gate records what C3 would refuse and
+  allows the call (`result.would_refuse`).
+- **`/v1/chat/completions` evidence.** It ignores the relay's ingest result,
+  so a request naming an undeclared `causalmesh_agent` is still gated but its
+  event is silently not recorded, unlike `/v1/tools/{name}/execute`, which
+  reports `recorded` and `audit_error`.
+- **Key custody in SDK sessions.** With `seed=`, anyone holding the seed can
+  sign as any agent. Without it, keys are random per session and the chain is
+  not reproducible.
+- **Transport.** `serve` speaks plain HTTP; TLS is the operator's proxy.
+  The bearer token is a single shared secret compared as a set member, not a
+  per-agent identity.
+- **The Docker image** binds `0.0.0.0` and therefore requires
+  `CAUSALMESH_API_TOKEN`; it is not a sandbox for the tools registered in it.
+
 ## Verification is offline by construction
 
 §26 and §82 require that evidence be checkable without the system that

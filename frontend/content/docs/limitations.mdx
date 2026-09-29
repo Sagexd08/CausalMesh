@@ -17,6 +17,8 @@ a deliberate scope decision, not a forgotten to-do.
 | `causalmesh report` | Generated figures and tables; the rest of the CLI is built |
 | CooperBench import (real dataset) | Tasks whose structure is not known by construction; loader is built and proven on one synthetic worked example (see `docs/backlog.md`) |
 | Scaling beyond 4 agents | The scalability profile |
+| Anthropic `tool_use`, LangGraph and CrewAI adapters | The SDK ships Generic, OpenAI function-calling and LangChain adapters, tested with mocks only |
+| SDK claims, persistence and export | SDK sessions have no claim registry and keep their chain in memory |
 
 ## Built but not executed
 
@@ -83,6 +85,10 @@ settings remove the randomness that can be removed and record the rest.
 profile. It is exercised by unit tests but has **no production consumer** in
 this slice — a genuine exception to the no-dead-code rule, recorded here
 rather than hidden.
+
+`adapters/serve.py` (the stdlib `http.server` implementation of `serve`) is
+unreachable from any entrypoint since `serve` moved onto FastAPI; only its own
+test file exercises it.
 
 `RunState.TIMED_OUT` is reachable in the state machine and tested there, but
 no run has yet reached it: whole-run timeouts need a watchdog this slice

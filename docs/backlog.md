@@ -415,7 +415,7 @@ the blocker is measurement validity, not mechanism.
 **Status:** wired into `docker-compose.yml`, documented as optional.
 
 **Why:** Windows has no `chroot` and no mount namespaces, so the L1 layer
-is process separation rather than a filesystem jail. `docs/security.md`
+is process separation rather than a filesystem jail. `docs/isolation.md`
 states this precisely rather than claiming a jail that does not exist.
 
 **What it would take:** running the harness on Linux or in CI, where the
@@ -714,15 +714,34 @@ project, outside a CausalMesh checkout. All three are now real and tested;
   chain, no ledger, no run — it answers one question and exits, same as
   `policy check` always has.
 - **`docker/Dockerfile` and `docker-compose.yml`** package the already-standalone
-  `causalmesh serve` — only the four runtime dependencies (`cryptography`,
-  `PyYAML`, `typer`, `rich`; `serve` itself uses only `http.server` from the
-  stdlib), no `causalmesh.yaml` baked into the image, bind-mounted read-only at
-  run time instead. Verified by hand in this environment (Docker Desktop's
-  daemon was not running by default; started for this check): `docker build`
-  succeeds, `docker compose up` starts the container, `GET /healthz` returns
-  200, and a `POST /v1/chat/completions` against this repository's own
-  `causalmesh.yaml` (no `--upstream`, so a stub reply) returns a gated response
-  rather than a connection error.
+  `causalmesh serve`, no `causalmesh.yaml` baked into the image, bind-mounted
+  read-only at run time instead.
+
+  **Regression found and fixed 2026-09-30.** The paragraph above originally
+  described `serve` as using only `http.server` from the stdlib, needing
+  just the four base runtime dependencies. That was true when it was
+  written; it stopped being true when `causalmesh serve` moved onto FastAPI
+  (Phase 2A, `d7e02ce`) — `commands_serve.py` now imports `uvicorn`
+  unconditionally and fails with "uvicorn is required" if it is missing.
+  The Dockerfile still ran a bare `pip install .`, so the image it built
+  could not actually start `serve`; the CLI's own mandatory-auth check
+  (`--api-token` required unless `--dev`, and `--dev` is refused for any
+  non-localhost `--host`, which `--host 0.0.0.0` always is) meant
+  `docker-compose.yml` would have failed a second, independent way even
+  with the dependency fixed, since it passed no token. Nobody re-ran the
+  container after the FastAPI migration to catch either.
+
+  Fixed: the Dockerfile now installs `.[server]`, and `docker-compose.yml`
+  passes `CAUSALMESH_API_TOKEN` through from the environment.
+  **Re-verified by hand in this environment** (Docker Desktop, real
+  `docker build` + `docker run`, not asserted from reading the Dockerfile):
+  build succeeds, the container starts, `GET /healthz` returns 200,
+  `GET /v1/tools` without a token returns 401, and with the correct
+  `Authorization: Bearer` token returns 200. `docker compose up` was then
+  run for real against the final tree: the same 401/200 results held on
+  `/v1/tools`, `/v1/tools/{name}/execute` and `/v1/chat/completions`, and
+  with `CAUSALMESH_API_TOKEN` unset the container exits with code 2 and
+  "--api-token is required" instead of starting unauthenticated.
 
 **What does not ship:**
 
@@ -753,7 +772,6 @@ a regression this work introduced.
 instead of fixing them. They are restored and now read `result.output`, which
 holds both streams under every `click` version, so the tests again check
 that quickstart reported what it did rather than only its exit code.
-  and PILOT/DERIVED labeling conventions) does not.
 
 ## Developer SDK (Phase 1, landed 2026-09-27)
 
@@ -794,10 +812,18 @@ mutation-checked: reverting the fix makes a test there fail.
 
 **What does not ship:**
 
-- **Framework adapters.** OpenAI function calling, Anthropic `tool_use`,
-  LangGraph and CrewAI are not implemented. `GenericAdapter` is the only
-  adapter. Each framework's call shape is its own contract, and none has
-  been exercised.
+- **Framework adapters (updated 2026-09-29).** `GenericAdapter`,
+  `OpenAIAdapter` (function calling, no vendor SDK — `schema.py` derives
+  JSON Schema from the handler's own signature) and `LangChainAdapter`
+  (`langchain-core` required, isolated behind an `ImportError` guard so
+  importing `causalmesh.integrations` without it still works) are
+  implemented and tested (`tests/integration/test_openai_adapter.py`,
+  `tests/integration/test_langchain_adapter.py`). Every adapter routes
+  exclusively through `BaseFrameworkAdapter.call_tool`/`acall_tool` —
+  `CausalMesh.execute`/`execute_async` — so there is one authorization path
+  regardless of which framework calls in; none of the three constructs a
+  second gate or calls a tool's handler directly. Anthropic `tool_use`,
+  LangGraph and CrewAI adapters are still not implemented.
 - **Human-in-the-loop approval from the SDK.** Checkpoints exist in the
   gate, but the SDK installs no checkpoint handler, so a matched checkpoint
   refuses by default.
@@ -814,3 +840,31 @@ mutation-checked: reverting the fix makes a test there fail.
 - **Reads are not gated.** `mutating=False` tools go around the gate, as
   §20 defines for the experiment. An operator who wants reads checked has
   to declare those tools mutating.
+
+## CI cannot currently run (external blocker, recorded 2026-09-30)
+
+**Status: blocked outside the repository.** None of the 7 most recent GitHub
+Actions runs on `main` (2026-09-28 15:39 UTC through 2026-09-29 17:33 UTC)
+started a job: every job shows no runner and no recorded steps, and the
+check-run annotation reads *"The job was not started because recent account
+payments have failed or your spending limit needs to be increased."* The
+failures at the top of `main`'s history are therefore not test failures, and
+a green check has not been possible to obtain since then. Fixing it is an
+account and billing action for the repository owner, not a code change, and
+nothing in this repository should be edited to hide it.
+
+**What that means for every test claim here.** The counts in the README are
+from a local run on one Windows machine. The Linux and macOS legs, Python
+3.11 and 3.13, the security scan and the site build have had no remote
+execution in that window. The site build was run separately, in a Linux Node
+22 container, on 2026-09-30, and passed.
+
+**A related gap, closed in this change but unproven remotely.** The
+`test` job installs only `.[dev,analysis]`, so `tests/server`, the `serve`
+CLI tests and the LangChain adapter tests skipped there rather than ran.
+A `server-and-adapters` job now installs the `server` extra and
+`langchain-core` and runs them with `-rs`; it has been run locally, not on
+GitHub.
+
+**Heads-up from the same annotation:** `ubuntu-latest` migrates to Ubuntu 26
+from 2026-10-19.

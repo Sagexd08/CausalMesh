@@ -12,6 +12,17 @@ inside it is in the commit log, and what is deliberately absent is in
 
 ### Added
 
+- **Developer SDK and tool gateway.** `CausalMesh`, `Tool` and `ToolGateway`
+  put the existing gate in front of an operator's own tools, sync and async.
+  Tools are gated unless declared `mutating=False`; protected resources come
+  from explicit `resource_args`, and a missing one fails closed.
+- **`causalmesh serve` on FastAPI** (`pip install 'causalmesh[server]'`):
+  `/v1/tools`, `/v1/tools/{name}/execute`, `/v1/chat/completions`, bearer
+  authentication, and `--dev` (no auth) refused for any non-localhost host.
+- **Framework adapters** for OpenAI function calling and LangChain
+  (`langchain-core` optional), both routed through `CausalMesh.execute`.
+  Tested with mocks only; no hosted model or real framework agent loop was run.
+
 - **The policy plane.** A declared contract (`causalmesh.yaml`) read by a
   gate that allows or refuses, and a ledger that records what has been
   consumed across processes. Four resource kinds: paths, spend, endpoints
@@ -38,6 +49,20 @@ inside it is in the commit log, and what is deliberately absent is in
 
 ### Fixed
 
+- **The Docker image could not start `serve`.** It installed no
+  `fastapi`/`uvicorn`, and `docker-compose.yml` passed no API token. It now
+  installs `.[server]` and reads `CAUSALMESH_API_TOKEN`.
+- **`causalmesh serve --api-token ""` started with authentication off.** A
+  blank token (for example from an unset shell variable) passed the "token
+  required" check and then left the server with no valid tokens, so
+  `/v1/tools` answered 200 to anyone on `--host 0.0.0.0`. A blank or
+  whitespace token is now treated as no token.
+- **CLI error text was parsed as Rich markup.** `pip install
+  'causalmesh[server]'` printed as `pip install 'causalmesh'`, and an error
+  message containing a stray `[/tag]` raised `MarkupError` inside the error
+  reporter. `fail`, `warn` and `note` now escape their text.
+- **`causalmesh doctor` called the adversarial battery "not built"** because
+  it inspected an empty `src/` package; the battery is `tests/adversarial`.
 - **The model transport opened any URL `urllib` had a handler for.** A
   `file://` base URL reaching it from a config or an environment variable
   would have read a local path and returned its contents as a model reply,
