@@ -1,8 +1,8 @@
 # Continuous integration.
 #
-# The suite is the project's central claim: 775 tests covering a signed
-# chain, a claim registry that must hold across processes, and a verifier
-# that has to detect tampering. A suite nobody runs on a pull request is not
+# The suite is the project's central claim: a signed chain, a claim registry
+# that must hold across processes, and a verifier that has to detect
+# tampering. A suite nobody runs on a pull request is not
 # a safety net, it is a historical record of one machine on one day.
 #
 # Three properties this workflow is built for:
@@ -123,6 +123,37 @@ jobs:
         # fake server. Slower, and worth running separately so a failure
         # says which half broke.
         run: pytest -q tests/integration
+
+  # The `test` job installs no `server` extra and no `langchain-core`, so
+  # tests/server, the `serve` CLI tests and the LangChain adapter tests all
+  # skip there (importorskip). Those are the tests that cover the HTTP
+  # authentication boundary and the framework adapters; a job that never
+  # runs them is a green check that says nothing about either.
+  server-and-adapters:
+    name: server and adapters (optional extras installed)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,server]" langchain-core
+
+      # -rs lists every skip, so a test that silently stops running because
+      # an extra went missing shows up in the log instead of as a pass.
+      - name: Server, serve CLI and adapter tests
+        run: >
+          pytest -q -rs
+          tests/server
+          tests/integration/test_serve.py
+          tests/integration/test_openai_adapter.py
+          tests/integration/test_langchain_adapter.py
 
   evidence:
     name: evidence verifies offline
