@@ -6,7 +6,7 @@ PYTHON ?= python
 .DEFAULT_GOAL := help
 .PHONY: help install install-dev doctor test test-unit test-integration \
         test-property test-adversarial test-failure test-repro lint format \
-        typecheck check check-fast smoke verify analyze report audit reproduce clean
+        typecheck check check-fast smoke verify analyze audit clean
 
 help: ## Show this help
 	@echo "CausalMesh — available targets:"
@@ -93,12 +93,6 @@ verify: ## Verify all event chains offline
 
 analyze: ## Analyze the most recent experiment
 	$(PYTHON) -m causalmesh.cli.main analyze --latest
-
-report: ## Generate figures, tables and the report
-	$(PYTHON) -m causalmesh.cli.main report --latest
-
-reproduce: ## Full reproducibility sequence (spec §70)
-	$(PYTHON) -m causalmesh.cli.main reproduce
 
 # ---------------------------------------------------------------------------
 # Housekeeping

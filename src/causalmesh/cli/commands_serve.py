@@ -3,13 +3,9 @@
 Routes through `server/app.py:create_app` (FastAPI). See `server/app.py`
 for the scope decision (gate-and-record, not a full proxy, by default).
 
-`adapters/serve.py` (`ServeConfig`/`run_server`, stdlib `http.server`) was
-this command's implementation before the FastAPI migration (Phase 2A).
-Nothing in `src/` reaches it anymore -- only its own
-`tests/integration/test_serve.py` exercises it. It is left in place rather
-than deleted, same as `RunState.TIMED_OUT` and `PathScopedDelivery`
-(docs/backlog.md): removing it is a separate, deliberate decision, not a
-side effect of this docstring.
+A stdlib `http.server` implementation of this command (`adapters/serve.py`)
+existed before the FastAPI migration. It was removed on 2026-09-30: nothing
+reached it, it had no authentication, and it still carried defects fixed here.
 """
 
 from __future__ import annotations
