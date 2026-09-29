@@ -59,11 +59,13 @@ causalmesh analyze --latest                 # what each arm bought and cost
 ruff check src tests          # must pass
 ruff format src tests         # must be clean
 pytest -q                     # must pass
+python scripts/check.py       # all of the above, plus types and the security scan
 ```
 
-CI runs these on Linux, Windows and macOS. Windows is not optional: the
+There is no CI, so run the gate yourself, and on Windows if you can: the
 isolation layer and the terminal interface both behave differently there,
-and both have shipped bugs that only appeared on it.
+and both have shipped bugs that only appeared on it. The site has its own
+check: `npm run types:check && npm run build`.
 
 ## The rules that are not style preferences
 

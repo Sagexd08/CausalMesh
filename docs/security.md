@@ -7,7 +7,7 @@ appears under "Not protected", even where a stronger claim would sound better.
 
 Status: describes the implementation as of the offline verifier and its
 attack battery (Steps 2–3 of `docs/PLAN.md`). Every row in the tables below
-corresponds to a test that runs in CI.
+corresponds to a test in the suite (`python scripts/check.py` runs it).
 
 ## What the chain is
 

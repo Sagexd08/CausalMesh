@@ -16,11 +16,15 @@ pytest -q --ignore=tests/integration   # faster, skips subprocess tests
 pytest -m unit -q                  # fastest inner loop
 ruff check src tests               # lint, must pass
 ruff format src tests              # format, must be clean
+python scripts/check.py            # the whole local gate in one command
 causalmesh doctor                  # what this machine has and lacks
 ```
 
-CI runs lint, format, the suite on three platforms, an offline evidence
-check, and the site build. All of them must pass.
+There is no CI. `python scripts/check.py` is the gate (lint, format, types on
+the enforced modules, the security scan and the suite) and it must pass before
+a change is merged. It tests the one machine it runs on: Windows, Linux and
+macOS each need a run of their own, and the site has its own check
+(`npm run types:check && npm run build`).
 
 ## Layout
 

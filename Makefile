@@ -6,7 +6,7 @@ PYTHON ?= python
 .DEFAULT_GOAL := help
 .PHONY: help install install-dev doctor test test-unit test-integration \
         test-property test-adversarial test-failure test-repro lint format \
-        typecheck smoke verify analyze report audit reproduce clean
+        typecheck check check-fast smoke verify analyze report audit reproduce clean
 
 help: ## Show this help
 	@echo "CausalMesh — available targets:"
@@ -70,6 +70,15 @@ format: ## Auto-format the source tree
 
 typecheck: ## Static type checking
 	$(PYTHON) -m mypy src
+
+# There is no CI. scripts/check.py is the gate: lint, format, mypy on the
+# enforced modules (not `mypy src`, which reports pre-existing debt), bandit
+# and the full suite. It also works where `make` is not installed.
+check: ## The local gate: lint, format, enforced types, security, full suite
+	$(PYTHON) scripts/check.py
+
+check-fast: ## The same gate without the subprocess (integration) tests
+	$(PYTHON) scripts/check.py --fast
 
 # ---------------------------------------------------------------------------
 # Experiment pipeline

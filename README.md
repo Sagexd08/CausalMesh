@@ -1,6 +1,5 @@
 # CausalMesh
 
-[![CI](https://github.com/Sagexd08/CausalMesh/actions/workflows/ci.yml/badge.svg)](https://github.com/Sagexd08/CausalMesh/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](pyproject.toml)
 
@@ -115,10 +114,10 @@ That last row is a real limitation, documented rather than hidden.
 1425 tests, and a full `pytest` run (slow tests included) on one Windows 11,
 Python 3.12 machine gave 1384 passed, 0 failed and 41 skipped: 35 need pilot
 artifacts that are not in the checkout, 2 need symlink privilege, 1 needs
-`TYPESAFE_API_KEY`, 1 needs `bash` and `jq`. That is one machine on one day;
-no remote CI job has started since 2026-09-28 (GitHub billing block, see
-`docs/backlog.md`), so CI does not corroborate this. Re-run rather than trust
-this line.
+`TYPESAFE_API_KEY`, 1 needs `bash` and `jq`. That is one machine on one day, and
+there is no CI to corroborate it: the workflow was removed rather than paid
+for (see `docs/backlog.md`). Re-run `python scripts/check.py` rather than
+trust this line.
 
 The build follows a vertical slice first: a single scenario driven end-to-end
 through every subsystem, executed under all four arms, before breadth is

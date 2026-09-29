@@ -62,7 +62,7 @@ dev = [
     # Pinned rather than floored. Lint and format rules change between
     # minor releases, so an unpinned version means a pull request that
     # changed nothing can fail on a rule that did not exist when it was
-    # opened. CI installs these exact versions.
+    # opened. `pip install -e '.[dev]'` installs these exact versions.
     "ruff==0.9.6",
     "mypy==1.14.1",
     "types-PyYAML>=6.0",
