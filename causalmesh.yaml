@@ -1,80 +1,56 @@
-# causalmesh.yaml - what agents working in this repository may do.
+# causalmesh.yaml - what agents in this repository may do.
 #
 # Sibling to AGENTS.md, not a replacement. AGENTS.md says what agents should
-# do and enforces nothing; this says what they are allowed to do, and the
-# gate holds them to it. The project argues that a convention every agent
-# reads and no agent is held to is a convention without a substrate, so it
-# ships both halves rather than only the readable one.
+# do; this says what they are allowed to do, and the gate holds them to it.
 #
-# Check any rule without running an agent or spending anything:
-#
-#     causalmesh policy show
-#     causalmesh policy check --agent docs --kind path --name src/causalmesh/crypto/chain.py
-#
-# `check` exits 0 when allowed and 1 when refused, and records nothing.
+# Generated from AGENTS.md's own Layout table: one role per top-level path
+# it names, owning exactly that path and nothing else. Nobody's archetype,
+# budget or allowlist was guessed -- add those by hand where they apply.
+# Absent means unrestricted. Check any rule with:
+#     causalmesh policy check --agent causalmesh --kind path --name src/causalmesh
 version: 1
 
 roles:
-  # The crypto and claims layers are where this project's guarantees live.
-  # A change to either invalidates evidence that verifies today, so they are
-  # owned rather than open: an agent editing them should be one that was
-  # asked to.
-  - agent_id: substrate
+  - agent_id: causalmesh
     archetype: writer
-    owns:
-      - src/causalmesh/crypto/
-      - src/causalmesh/claims/
-      - src/causalmesh/events/
-      - src/causalmesh/verifier/
-
-  - agent_id: policy
+    # the substrate. Everything shipped.
+    owns: [src/causalmesh/]
+  - agent_id: tests
     archetype: writer
-    owns:
-      - src/causalmesh/policy/
-      - src/causalmesh/cli/commands_policy.py
-
-  - agent_id: interface
+    # the suite, marked by kind
+    owns: [tests/]
+  - agent_id: fixtures
     archetype: writer
-    owns:
-      - src/causalmesh/tui/
-      - src/causalmesh/cli/
-
+    # experimental material. Do not lint or reformat.
+    owns: [fixtures/]
   - agent_id: web
     archetype: writer
-    owns:
-      - frontend/
-
+    # the whole website: / and /docs
+    owns: [frontend/]
   - agent_id: docs
     archetype: writer
-    owns:
-      - docs/
-      - README.md
-      - CONTRIBUTING.md
-      - AGENTS.md
+    # architecture, protocol, security, and the backlog
+    owns: [docs/]
 
-  # Reads everything, owns nothing. The archetype exists so a review agent
-  # can be pointed at the repository without any path being writable by it.
-  - agent_id: reviewer
-    archetype: checker
-    owns: []
+  # An agent that spends money. Uncomment to enforce it.
+  # - agent_id: buyer
+  #   archetype: spender
+  #   allow: [api.example.com]      # hosts it may reach; covers subdomains
+  #   budget:
+  #     usd_total: "5.00"           # quote money, or use an integer
+  #     usd_per_call: "0.10"        # the one catastrophic call, refused
 
 policy:
-  # C3 is the enforcing arm. The others record what C3 would have done
-  # without acting on it, which is what makes the contrast measurable.
+  # C0 none - C1 transcripts - C2 metadata - C3 metadata + enforced claims.
+  # Only C3 refuses; the others record what C3 would have done.
   arm: C3
 
-  # Files several roles legitimately touch. An exclusive lease means one
-  # writer at a time rather than one owner forever.
-  contested:
-    pyproject.toml: exclusive
-    package.json: exclusive
-    .github/workflows/ci.yml: exclusive
+  # Paths that need an exclusive lease before a write.
+  contested: {}
 
-  budgets:
-    # A ceiling on an open-ended agent loop. The failure this prevents is
-    # discovering the cost on an invoice rather than at the gate.
-    tokens: 400000
+  # Allowances for the whole run, unless a role declares its own.
+  budgets: {}
+    # tokens: 200000
 
 evidence:
   sign: true
-  verify_on_exit: true
