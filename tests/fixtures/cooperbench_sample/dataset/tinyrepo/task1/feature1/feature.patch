@@ -1,0 +1,12 @@
+diff --git a/src/greeter.py b/src/greeter.py
+index 2a89d8e..7f30084 100644
+--- a/src/greeter.py
++++ b/src/greeter.py
+@@ -2,6 +2,7 @@
+ 
+ GREETINGS = {
+     "casual": "Hi",
++    "formal": "Good day",
+ }
+ 
+ 
