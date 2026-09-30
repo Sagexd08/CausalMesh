@@ -46,6 +46,7 @@ from causalmesh.policy.ledger import Ledger, Reservation
 from causalmesh.policy.resource import Resource, ResourceKind
 from causalmesh.relay import Relay
 
+from .clock import DEFAULT_CLOCK_BASE_US, DEFAULT_CLOCK_TICK_US, LogicalClock
 from .resolver import ResourceResolver
 from .result import GatewayResult
 from .tool import Tool
@@ -77,6 +78,12 @@ class ToolGateway:
         ledger:     Where consumption is recorded once a spend or budget call
                     has run.  Without one, a declared total cannot be enforced
                     and the gate refuses the call (see ``Gate(require_ledger)``).
+        clock_base_us, clock_tick_us:
+                    The logical clock that stamps the signed chain, the gate
+                    and the ledger: ``base + n * tick`` for the n-th call.
+                    Constants by default, so two identical sessions produce
+                    identical chains.  The wall-clock time of each call is
+                    kept apart, in ``wall_times()``, and never signed.
     """
 
     def __init__(
@@ -88,8 +95,12 @@ class ToolGateway:
         identity_factory: Any | None = None,
         gate: ContractGate | None = None,
         ledger: Ledger | None = None,
+        clock_base_us: int = DEFAULT_CLOCK_BASE_US,
+        clock_tick_us: int = DEFAULT_CLOCK_TICK_US,
     ) -> None:
         self._ledger = ledger
+        self.clock = LogicalClock(base_us=clock_base_us, tick_us=clock_tick_us)
+        self._wall_times: dict[str, int] = {}
         self._boundary = boundary
         self._relay = relay
         self._agent_id = agent_id
@@ -204,7 +215,7 @@ class ToolGateway:
 
         tool = self._tools[tool_name]
         args = dict(arguments or {})
-        ts = now_us if now_us is not None else utc_now_micros()
+        ts, wall_us = self._stamp(now_us)
 
         # Extract paths using ResourceResolver instead of guessing "path".
         if paths is None:
@@ -250,6 +261,8 @@ class ToolGateway:
                 shadow=shadow,
                 annotations=annotations,
             )
+            if event_id is not None:
+                self._wall_times[event_id] = wall_us
             audit_error = self._record_consumption(
                 internal_result,
                 resources,
@@ -267,6 +280,25 @@ class ToolGateway:
         return GatewayResult(
             internal_result, event_id=event_id, audit_error=audit_error, shadow=shadow
         )
+
+    def _stamp(self, now_us: int | None) -> tuple[int, int]:
+        """``(logical time, wall time)`` for one call.
+
+        The first is signed, gated and ledgered; the second is for the
+        envelope only.  A caller-supplied ``now_us`` is used as given, and the
+        clock moves past it so later calls stay in order.
+        """
+        wall_us = utc_now_micros()
+        ts = self.clock.tick() if now_us is None else self.clock.observe(now_us)
+        return ts, wall_us
+
+    def wall_times(self) -> dict[str, int]:
+        """Wall-clock microseconds of each recorded call, by event id.
+
+        Not signed and not reproducible: it belongs in the unsigned envelope.
+        An event with no entry has no known wall time (unknown, not zero).
+        """
+        return dict(self._wall_times)
 
     def _shadow_refusal(self, checks_before: int) -> Verdict | None:
         """The first refusal this call's checks recorded but did not enforce."""
@@ -303,7 +335,7 @@ class ToolGateway:
 
         tool_obj = self._tools[tool]
         args = dict(arguments or {})
-        ts = now_us if now_us is not None else utc_now_micros()
+        ts, wall_us = self._stamp(now_us)
 
         if paths is None:
             paths = self._resolver.resolve(tool_obj, args)
@@ -343,6 +375,8 @@ class ToolGateway:
                 shadow=shadow,
                 annotations=annotations,
             )
+            if event_id is not None:
+                self._wall_times[event_id] = wall_us
             audit_error = self._record_consumption(
                 internal_result,
                 resources,
