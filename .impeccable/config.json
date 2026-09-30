@@ -4,22 +4,13 @@
     "ignoreFiles": [],
     "ignoreValues": [
       {
-        "rule": "gradient-text",
+        "rule": "buried-raster",
         "value": "*",
         "files": [
-          "videos/causalmesh-motion/index.html"
+          "videos/causalmesh-film/composition/index.html"
         ],
-        "createdAt": "2026-09-27T23:28:34.679Z",
-        "reason": "Claude: text-shimmer registry primitive; solid #fafafa at rest, specular band only during one timed sweep"
-      },
-      {
-        "rule": "clipped-overflow-container",
-        "value": "*",
-        "files": [
-          "videos/causalmesh-motion/index.html"
-        ],
-        "createdAt": "2026-09-27T23:28:34.922Z",
-        "reason": "Claude: Hyperframes render canvas; html/body/#root are a fixed 1080x1920 frame that must clip"
+        "createdAt": "2026-09-30T08:25:15.931Z",
+        "reason": "Claude: #grain is a procedural film-grain tile at 0.1 opacity with mix-blend-mode overlay, re-offset every frame; low opacity is the intended texture strength"
       }
     ]
   }
