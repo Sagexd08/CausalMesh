@@ -142,7 +142,17 @@ So consumption is SQLite with WAL, for the same reason the claim registry is.
 
 Only actions that **happened** are recorded. A gate check that refused writes
 nothing, and a gate check that allowed writes nothing either; the caller
-records after acting. That keeps totals measuring work done rather than
+records after acting.
+
+A caller that is about to act on a declared total does not check and then
+record, because two callers can both pass the check before either records.
+`Gate.check(..., holds=[])` **reserves** the amount in the same ledger
+transaction that compares it to the limit (`Ledger.reserve`, `BEGIN
+IMMEDIATE`); the caller then `commit`s the hold when the action happened or
+`release`s it when it did not. The SDK does this for every `spend` and `budget`
+tool. `total` is still only what happened, and the gate counts recorded plus
+held, so a plain `check` does not admit a call an in-flight one has already
+claimed the room for. That keeps totals measuring work done rather than
 questions asked — the distinction `may_write` and `record_denial` already draw
 in the claim registry, and the reason an earlier build reported a confident
 zero for enforcement.

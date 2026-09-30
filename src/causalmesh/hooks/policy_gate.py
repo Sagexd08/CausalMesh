@@ -43,6 +43,7 @@ from causalmesh.policy.resource import ResourceError
 if TYPE_CHECKING:
     from causalmesh.claims.registry import ClaimRegistry
     from causalmesh.policy.checkpoints import CheckpointHandler
+    from causalmesh.policy.ledger import Reservation
 
 __all__ = ["ContractGate"]
 
@@ -106,22 +107,36 @@ class ContractGate:
         named: list[tuple[str, Resource | None]] = [(path, None) for path in call.paths]
         named.extend((resource.identity, resource) for resource in getattr(call, "resources", ()))
 
+        # A call that carries a `reservations` list asks for its totals to be
+        # reserved, not just checked: the gateway commits or releases what lands
+        # here once the handler has run. A call without one (the harness's own
+        # `ToolCall`) is checked only, as before.
+        holds: list[Reservation] | None = getattr(call, "reservations", None)
+        taken: list[Reservation] | None = [] if holds is not None else None
+
         for label, declared in named:
             try:
                 resource = declared if declared is not None else Resource.path(label)
             except ResourceError as exc:
                 # A path that cannot be formed cannot be decided on. Refuse it as
                 # data, like every other refusal, instead of raising past the gate.
+                self._give_back(taken)
                 return GateDecision(
                     allowed=False,
                     reason=f"{label!r} is not a usable resource: {exc}",
                     blocked_path=label,
                     rule="malformed",
                 )
-            verdict = self.policy.check(agent_id=call.agent_id, resource=resource, now_us=now_us)
+            verdict = self.policy.check(
+                agent_id=call.agent_id, resource=resource, now_us=now_us, holds=taken
+            )
             self.verdicts.append(verdict)
             if not verdict.refused:
                 continue
+
+            # A refused call spends nothing, so what an earlier resource of the
+            # same call reserved goes back: the call is all-or-nothing.
+            self._give_back(taken)
 
             if verdict.rule == "claim" and self.registry is not None:
                 holder = self.registry.check(
@@ -144,7 +159,13 @@ class ContractGate:
                 rule=verdict.rule,
             )
 
+        if holds is not None and taken:
+            holds.extend(taken)
         return GateDecision(allowed=True, reason="the contract permits this call")
+
+    def _give_back(self, taken: list[Reservation] | None) -> None:
+        if taken:
+            self.policy.release(taken)
 
     def refusals(self) -> list[Verdict]:
         """Every verdict that refused, in order."""
