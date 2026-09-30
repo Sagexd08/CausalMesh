@@ -1,0 +1,12 @@
+{
+  "name": "causalmesh-film",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "npx --yes hyperframes@0.8.81 preview",
+    "lint": "npx --yes hyperframes@0.8.81 lint",
+    "check": "npx --yes hyperframes@0.8.81 check",
+    "snapshot": "npx --yes hyperframes@0.8.81 snapshot",
+    "render": "npx --yes hyperframes@0.8.81 render --quality delivery --output ../brag.mp4"
+  }
+}

@@ -11,6 +11,7 @@ from causalmesh.sdk.errors import (
     ToolNotFoundError,
     UnknownAgentError,
 )
+from causalmesh.server.observability import REQUEST_ID_HEADER, loggable, request_id_for
 
 log = logging.getLogger(__name__)
 
@@ -39,5 +40,17 @@ def register_error_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(Exception)
     async def generic_exception_handler(request: Request, exc: Exception) -> JSONResponse:
-        log.exception(f"Unhandled exception during {request.method} {request.url.path}")
-        return JSONResponse(status_code=500, content={"detail": "Internal Server Error"})
+        # This handler runs in Starlette's outermost middleware, outside ours,
+        # so the request id is read from the scope rather than the context.
+        request_id = request_id_for(request.scope)
+        log.exception(
+            "Unhandled exception during %s %s",
+            request.method,
+            loggable(request.url.path),
+            extra={"request_id": request_id},
+        )
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Internal Server Error"},
+            headers={REQUEST_ID_HEADER: request_id},
+        )

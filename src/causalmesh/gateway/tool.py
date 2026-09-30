@@ -69,6 +69,7 @@ class Tool:
     resource_kind: str = "path"
     amount_arg: str | None = None
     unit: str = ""
+    spend_on_error: bool = False
 
     def __post_init__(self) -> None:
         if not isinstance(self.name, str) or not self.name.strip():
@@ -107,6 +108,10 @@ class Tool:
             raise ValueError(
                 f"Tool {self.name!r}: resource_kind={kind.value!r} needs resource_args, "
                 "or nothing would be checked"
+            )
+        if self.spend_on_error and not consumable:
+            raise ValueError(
+                f"Tool {self.name!r}: spend_on_error only applies to spend and budget tools"
             )
         if consumable and not self.mutating:
             raise ValueError(

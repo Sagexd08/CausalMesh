@@ -61,7 +61,10 @@ def measure_run(
     """
     agents = [spec.agent_id(i) for i in range(spec.n_agents)]
     ring = PublicKeyRing.from_keypairs(
-        {actor: KeyPair.derive(master_seed, actor) for actor in [*agents, "acceptance"]}
+        {
+            actor: KeyPair.derive(master_seed, actor)
+            for actor in [*agents, "acceptance", "integration_test"]
+        }
     )
     chain_valid = verify_chain(result.records, ring).valid
 

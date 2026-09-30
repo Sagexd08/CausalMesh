@@ -1,0 +1,2 @@
+CausalMesh.
+The accountability layer underneath AI agents: every action gated, signed, and recorded, with every refusal kept alongside its reason.

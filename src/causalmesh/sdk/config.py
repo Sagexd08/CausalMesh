@@ -26,7 +26,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from causalmesh.policy.contract import Contract, ContractError
+from causalmesh.policy.contract import Contract, ContractError, parse_sdk_sections
 
 from .errors import ConfigurationError
 
@@ -42,10 +42,6 @@ _ALLOWED_TOP_LEVEL = {
     "agent",
     "tools",
 }
-
-_AGENT_KEYS = {"id"}
-_TOOL_ENTRY_KEYS = {"mode"}
-_ALLOWED_TOOL_MODES = {"auto"}
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,13 +91,10 @@ def load_sdk_config(path: Path | str) -> tuple[Contract, SDKConfig]:
             f"Valid keys: {', '.join(sorted(_ALLOWED_TOP_LEVEL))}"
         )
 
-    # Contract.from_dict is strict and rejects unknown keys.
-    # Strip the Phase-1 SDK extension keys before passing to it.
-    _sdk_only_keys = {"agent", "tools"}
-    contract_raw = {k: v for k, v in raw.items() if k not in _sdk_only_keys}
-
+    # The core schema accepts (and validates) the SDK sections itself, so the
+    # whole mapping goes through it unchanged.
     try:
-        contract = Contract.from_dict(contract_raw, source=path)
+        contract = Contract.from_dict(raw, source=path)
     except ContractError as exc:
         raise ConfigurationError(str(exc)) from exc
 
@@ -110,50 +103,13 @@ def load_sdk_config(path: Path | str) -> tuple[Contract, SDKConfig]:
 
 
 def _parse_sdk_fields(raw: dict[str, Any]) -> SDKConfig:
-    """Extract the Phase-1 extension fields from an already-loaded mapping."""
-    agent_section = raw.get("agent")
-    agent_id: str | None = None
-    if agent_section is not None:
-        if not isinstance(agent_section, dict):
-            raise ConfigurationError("`agent` must be a mapping")
-        unknown = set(agent_section) - _AGENT_KEYS
-        if unknown:
-            raise ConfigurationError(
-                f"unknown key(s) in `agent`: {', '.join(sorted(unknown))}. "
-                f"Valid keys: {', '.join(sorted(_AGENT_KEYS))}"
-            )
-        raw_id = agent_section.get("id")
-        if raw_id is not None:
-            if not isinstance(raw_id, str) or not raw_id.strip():
-                raise ConfigurationError("`agent.id` must be a non-empty string")
-            agent_id = raw_id.strip()
+    """Extract the Phase-1 extension fields from an already-loaded mapping.
 
-    tools_section = raw.get("tools")
-    tool_names: tuple[str, ...] = ()
-    if tools_section is not None:
-        if not isinstance(tools_section, dict):
-            raise ConfigurationError("`tools` must be a mapping")
-        names = []
-        for tool_name, tool_conf in tools_section.items():
-            if not isinstance(tool_name, str) or not tool_name.strip():
-                raise ConfigurationError("`tools` keys must be non-empty strings")
-            if tool_conf is not None:
-                if not isinstance(tool_conf, dict):
-                    raise ConfigurationError(f"`tools.{tool_name}` must be a mapping or null")
-                unknown = set(tool_conf) - _TOOL_ENTRY_KEYS
-                if unknown:
-                    raise ConfigurationError(
-                        f"unknown key(s) in `tools.{tool_name}`: "
-                        f"{', '.join(sorted(unknown))}. "
-                        f"Valid keys: {', '.join(sorted(_TOOL_ENTRY_KEYS))}"
-                    )
-                mode = tool_conf.get("mode", "auto")
-                if mode not in _ALLOWED_TOOL_MODES:
-                    raise ConfigurationError(
-                        f"`tools.{tool_name}.mode` must be one of "
-                        f"{sorted(_ALLOWED_TOOL_MODES)}, got {mode!r}"
-                    )
-            names.append(tool_name.strip())
-        tool_names = tuple(names)
-
+    The validation lives in ``causalmesh.policy.contract.parse_sdk_sections``
+    so that the core contract loader and this one accept the same file.
+    """
+    try:
+        agent_id, tool_names = parse_sdk_sections(raw)
+    except ContractError as exc:
+        raise ConfigurationError(str(exc)) from exc
     return SDKConfig(agent_id=agent_id, tool_names=tool_names)

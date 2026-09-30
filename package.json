@@ -10,7 +10,11 @@
     "dev": "npm run dev --workspace=frontend",
     "build": "npm run build --workspace=frontend",
     "start": "npm run start --workspace=frontend",
-    "types:check": "npm run types:check --workspace=frontend"
+    "types:check": "npm run types:check --workspace=frontend",
+    "video:dev": "npm run dev --prefix videos/causalmesh-film/composition",
+    "video:lint": "npm run lint --prefix videos/causalmesh-film/composition",
+    "video:check": "npm run check --prefix videos/causalmesh-film/composition",
+    "video:render": "npm run render --prefix videos/causalmesh-film/composition"
   },
   "engines": {
     "node": ">=20"

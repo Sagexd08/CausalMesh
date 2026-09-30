@@ -29,6 +29,8 @@ event-emission logic by delegating to the relay directly.
 from __future__ import annotations
 
 import threading
+from collections.abc import Mapping
+from contextlib import suppress
 from typing import Any
 
 from causalmesh.events.schema import EventIdentity, EventType, utc_now_micros
@@ -40,10 +42,11 @@ from causalmesh.hooks.lifecycle import (
 )
 from causalmesh.hooks.policy_gate import ContractGate
 from causalmesh.policy.gate import Verdict
-from causalmesh.policy.ledger import Ledger
+from causalmesh.policy.ledger import Ledger, Reservation
 from causalmesh.policy.resource import Resource, ResourceKind
 from causalmesh.relay import Relay
 
+from .clock import DEFAULT_CLOCK_BASE_US, DEFAULT_CLOCK_TICK_US, LogicalClock
 from .resolver import ResourceResolver
 from .result import GatewayResult
 from .tool import Tool
@@ -75,6 +78,12 @@ class ToolGateway:
         ledger:     Where consumption is recorded once a spend or budget call
                     has run.  Without one, a declared total cannot be enforced
                     and the gate refuses the call (see ``Gate(require_ledger)``).
+        clock_base_us, clock_tick_us:
+                    The logical clock that stamps the signed chain, the gate
+                    and the ledger: ``base + n * tick`` for the n-th call.
+                    Constants by default, so two identical sessions produce
+                    identical chains.  The wall-clock time of each call is
+                    kept apart, in ``wall_times()``, and never signed.
     """
 
     def __init__(
@@ -86,8 +95,12 @@ class ToolGateway:
         identity_factory: Any | None = None,
         gate: ContractGate | None = None,
         ledger: Ledger | None = None,
+        clock_base_us: int = DEFAULT_CLOCK_BASE_US,
+        clock_tick_us: int = DEFAULT_CLOCK_TICK_US,
     ) -> None:
         self._ledger = ledger
+        self.clock = LogicalClock(base_us=clock_base_us, tick_us=clock_tick_us)
+        self._wall_times: dict[str, int] = {}
         self._boundary = boundary
         self._relay = relay
         self._agent_id = agent_id
@@ -95,7 +108,9 @@ class ToolGateway:
         self._gate = gate
         self._tools: dict[str, Tool] = {}
         self._event_counter = 0
-        self._event_counter_lock = threading.Lock()
+        # Emission is the one step that must be serial: the event counter and
+        # the relay's chain. Reservation and the handler run concurrently.
+        self._emit_lock = threading.Lock()
         self._resolver = ResourceResolver()
 
     # ------------------------------------------------------------------ #
@@ -159,6 +174,7 @@ class ToolGateway:
         *,
         paths: tuple[str, ...] | None = None,
         now_us: int | None = None,
+        annotations: Mapping[str, str] | None = None,
     ) -> GatewayResult:
         """Route one tool call through the boundary and return the result.
 
@@ -174,6 +190,13 @@ class ToolGateway:
                         When omitted, extracted from ``arguments`` if
                         a ``"path"`` key is present.
             now_us:     Timestamp override (for deterministic tests).
+            annotations: Extra string fields recorded on the call's event, for
+                        the transport to say how the call arrived (the HTTP
+                        server records ``identity_source``).  They are
+                        signed into the chain, so they must be reproducible:
+                        no clock, host or random value.  A key the gateway
+                        already writes (``tool``, ``outcome``, ...) is never
+                        overridden.
 
         Raises:
             ToolNotFoundError: When ``tool_name`` is not registered.
@@ -192,7 +215,7 @@ class ToolGateway:
 
         tool = self._tools[tool_name]
         args = dict(arguments or {})
-        ts = now_us if now_us is not None else utc_now_micros()
+        ts, wall_us = self._stamp(now_us)
 
         # Extract paths using ResourceResolver instead of guessing "path".
         if paths is None:
@@ -211,6 +234,7 @@ class ToolGateway:
             arguments=args,
             resources=resources,
             _mutating=tool.mutating,
+            reservations=[],
         )
 
         import inspect
@@ -225,22 +249,56 @@ class ToolGateway:
             return tool.handler(**c.arguments)
 
         checks_before = len(self._gate.verdicts) if self._gate is not None else 0
-        internal_result = self._boundary.invoke(aware_call, executor, now_us=ts)
-        shadow = self._shadow_refusal(checks_before)
+        try:
+            internal_result = self._boundary.invoke(aware_call, executor, now_us=ts)
+            shadow = self._shadow_refusal(checks_before)
 
-        event_id, audit_error = self._emit_event(
-            internal_result,
-            agent_id=agent_id,
-            ts=ts,
-            mutating=tool.mutating,
-            shadow=shadow,
-        )
-        audit_error = self._record_consumption(
-            internal_result, resources, agent_id, ts, event_id, audit_error
-        )
+            event_id, audit_error = self._emit_event(
+                internal_result,
+                agent_id=agent_id,
+                ts=ts,
+                mutating=tool.mutating,
+                shadow=shadow,
+                annotations=annotations,
+            )
+            if event_id is not None:
+                self._wall_times[event_id] = wall_us
+            audit_error = self._record_consumption(
+                internal_result,
+                resources,
+                agent_id,
+                ts,
+                event_id,
+                audit_error,
+                holds=aware_call.reservations,
+                spend_on_error=tool.spend_on_error,
+            )
+        finally:
+            # An interrupt or cancellation skips the settle above: what is still
+            # held goes back rather than staying counted against the allowance.
+            self._release_holds(aware_call.reservations)
         return GatewayResult(
             internal_result, event_id=event_id, audit_error=audit_error, shadow=shadow
         )
+
+    def _stamp(self, now_us: int | None) -> tuple[int, int]:
+        """``(logical time, wall time)`` for one call.
+
+        The first is signed, gated and ledgered; the second is for the
+        envelope only.  A caller-supplied ``now_us`` is used as given, and the
+        clock moves past it so later calls stay in order.
+        """
+        wall_us = utc_now_micros()
+        ts = self.clock.tick() if now_us is None else self.clock.observe(now_us)
+        return ts, wall_us
+
+    def wall_times(self) -> dict[str, int]:
+        """Wall-clock microseconds of each recorded call, by event id.
+
+        Not signed and not reproducible: it belongs in the unsigned envelope.
+        An event with no entry has no known wall time (unknown, not zero).
+        """
+        return dict(self._wall_times)
 
     def _shadow_refusal(self, checks_before: int) -> Verdict | None:
         """The first refusal this call's checks recorded but did not enforce."""
@@ -259,6 +317,7 @@ class ToolGateway:
         arguments: dict[str, Any] | None = None,
         paths: tuple[str, ...] | None = None,
         now_us: int | None = None,
+        annotations: Mapping[str, str] | None = None,
     ) -> GatewayResult:
         """Route an async tool call through the policy boundary.
 
@@ -276,7 +335,7 @@ class ToolGateway:
 
         tool_obj = self._tools[tool]
         args = dict(arguments or {})
-        ts = now_us if now_us is not None else utc_now_micros()
+        ts, wall_us = self._stamp(now_us)
 
         if paths is None:
             paths = self._resolver.resolve(tool_obj, args)
@@ -289,6 +348,7 @@ class ToolGateway:
             arguments=args,
             resources=resources,
             _mutating=tool_obj.mutating,
+            reservations=[],
         )
 
         import inspect
@@ -301,19 +361,34 @@ class ToolGateway:
                 return tool_obj.handler(**c.arguments)
 
         checks_before = len(self._gate.verdicts) if self._gate is not None else 0
-        internal_result = await self._boundary.invoke_async(aware_call, async_executor, now_us=ts)
-        shadow = self._shadow_refusal(checks_before)
+        try:
+            internal_result = await self._boundary.invoke_async(
+                aware_call, async_executor, now_us=ts
+            )
+            shadow = self._shadow_refusal(checks_before)
 
-        event_id, audit_error = self._emit_event(
-            internal_result,
-            agent_id=agent_id,
-            ts=ts,
-            mutating=tool_obj.mutating,
-            shadow=shadow,
-        )
-        audit_error = self._record_consumption(
-            internal_result, resources, agent_id, ts, event_id, audit_error
-        )
+            event_id, audit_error = self._emit_event(
+                internal_result,
+                agent_id=agent_id,
+                ts=ts,
+                mutating=tool_obj.mutating,
+                shadow=shadow,
+                annotations=annotations,
+            )
+            if event_id is not None:
+                self._wall_times[event_id] = wall_us
+            audit_error = self._record_consumption(
+                internal_result,
+                resources,
+                agent_id,
+                ts,
+                event_id,
+                audit_error,
+                holds=aware_call.reservations,
+                spend_on_error=tool_obj.spend_on_error,
+            )
+        finally:
+            self._release_holds(aware_call.reservations)
         return GatewayResult(
             internal_result, event_id=event_id, audit_error=audit_error, shadow=shadow
         )
@@ -326,30 +401,67 @@ class ToolGateway:
         ts: int,
         event_id: str | None,
         audit_error: str | None,
+        *,
+        holds: list[Reservation] | None = None,
+        spend_on_error: bool = False,
     ) -> str | None:
-        """Write what a completed spend or budget call consumed to the ledger.
+        """Settle what a spend or budget call reserved: commit it or give it back.
 
-        Only a call that ran is recorded, and only after it ran: a refused
-        call spent nothing, and recording on intent would count a refusal
-        against the allowance it never touched. A handler that raised is not
-        recorded either, which under-counts if it failed after the money left;
-        the handler is the only thing that knows, and `docs/backlog.md` says
-        so. A ledger that cannot be written is reported on the result rather
-        than raised, so it cannot mask the outcome.
+        The gate reserved each declared total before the handler ran (see
+        `Gate.check(holds=...)`), so two callers cannot both spend the same
+        remainder. Here the reservation meets what happened:
+
+        - the handler returned: the hold becomes a recorded entry;
+        - the handler raised: the hold is released and nothing is recorded,
+          unless the tool says `spend_on_error`, in which case the amount
+          counts as spent (a tool that cannot tell whether the money left
+          chooses which way to be wrong: under-count by default, over-count
+          on request);
+        - the call was refused: the gate already released its holds, and
+          anything left is released here.
+
+        A resource with no hold (no total is declared for it, or the gate
+        is unenforced before the budget rule ran) is recorded directly after
+        a successful call, as before. A ledger that cannot be written is
+        reported on the result rather than raised, so it cannot mask the
+        outcome; a hold whose commit failed stays counted, which fails closed.
         """
-        if self._ledger is None or result.outcome != ToolOutcome.EXECUTED:
+        if self._ledger is None:
+            return audit_error
+        pending = list(holds or ())
+        if holds is not None:
+            holds.clear()
+        spent = result.outcome == ToolOutcome.EXECUTED or (
+            result.outcome == ToolOutcome.FAILED and spend_on_error
+        )
+        if not spent:
+            self._release_holds(pending)
             return audit_error
         for resource in resources:
             if resource.kind not in (ResourceKind.SPEND, ResourceKind.BUDGET):
                 continue
+            hold = next((h for h in pending if h.resource == resource), None)
             try:
-                self._ledger.record(
-                    agent_id=agent_id, resource=resource, now_us=ts, reference=event_id
-                )
+                if hold is not None:
+                    pending.remove(hold)
+                    self._ledger.commit(hold, now_us=ts, reference=event_id)
+                else:
+                    self._ledger.record(
+                        agent_id=agent_id, resource=resource, now_us=ts, reference=event_id
+                    )
             except Exception as exc:  # noqa: BLE001 - see docstring
                 note = f"ledger: {type(exc).__name__}: {exc}"
                 audit_error = note if audit_error is None else f"{audit_error}; {note}"
+        self._release_holds(pending)
         return audit_error
+
+    def _release_holds(self, holds: list[Reservation]) -> None:
+        """Give back every reservation in `holds`, and empty it. Never raises."""
+        if self._ledger is not None:
+            for hold in holds:
+                with suppress(Exception):
+                    self._ledger.release(hold)
+        holds.clear()
 
     # ------------------------------------------------------------------ #
     # Event emission (mirrors tools/executor.py pattern)                  #
@@ -401,6 +513,7 @@ class ToolGateway:
         ts: int,
         mutating: bool,
         shadow: Verdict | None = None,
+        annotations: Mapping[str, str] | None = None,
     ) -> tuple[str | None, str | None]:
         """Emit one event to the relay for this result.
 
@@ -411,7 +524,8 @@ class ToolGateway:
         Returns ``(event_id, None)`` when recorded and ``(None, reason)``
         when not, so a missing record is reported rather than silent.
         """
-        event_id = self._next_event_id(agent_id)
+        with self._emit_lock:
+            event_id = self._next_event_id(agent_id)
         identity = self._identity_for(agent_id)
         resources: tuple[Resource, ...] = getattr(result.call, "resources", ())
 
@@ -446,17 +560,21 @@ class ToolGateway:
             if resources:
                 payload["resources"] = [resource.to_dict() for resource in resources]
 
+        for key, value in (annotations or {}).items():
+            payload.setdefault(key, value)
+
         try:
-            ingested = self._relay.ingest(
-                event_id=event_id,
-                agent_id=agent_id,
-                event_type=event_type,
-                identity=identity,
-                timestamp_us=ts,
-                paths=result.call.paths,
-                parent_id=None,
-                payload=payload,
-            )
+            with self._emit_lock:
+                ingested = self._relay.ingest(
+                    event_id=event_id,
+                    agent_id=agent_id,
+                    event_type=event_type,
+                    identity=identity,
+                    timestamp_us=ts,
+                    paths=result.call.paths,
+                    parent_id=None,
+                    payload=payload,
+                )
         except Exception as exc:  # noqa: BLE001 — relay errors must not mask tool results
             return None, f"{type(exc).__name__}: {exc}"
         if not ingested.accepted:
@@ -474,7 +592,15 @@ class _MutatingAwareCall:
     the same interface ``LifecycleBoundary.invoke`` needs without inheriting.
     """
 
-    __slots__ = ("_mutating", "agent_id", "arguments", "paths", "resources", "tool")
+    __slots__ = (
+        "_mutating",
+        "agent_id",
+        "arguments",
+        "paths",
+        "reservations",
+        "resources",
+        "tool",
+    )
 
     def __init__(
         self,
@@ -485,7 +611,11 @@ class _MutatingAwareCall:
         arguments: dict[str, Any] | None = None,
         resources: tuple[Resource, ...] = (),
         _mutating: bool = False,
+        reservations: list[Reservation] | None = None,
     ) -> None:
+        # Totals the gate reserved for this call, committed or released by the
+        # gateway once the handler has run. `None` asks the gate for a check only.
+        self.reservations = reservations
         self.tool = tool
         self.agent_id = agent_id
         self.paths = paths

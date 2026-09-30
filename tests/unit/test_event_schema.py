@@ -210,3 +210,34 @@ class TestPolicyVerdictEventType:
         # Re-canonicalizing the same structure must be byte-identical —
         # this is the property the whole hash chain depends on.
         assert event.canonical_bytes() == event.canonical_bytes()
+
+
+class TestIntegrationTestResultEventType:
+    def test_is_a_member_distinct_from_an_agents_test_event(self) -> None:
+        # TEST is an agent running tests inside its own workspace; this is the
+        # harness measuring the integrated result. Conflating them would make
+        # an agent's tests indistinguishable from the run's verdict.
+        assert EventType.INTEGRATION_TEST_RESULT == "INTEGRATION_TEST_RESULT"
+        assert EventType.INTEGRATION_TEST_RESULT != EventType.TEST
+
+    def test_round_trips_with_an_unknown_exit_code(self) -> None:
+        identity = EventIdentity(
+            experiment_id="exp1",
+            task_id="task1",
+            run_id="run1",
+            agent_id="integration_test",
+            arm="C2",
+        )
+        event = Event(
+            event_id="run1_integration_test",
+            identity=identity,
+            event_type=EventType.INTEGRATION_TEST_RESULT,
+            sequence=0,
+            timestamp_us=1_700_000_000_000_000,
+            payload={"command": ["pytest"], "exit_code": None, "ran": False},
+        )
+        canonical = event.to_canonical_dict()
+        assert canonical["event_type"] == "INTEGRATION_TEST_RESULT"
+        # A test that never ran is recorded as null, never as a passing 0.
+        assert canonical["payload"]["exit_code"] is None
+        assert event.canonical_bytes() == event.canonical_bytes()

@@ -1,0 +1,896 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <title>CausalMesh Film</title>
+    <script src="assets/vendor/gsap.min.js"></script>
+    <script src="assets/audio-data.js"></script>
+    <style>
+      @font-face {
+        font-family: "Manrope";
+        src: url("assets/fonts/Manrope.woff2") format("woff2");
+        font-weight: 200 800;
+        font-display: block;
+      }
+      @font-face {
+        font-family: "JetBrains Mono";
+        src: url("assets/fonts/JetBrainsMono.woff2") format("woff2");
+        font-weight: 400 600;
+        font-display: block;
+      }
+
+      /* Tokens are the site's own (frontend/app/site.css). Amber is
+         --color-deny: on the site and in this film it only ever means REFUSE. */
+      :root {
+        --stage: #050505;
+        --panel: #0c0c0c;
+        --fg: #fafafa;
+        --fg-2: #d6d5d5;
+        --muted: #a7a6a6;
+        --hud: #8b8a8a;
+        --line: rgba(255, 255, 255, 0.09);
+        --line-strong: rgba(255, 255, 255, 0.16);
+        --deny: #d2a676;
+        --deny-wash: rgba(210, 166, 118, 0.12);
+        --lvl: 0;
+        --bass: 0;
+        --sans: "Manrope", system-ui, sans-serif;
+        --mono: "JetBrains Mono", ui-monospace, monospace;
+      }
+
+      html,
+      body {
+        margin: 0;
+        width: 1920px;
+        height: 1080px;
+        background: var(--stage);
+        color: var(--fg);
+        font-family: var(--sans);
+        -webkit-font-smoothing: antialiased;
+      }
+      #root {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: var(--stage);
+      }
+      .clip {
+        position: absolute;
+        inset: 0;
+      }
+      .abs {
+        position: absolute;
+      }
+      .mono {
+        font-family: var(--mono);
+      }
+      .mask {
+        display: block;
+        overflow: hidden;
+      }
+      /* room below the baseline so g, y and p are not cut by the reveal mask */
+      .mask-d {
+        padding-bottom: var(--pd);
+        margin-bottom: calc(-1 * var(--pd));
+      }
+      .mi {
+        display: block;
+      }
+      .label {
+        font-family: var(--mono);
+        font-size: 22px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--hud);
+      }
+      .h2 {
+        font-size: 58px;
+        font-weight: 300;
+        letter-spacing: -0.04em;
+        line-height: 1.05;
+        color: var(--fg);
+        white-space: nowrap;
+      }
+
+      /* ---------- persistent background ---------- */
+      #bg-grid {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        background-image:
+          linear-gradient(rgba(255, 255, 255, calc(0.05 + var(--lvl) * 0.05)) 2px, transparent 2px),
+          linear-gradient(90deg, rgba(255, 255, 255, calc(0.05 + var(--lvl) * 0.05)) 2px, transparent 2px);
+        background-size: 120px 120px;
+        background-position: 20px 0px;
+      }
+      #grain {
+        position: absolute;
+        inset: -64px;
+        z-index: 40;
+        pointer-events: none;
+        opacity: 0.1;
+        mix-blend-mode: overlay;
+        background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='256' height='256'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 1.6 -0.3'/></filter><rect width='256' height='256' filter='url(%23n)'/></svg>");
+        background-size: 256px 256px;
+      }
+
+      /* ---------- HUD: production metadata, not a game HUD ---------- */
+      #hud {
+        position: absolute;
+        inset: 0;
+        z-index: 50;
+        pointer-events: none;
+        color: var(--hud);
+        font-family: var(--mono);
+        font-size: 18px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        opacity: 0;
+      }
+      #hud.ink {
+        color: #2e2e2e;
+      }
+      #hud .reg {
+        position: absolute;
+        width: 28px;
+        height: 28px;
+        border-color: currentColor;
+        border-style: solid;
+        border-width: 0;
+      }
+      #hud .tl { left: 40px; top: 40px; border-left-width: 2px; border-top-width: 2px; }
+      #hud .tr { right: 40px; top: 40px; border-right-width: 2px; border-top-width: 2px; }
+      #hud .bl { left: 40px; bottom: 40px; border-left-width: 2px; border-bottom-width: 2px; }
+      #hud .br { right: 40px; bottom: 40px; border-right-width: 2px; border-bottom-width: 2px; }
+      #hud-title { position: absolute; left: 84px; top: 44px; }
+      #hud-tc { position: absolute; right: 84px; top: 44px; }
+      #hud-scene { position: absolute; left: 84px; bottom: 50px; }
+      #hud-spec { position: absolute; right: 84px; bottom: 50px; }
+      #hud-track {
+        position: absolute;
+        left: 84px;
+        right: 84px;
+        bottom: 34px;
+        height: 2px;
+        background: currentColor;
+        opacity: 0.35;
+      }
+      #hud-prog {
+        position: absolute;
+        left: 84px;
+        bottom: 34px;
+        width: 1752px;
+        height: 2px;
+        background: currentColor;
+        transform-origin: 0 50%;
+      }
+
+      /* ---------- 01 Signal ---------- */
+      #s1-copy { left: 140px; top: 262px; }
+      .s1-big {
+        font-size: 176px;
+        font-weight: 300;
+        letter-spacing: -0.05em;
+        line-height: 1.02;
+        white-space: nowrap;
+      }
+      #s1-path {
+        margin-top: 44px;
+        font-size: 34px;
+        color: var(--muted);
+      }
+      #s1-path b { font-weight: 400; color: var(--fg-2); }
+      .s1-line { left: 1479px; width: 2px; height: 522px; }
+      #s1-lineA { top: 0; background: linear-gradient(180deg, rgba(250, 250, 250, 0), #fafafa); }
+      #s1-lineB { top: 558px; background: linear-gradient(0deg, rgba(250, 250, 250, 0), #fafafa); }
+      .s1-pk { left: 1476px; width: 8px; height: 56px; background: #fafafa; border-radius: 4px; }
+      #s1-pA { top: 0; }
+      #s1-pB { top: 1024px; }
+      .s1-agent { left: 1510px; font-size: 22px; color: var(--muted); }
+      #s1-agA { top: 118px; }
+      #s1-agB { top: 938px; }
+      #s1-glowwrap { left: 1180px; top: 240px; width: 600px; height: 600px; opacity: 0; }
+      #s1-glow {
+        width: 100%;
+        height: 100%;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(250, 250, 250, 0.34), rgba(250, 250, 250, 0) 62%);
+        opacity: calc(0.35 + var(--lvl) * 0.65);
+      }
+      #s1-node {
+        left: 1462px;
+        top: 522px;
+        width: 32px;
+        height: 32px;
+        border: 2px solid #fafafa;
+        background: var(--stage);
+      }
+      #s1-nodefill { position: absolute; inset: 6px; background: #fafafa; opacity: 0; }
+      #s1-gate { left: 1532px; top: 516px; font-size: 24px; letter-spacing: 0.16em; color: var(--fg); }
+      #s1-gate span { display: block; font-size: 20px; letter-spacing: 0.04em; color: var(--muted); margin-top: 6px; text-transform: none; }
+
+      /* ---------- 02 Kinetic type ---------- */
+      #s2-cap { left: 140px; top: 214px; font-size: 24px; letter-spacing: 0.2em; color: var(--muted); }
+      #s2-rule { left: 470px; top: 229px; width: 1310px; height: 2px; background: var(--line-strong); transform-origin: 0 50%; }
+      .s2-word {
+        left: 0;
+        top: 330px;
+        width: 1920px;
+        height: 420px;
+        overflow: hidden;
+        opacity: 0;
+      }
+      .s2-in {
+        position: absolute;
+        left: 124px;
+        top: 0;
+        font-weight: 300;
+        letter-spacing: -0.055em;
+        line-height: 1;
+        white-space: nowrap;
+      }
+      .s2-ghost {
+        position: absolute;
+        left: 124px;
+        top: 0;
+        font-weight: 300;
+        letter-spacing: -0.055em;
+        line-height: 1;
+        white-space: nowrap;
+        color: transparent;
+        -webkit-text-stroke: 2px rgba(250, 250, 250, 0.28);
+      }
+      .s2-idx { left: 140px; top: 820px; font-size: 24px; letter-spacing: 0.16em; color: var(--muted); opacity: 0; }
+
+      /* ---------- 03 Gate console (VerdictConsole.tsx at video scale) ---------- */
+      #s3-head { left: 140px; top: 96px; }
+      #s3-head .h2 { margin-top: 14px; }
+      #s3-panel {
+        left: 140px;
+        top: 262px;
+        width: 1640px;
+        height: 600px;
+        display: grid;
+        grid-template-columns: 440px 1fr;
+        border: 2px solid var(--line-strong);
+        border-radius: 8px;
+        background: var(--panel);
+        overflow: hidden;
+      }
+      .ph {
+        display: flex;
+        justify-content: space-between;
+        padding: 22px 30px;
+        border-bottom: 2px solid var(--line);
+        font-family: var(--mono);
+        font-size: 20px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--hud);
+      }
+      .ph span:last-child { letter-spacing: 0.04em; text-transform: none; }
+      #s3-left { position: relative; border-right: 2px solid var(--line); }
+      #s3-sel { position: absolute; left: 0; top: 70px; width: 438px; height: 112px; background: rgba(255, 255, 255, 0.06); }
+      .req {
+        position: relative;
+        display: flex;
+        gap: 20px;
+        align-items: flex-start;
+        height: 112px;
+        box-sizing: border-box;
+        padding: 26px 30px;
+        border-bottom: 2px solid var(--line);
+        font-family: var(--mono);
+      }
+      .dot { flex: none; width: 12px; height: 12px; margin-top: 10px; border-radius: 50%; background: var(--line-strong); }
+      .req .a { display: block; font-size: 24px; color: var(--fg-2); }
+      .req .r { display: block; width: 348px; margin-top: 8px; font-size: 17px; color: var(--hud); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      #s3-body { position: relative; padding: 38px 46px; font-family: var(--mono); font-size: 29px; line-height: 1.55; }
+      #s3-cmdline { color: var(--fg-2); word-break: break-all; min-height: 88px; }
+      #s3-cmdline .pr { color: var(--hud); }
+      #s3-caret { display: inline-block; width: 14px; height: 30px; margin-left: 2px; vertical-align: -4px; background: #fafafa; }
+      .verdict { position: absolute; left: 46px; right: 46px; top: 184px; opacity: 0; }
+      .vtop { display: flex; align-items: center; gap: 22px; }
+      .badge { display: inline-block; padding: 5px 16px; border-radius: 3px; font-size: 30px; letter-spacing: 0.12em; }
+      .badge.deny { background: var(--deny-wash); color: var(--deny); }
+      .badge.ok { background: rgba(255, 255, 255, 0.1); color: var(--fg); }
+      .vres { color: var(--muted); font-size: 26px; }
+      .vrows { margin-top: 26px; }
+      .vrow { display: grid; grid-template-columns: 160px 1fr; font-size: 28px; line-height: 1.45; margin-bottom: 6px; }
+      .vrow dt { color: var(--hud); }
+      .vrow dd { margin: 0; color: var(--fg-2); }
+      .vrow dd.deny { color: var(--deny); }
+
+      /* ---------- 04 Chain ---------- */
+      #s4-head { left: 140px; top: 96px; }
+      #s4-head .h2 { margin-top: 14px; }
+      #s4-stage { position: absolute; inset: 0; perspective: 1800px; perspective-origin: 50% 48%; }
+      #chain { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-style: preserve-3d; }
+      #s4-run { left: 140px; top: 322px; font-size: 20px; color: var(--hud); }
+      #s4-run b { font-weight: 400; color: var(--muted); }
+      .blk {
+        top: 380px;
+        width: 380px;
+        height: 260px;
+        box-sizing: border-box;
+        padding: 22px 28px;
+        border: 2px solid var(--line-strong);
+        border-radius: 8px;
+        background: var(--panel);
+        font-family: var(--mono);
+        opacity: 0;
+      }
+      .blk.deny { border-color: rgba(210, 166, 118, 0.75); }
+      .bt { display: flex; justify-content: space-between; font-size: 20px; letter-spacing: 0.1em; color: var(--hud); }
+      .bt .ty { color: var(--fg-2); }
+      .blk.deny .bt .ty { color: var(--deny); }
+      .ba { margin-top: 18px; font-size: 27px; color: var(--fg); }
+      .bp { margin-top: 4px; font-size: 22px; color: var(--muted); }
+      .bd { margin-top: 2px; font-size: 19px; color: var(--muted); white-space: nowrap; }
+      .bh { position: absolute; left: 28px; right: 28px; bottom: 20px; display: flex; justify-content: space-between; font-size: 20px; color: var(--fg-2); }
+      .bh span:last-child { color: var(--hud); }
+      .blk.deny .bh span:last-child { color: var(--deny); }
+      .lnk { top: 509px; width: 40px; height: 2px; background: rgba(250, 250, 250, 0.55); transform-origin: 0 50%; }
+      #s4-formula { left: 140px; top: 716px; font-size: 42px; color: var(--fg-2); white-space: nowrap; }
+      #s4-formula i { font-style: normal; color: var(--hud); }
+      #s4-sig { left: 140px; top: 790px; font-size: 22px; color: var(--hud); }
+
+      /* ---------- 05 Properties ---------- */
+      .card { position: absolute; inset: 0; opacity: 0; }
+      .c-idx { position: absolute; left: 140px; top: 282px; font-family: var(--mono); font-size: 24px; letter-spacing: 0.16em; }
+      .c-word {
+        position: absolute;
+        left: 124px;
+        top: 336px;
+        font-size: 330px;
+        font-weight: 300;
+        letter-spacing: -0.055em;
+        line-height: 1;
+        white-space: nowrap;
+      }
+      .c-wmask { position: absolute; left: 0; top: 336px; width: 1920px; height: 350px; overflow: hidden; }
+      .c-wmask .c-word { top: 0; }
+      .c-det { position: absolute; left: 140px; top: 744px; font-family: var(--mono); font-size: 36px; }
+      #c1 { background: #050505; color: #fafafa; }
+      #c1 .c-idx, #c1 .c-det { color: var(--muted); }
+      #c2 { background: #fafafa; color: #050505; }
+      #c2 .c-idx, #c2 .c-det { color: #3a3a3a; }
+      #c3 { background: #d2a676; color: #050505; }
+      #c3 .c-idx, #c3 .c-det { color: #1f1a14; }
+      #c4 { background: #050505; color: #fafafa; }
+      #c4 .c-idx, #c4 .c-det { color: var(--muted); }
+      #s5-slit {
+        position: absolute;
+        left: 818px;
+        top: 262px;
+        width: 284px;
+        height: 712px;
+        background: #fafafa;
+        transform-origin: 50% 100%;
+        opacity: 0;
+        box-shadow: 0 0 120px 30px rgba(250, 245, 236, 0.28);
+      }
+
+      /* ---------- 06 Portal ---------- */
+      #s6-cam { position: absolute; inset: 0; transform-origin: 50% 55%; }
+      #portal { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; object-fit: cover; }
+      #s6-vig {
+        position: absolute;
+        inset: 0;
+        background:
+          radial-gradient(ellipse 58% 70% at 50% 52%, rgba(5, 5, 5, 0) 55%, rgba(5, 5, 5, 0.78) 100%),
+          radial-gradient(ellipse 34% 60% at 14% 48%, rgba(5, 5, 5, 0.72), rgba(5, 5, 5, 0) 100%);
+      }
+      #s6-glowwrap { position: absolute; left: 660px; top: 170px; width: 600px; height: 880px; mix-blend-mode: screen; }
+      #s6-glow {
+        width: 100%;
+        height: 100%;
+        background: radial-gradient(ellipse at 50% 58%, rgba(250, 244, 232, 0.5), rgba(250, 244, 232, 0) 62%);
+        opacity: calc(0.12 + var(--lvl) * 0.42);
+      }
+      #s6-title { left: 116px; top: 392px; }
+      .s6-line { font-size: 82px; font-weight: 300; letter-spacing: -0.045em; line-height: 1.08; white-space: nowrap; }
+      #s6-meta { left: 120px; top: 612px; font-size: 22px; line-height: 1.7; color: var(--muted); }
+      #s6-fade { position: absolute; inset: 0; background: #050505; opacity: 0; }
+
+      /* ---------- 07 Mark ---------- */
+      #s7-stack { left: 0; top: 0; width: 1920px; height: 1080px; }
+      #mark { position: absolute; left: 885px; top: 262px; width: 150px; height: 150px; overflow: visible; color: #fafafa; }
+      #s7-name { position: absolute; left: 0; width: 1920px; top: 452px; text-align: center; }
+      #s7-name .mi { font-size: 112px; font-weight: 300; letter-spacing: -0.045em; line-height: 1.05; }
+      #s7-cta { position: absolute; left: 0; width: 1920px; top: 604px; text-align: center; font-size: 42px; font-weight: 300; letter-spacing: -0.02em; color: var(--fg-2); }
+      #s7-row { position: absolute; left: 0; width: 1920px; top: 700px; display: flex; justify-content: center; align-items: center; gap: 30px; }
+      .pill { padding: 14px 30px; border-radius: 999px; background: #fafafa; color: #050505; font-size: 22px; font-weight: 600; }
+      #s7-url { font-family: var(--mono); font-size: 24px; color: var(--muted); }
+      #s7-foot { position: absolute; left: 0; width: 1920px; top: 846px; text-align: center; font-size: 22px; color: var(--hud); }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="causalmesh-film"
+      data-start="0"
+      data-width="1920"
+      data-height="1080"
+      data-duration="30"
+      data-fps="30"
+    >
+      <!-- persistent background: the site's grid, brightened by the music -->
+      <div id="bg-grid" aria-hidden="true"></div>
+
+      <!-- 01 SIGNAL: two agents, one file, one gate -->
+      <section id="s1" class="clip" data-start="0" data-duration="4.39" data-track-index="1">
+        <div id="s1-copy" class="abs">
+          <div class="mask mask-d" style="--pd: 46px"><div id="s1-l1" class="mi s1-big">Two agents.</div></div>
+          <div class="mask mask-d" style="--pd: 46px"><div id="s1-l2" class="mi s1-big">One file.</div></div>
+          <div id="s1-path" class="mono">write_file&nbsp;&nbsp;<b>src/config.py</b></div>
+        </div>
+        <div id="s1-lineA" class="abs s1-line"></div>
+        <div id="s1-lineB" class="abs s1-line"></div>
+        <div id="s1-pA" class="abs s1-pk"></div>
+        <div id="s1-pB" class="abs s1-pk"></div>
+        <div id="s1-agA" class="abs mono s1-agent">agent_a</div>
+        <div id="s1-agB" class="abs mono s1-agent">agent_b</div>
+        <div id="s1-glowwrap" class="abs"><div id="s1-glow"></div></div>
+        <div id="s1-node" class="abs"><div id="s1-nodefill"></div></div>
+        <div id="s1-gate" class="abs mono">GATE<span>causalmesh.yaml</span></div>
+      </section>
+
+      <!-- 02 TYPE: "Every action gated, signed, and recorded" -->
+      <section id="s2" class="clip" data-start="4.39" data-duration="3.25" data-track-index="2">
+        <div id="s2-cap" class="abs mono">EVERY ACTION</div>
+        <div id="s2-rule" class="abs"></div>
+        <div id="w1" class="abs s2-word" data-layout-bleed="true">
+          <div id="w1g" class="s2-ghost" data-layout-ignore style="font-size: 420px" aria-hidden="true">GATED.</div>
+          <div id="w1t" class="s2-in" style="font-size: 420px">GATED.</div>
+        </div>
+        <div id="w2" class="abs s2-word" data-layout-bleed="true">
+          <div id="w2g" class="s2-ghost" data-layout-ignore style="font-size: 400px" aria-hidden="true">SIGNED.</div>
+          <div id="w2t" class="s2-in" style="font-size: 400px">SIGNED.</div>
+        </div>
+        <div id="w3" class="abs s2-word" data-layout-bleed="true">
+          <div id="w3g" class="s2-ghost" data-layout-ignore style="font-size: 318px" aria-hidden="true">RECORDED.</div>
+          <div id="w3t" class="s2-in" style="font-size: 318px">RECORDED.</div>
+        </div>
+        <div id="i1" class="abs mono s2-idx">01 / 03&nbsp;&nbsp;&nbsp;GATE</div>
+        <div id="i2" class="abs mono s2-idx">02 / 03&nbsp;&nbsp;&nbsp;ED25519</div>
+        <div id="i3" class="abs mono s2-idx">03 / 03&nbsp;&nbsp;&nbsp;HASH CHAIN</div>
+      </section>
+
+      <!-- 03 GATE: the site's gate console, replaying two real verdicts -->
+      <section id="s3" class="clip" data-start="7.64" data-duration="5.47" data-track-index="3">
+        <div id="s3-head" class="abs">
+          <div class="mask"><div id="s3-lab" class="mi label">01 / Gate</div></div>
+          <div class="mask mask-d" style="--pd: 16px"><div id="s3-h2" class="mi h2">Every action passes one gate.</div></div>
+        </div>
+        <div id="s3-panel" class="abs">
+          <div id="s3-left">
+            <div class="ph"><span>Requests</span></div>
+            <div id="s3-sel"></div>
+            <div id="req1" class="req">
+              <span id="dot1" class="dot"></span>
+              <span><span class="a">docs</span><span class="r">path:src/causalmesh/policy/gate.py</span></span>
+            </div>
+            <div id="req2" class="req">
+              <span id="dot2" class="dot"></span>
+              <span><span class="a">causalmesh</span><span class="r">path:src/causalmesh/policy/gate.py</span></span>
+            </div>
+          </div>
+          <div id="s3-right">
+            <div class="ph"><span>Gate</span><span>causalmesh.yaml &middot; arm C3</span></div>
+            <div id="s3-body">
+              <div id="s3-cmdline"><span class="pr">$ </span><span id="s3-cmd"></span><span id="s3-caret"></span></div>
+              <div id="vA" class="verdict">
+                <div class="vtop"><span id="vA-badge" class="badge deny">REFUSE</span><span class="vres">path:src/causalmesh/policy/gate.py</span></div>
+                <dl class="vrows">
+                  <div class="vrow vA-r"><dt>rule</dt><dd>ownership</dd></div>
+                  <div class="vrow vA-r"><dt>holder</dt><dd>causalmesh</dd></div>
+                  <div class="vrow vA-r"><dt>reason</dt><dd>'src/causalmesh/policy/gate.py' is owned by 'causalmesh', not 'docs'</dd></div>
+                  <div class="vrow vA-r"><dt>exit</dt><dd class="deny">1</dd></div>
+                </dl>
+              </div>
+              <div id="vB" class="verdict">
+                <div class="vtop"><span id="vB-badge" class="badge ok">ALLOW</span><span class="vres">path:src/causalmesh/policy/gate.py</span></div>
+                <dl class="vrows">
+                  <div class="vrow vB-r"><dt>rule</dt><dd>default-allow</dd></div>
+                  <div class="vrow vB-r"><dt>holder</dt><dd>null</dd></div>
+                  <div class="vrow vB-r"><dt>reason</dt><dd>no rule refuses this</dd></div>
+                  <div class="vrow vB-r"><dt>exit</dt><dd>0</dd></div>
+                </dl>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 04 CHAIN: the signed trace of pilot_landing__concurrent_edit_collision__C3__r0000 -->
+      <section id="s4" class="clip" data-start="13.11" data-duration="4.91" data-track-index="4">
+        <div id="s4-head" class="abs">
+          <div class="mask"><div id="s4-lab" class="mi label">05 / Evidence</div></div>
+          <div class="mask mask-d" style="--pd: 16px"><div id="s4-h2" class="mi h2">Observe every execution. Verify it anywhere.</div></div>
+        </div>
+        <div id="s4-stage">
+          <div id="chain">
+            <div id="s4-run" class="abs mono">run&nbsp;&nbsp;<b>pilot_landing__concurrent_edit_collision__C3__r0000</b></div>
+            <div id="b0" class="abs blk" style="left: 140px">
+              <div class="bt"><span>#0 &middot; +0.000</span><span class="ty">READ</span></div>
+              <div class="ba">agent_a</div>
+              <div class="bp">src/config.py</div>
+              <div class="bd">read_file</div>
+              <div class="bh"><span>0c75065597</span><span>executed</span></div>
+            </div>
+            <div id="b1" class="abs blk" style="left: 560px">
+              <div class="bt"><span>#1 &middot; +0.000</span><span class="ty">READ</span></div>
+              <div class="ba">agent_b</div>
+              <div class="bp">src/config.py</div>
+              <div class="bd">read_file</div>
+              <div class="bh"><span>1f1c3ea9dd</span><span>executed</span></div>
+            </div>
+            <div id="b2" class="abs blk" style="left: 980px">
+              <div class="bt"><span>#2 &middot; +1.000</span><span class="ty">WRITE</span></div>
+              <div class="ba">agent_a</div>
+              <div class="bp">src/config.py</div>
+              <div class="bd">write_file 301 B</div>
+              <div class="bh"><span>c7a0cfc7c6</span><span>executed</span></div>
+            </div>
+            <div id="b3" class="abs blk deny" style="left: 1400px">
+              <div class="bt"><span>#3 &middot; +2.000</span><span class="ty">FAILURE</span></div>
+              <div class="ba">agent_b</div>
+              <div class="bp">src/config.py</div>
+              <div class="bd">write_file held by 'agent_a'</div>
+              <div class="bh"><span>e3c6c935a1</span><span>denied</span></div>
+            </div>
+            <div id="k0" class="abs lnk" style="left: 520px"></div>
+            <div id="k1" class="abs lnk" style="left: 940px"></div>
+            <div id="k2" class="abs lnk" style="left: 1360px"></div>
+            <div id="s4-formula" class="abs mono">h<i>_i</i> = SHA256( h<i>_(i-1)</i> || canonical(event<i>_i</i>) )</div>
+            <div id="s4-sig" class="abs mono">Ed25519, one key per actor&nbsp;&nbsp;&middot;&nbsp;&nbsp;head e3c6c935a1da9f74cfa0d915e398a4f4</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 05 PROPERTIES: four grounds, one per beat pair -->
+      <section id="s5" class="clip" data-start="18.02" data-duration="4.91" data-track-index="5">
+        <div id="c1" class="card">
+          <div class="c-idx">01 / 04</div>
+          <div class="c-wmask" data-layout-bleed="true"><div id="c1w" class="c-word">OWNED.</div></div>
+          <div id="c1d" class="c-det">src/causalmesh/&nbsp;&nbsp;&rarr;&nbsp;&nbsp;causalmesh</div>
+        </div>
+        <div id="c2" class="card">
+          <div class="c-idx">02 / 04</div>
+          <div class="c-wmask" data-layout-bleed="true"><div id="c2w" class="c-word">LEASED.</div></div>
+          <div id="c2d" class="c-det">write_file held by 'agent_a'</div>
+        </div>
+        <div id="c3" class="card">
+          <div class="c-idx">03 / 04</div>
+          <div class="c-wmask" data-layout-bleed="true"><div id="c3w" class="c-word">REFUSED.</div></div>
+          <div id="c3d" class="c-det">kept alongside its reason</div>
+        </div>
+        <div id="c4" class="card">
+          <div id="c4i" class="c-idx">04 / 04</div>
+          <div class="c-wmask" data-layout-bleed="true"><div id="c4w" class="c-word">VERIFIED.</div></div>
+          <div id="c4d" class="c-det">offline, from the log and the public keys</div>
+          <div id="s5-slit"></div>
+        </div>
+      </section>
+
+      <!-- 06 PORTAL: the site's hero clip. Untimed camera wrapper so the video carries its own timing. -->
+      <div id="s6-cam">
+        <video
+          id="portal"
+          src="assets/video/portal.mp4"
+          data-start="22.93"
+          data-duration="4.07"
+          data-media-start="4"
+          data-track-index="6"
+          muted
+          playsinline
+        ></video>
+      </div>
+      <section id="s6" class="clip" data-start="22.93" data-duration="4.07" data-track-index="7">
+        <div id="s6-glowwrap"><div id="s6-glow"></div></div>
+        <div id="s6-vig"></div>
+        <div id="s6-title" class="abs">
+          <div class="mask mask-d" style="--pd: 22px"><div id="s6-l1" class="mi s6-line">The Next Layer</div></div>
+          <div class="mask mask-d" style="--pd: 22px"><div id="s6-l2" class="mi s6-line">of Intelligence</div></div>
+        </div>
+        <div id="s6-meta" class="abs mono">
+          <div id="s6-m1">head&nbsp;&nbsp;e3c6c935a1da9f74cfa0d915</div>
+          <div id="s6-m2">4 events&nbsp;&nbsp;&middot;&nbsp;&nbsp;1 refusal&nbsp;&nbsp;&middot;&nbsp;&nbsp;signed</div>
+        </div>
+        <div id="s6-fade"></div>
+      </section>
+
+      <!-- 07 MARK -->
+      <section id="s7" class="clip" data-start="27" data-duration="3" data-track-index="8">
+        <div id="s7-stack" class="abs">
+          <svg id="mark" viewBox="0 0 40 40" role="img" aria-label="CausalMesh">
+            <polygon id="bar1" points="15,2 38,2 27,19 4,19" fill="currentColor" />
+            <polygon id="bar2" points="13,21 36,21 25,38 2,38" fill="currentColor" opacity="0.55" />
+          </svg>
+          <div id="s7-name" class="mask mask-d" style="--pd: 30px"><div id="s7-n" class="mi">CausalMesh</div></div>
+          <div id="s7-cta">Gate the next action.</div>
+          <div id="s7-row"><span class="pill">Get Started</span><span id="s7-url">causalmesh.vercel.app</span></div>
+          <div id="s7-foot">Releasing soon under the MIT licence.</div>
+        </div>
+      </section>
+
+      <div id="grain" aria-hidden="true"></div>
+
+      <div id="hud">
+        <div class="reg tl"></div>
+        <div class="reg tr"></div>
+        <div class="reg bl"></div>
+        <div class="reg br"></div>
+        <div id="hud-title">CausalMesh&nbsp;&nbsp;/&nbsp;&nbsp;Motion study 01</div>
+        <div id="hud-tc">TC 00:00:00:00</div>
+        <div id="hud-scene">01 Signal&nbsp;&nbsp;&middot;&nbsp;&nbsp;Arm C3</div>
+        <div id="hud-spec">1920 x 1080&nbsp;&nbsp;&middot;&nbsp;&nbsp;30 fps</div>
+        <div id="hud-track"></div>
+        <div id="hud-prog"></div>
+      </div>
+
+      <!-- AUDIO. Bed: vol-12, 109.96 BPM. SFX are CC0 (Kenney) from the /brag library. -->
+      <audio
+        id="bed"
+        src="assets/music/happy-beats-business-moves-vol-12-by-ende-dot-app.mp3"
+        data-start="0"
+        data-duration="30"
+        data-track-index="10"
+        data-volume="1"
+        data-automation='{"version":1,"lanes":[{"target":"volume","points":[{"t":0,"v":0},{"t":1.2,"v":0.34},{"t":27.6,"v":0.34},{"t":30,"v":0}]}]}'
+      ></audio>
+      <audio id="fx-two" src="assets/sfx/impactSoft_medium_002.ogg" data-start="0.54" data-duration="0.14" data-track-index="11" data-volume="0.5"></audio>
+      <audio id="fx-one" src="assets/sfx/impactSoft_medium_002.ogg" data-start="1.62" data-duration="0.14" data-track-index="12" data-volume="0.5"></audio>
+      <audio id="fx-node" src="assets/sfx/drop_002.ogg" data-start="3.25" data-duration="0.19" data-track-index="13" data-volume="0.6"></audio>
+      <audio id="fx-w1" src="assets/sfx/impactSoft_medium_001.ogg" data-start="4.37" data-duration="0.19" data-track-index="14" data-volume="0.72"></audio>
+      <audio id="fx-w2" src="assets/sfx/impactSoft_medium_004.ogg" data-start="5.46" data-duration="0.15" data-track-index="15" data-volume="0.72"></audio>
+      <audio id="fx-w3" src="assets/sfx/impactSoft_heavy_002.ogg" data-start="6.54" data-duration="0.58" data-track-index="16" data-volume="0.6"></audio>
+      <audio id="fx-k1" src="assets/sfx/keypress-003.wav" data-start="8.02" data-duration="0.3" data-track-index="17" data-volume="0.34"></audio>
+      <audio id="fx-k2" src="assets/sfx/keypress-007.wav" data-start="8.16" data-duration="0.3" data-track-index="18" data-volume="0.3"></audio>
+      <audio id="fx-k3" src="assets/sfx/keypress-011.wav" data-start="8.3" data-duration="0.3" data-track-index="19" data-volume="0.34"></audio>
+      <audio id="fx-k4" src="assets/sfx/keypress-014.wav" data-start="8.44" data-duration="0.3" data-track-index="20" data-volume="0.3"></audio>
+      <audio id="fx-refuse" src="assets/sfx/impactSoft_heavy_002.ogg" data-start="8.72" data-duration="0.58" data-track-index="21" data-volume="0.75"></audio>
+      <audio id="fx-select" src="assets/sfx/click_003.ogg" data-start="11.44" data-duration="0.01" data-track-index="22" data-volume="0.75"></audio>
+      <audio id="fx-morph" src="assets/sfx/drop_002.ogg" data-start="13.09" data-duration="0.19" data-track-index="23" data-volume="0.6"></audio>
+      <audio id="fx-b0" src="assets/sfx/drop_002.ogg" data-start="13.62" data-duration="0.19" data-track-index="24" data-volume="0.4"></audio>
+      <audio id="fx-b2" src="assets/sfx/drop_002.ogg" data-start="14.71" data-duration="0.19" data-track-index="25" data-volume="0.45"></audio>
+      <audio id="fx-c1" src="assets/sfx/card-slide-1.ogg" data-start="18" data-duration="0.6" data-track-index="26" data-volume="0.5"></audio>
+      <audio id="fx-c2" src="assets/sfx/card-slide-1.ogg" data-start="19.08" data-duration="0.6" data-track-index="27" data-volume="0.45"></audio>
+      <audio id="fx-c3" src="assets/sfx/card-slide-1.ogg" data-start="20.17" data-duration="0.6" data-track-index="28" data-volume="0.5"></audio>
+      <audio id="fx-c4" src="assets/sfx/card-slide-1.ogg" data-start="21.26" data-duration="0.6" data-track-index="29" data-volume="0.45"></audio>
+      <audio id="fx-portal" src="assets/sfx/impactSoft_medium_001.ogg" data-start="22.91" data-duration="0.19" data-track-index="30" data-volume="0.55"></audio>
+      <audio id="fx-mark" src="assets/sfx/impactBell_heavy_004.ogg" data-start="27.28" data-duration="0.3" data-track-index="31" data-volume="0.6"></audio>
+    </div>
+
+    <script>
+      (function () {
+        var FPS = 30;
+        var TOTAL = 900;
+        var root = document.getElementById("root");
+        var tl = gsap.timeline({ paused: true });
+
+        /* ---------------- beat map (vol-12 preset, 109.96 BPM) ---------------- */
+        var B = {
+          two: 0.56, one: 1.64, path: 2.19, gate: 3.27,
+          w1: 4.39, w2: 5.48, w3: 6.56,
+          gateIn: 7.64, refuse: 8.74, allow: 11.46,
+          chain: 13.11, b0: 13.64, b1: 14.2, b2: 14.73, formula: 15.29, tilt: 15.84,
+          c1: 18.02, c2: 19.1, c3: 20.19, c4: 21.28,
+          portal: 22.93, line1: 23.46, line2: 24.02, meta: 24.56,
+          end: 27.0, mark: 27.3
+        };
+
+        /* ---------------- 00 background + HUD ---------------- */
+        tl.to("#bg-grid", { opacity: 1, duration: 0.9, ease: "power1.out" }, 0);
+        tl.to("#hud", { opacity: 1, duration: 0.6, ease: "power1.out" }, 0.15);
+        tl.to("#bg-grid", { opacity: 0.35, duration: 0.3, ease: "power1.out" }, B.w1 - 0.02);
+        tl.to("#bg-grid", { opacity: 0.8, duration: 0.4, ease: "power1.out" }, B.gateIn);
+        tl.to("#bg-grid", { opacity: 0, duration: 0.2, ease: "power1.in" }, B.c1 - 0.2);
+        tl.to("#bg-grid", { opacity: 0.5, duration: 0.6, ease: "power1.out" }, B.end);
+        tl.to("#hud", { opacity: 0, duration: 0.35, ease: "power1.in" }, B.end - 0.4);
+
+        /* ---------------- 01 SIGNAL ---------------- */
+        // two signal lines race in from top and bottom and meet at the gate on the 3.27 beat
+        tl.fromTo("#s1-lineA", { scaleY: 0, transformOrigin: "50% 0%" }, { scaleY: 1, duration: 3.1, ease: "power2.inOut" }, 0.17);
+        tl.fromTo("#s1-lineB", { scaleY: 0, transformOrigin: "50% 100%" }, { scaleY: 1, duration: 3.1, ease: "power2.inOut" }, 0.17);
+        tl.fromTo("#s1-pA", { y: -56 }, { y: 474, duration: 3.1, ease: "power2.inOut" }, 0.17);
+        tl.fromTo("#s1-pB", { y: 56 }, { y: -474, duration: 3.1, ease: "power2.inOut" }, 0.17);
+        tl.fromTo(["#s1-agA", "#s1-agB"], { opacity: 0, x: 24 }, { opacity: 1, x: 0, duration: 0.5, ease: "expo.out", stagger: 0.12 }, 0.3);
+        // beat-locked: 0.56 / 1.64
+        tl.fromTo("#s1-l1", { yPercent: 135 }, { yPercent: 0, duration: 0.6, ease: "expo.out" }, B.two);
+        tl.fromTo("#s1-l2", { yPercent: 135 }, { yPercent: 0, duration: 0.6, ease: "expo.out" }, B.one);
+        tl.fromTo("#s1-path", { clipPath: "inset(0 100% 0 0)" }, { clipPath: "inset(0 0% 0 0)", duration: 0.45, ease: "steps(26)" }, B.path);
+        // the gate node locks on the 3.27 beat
+        tl.fromTo("#s1-node", { rotation: 45, scale: 0 }, { rotation: 45, scale: 1, duration: 0.5, ease: "back.out(2.4)" }, B.gate - 0.06);
+        tl.to("#s1-nodefill", { opacity: 1, duration: 0.12, ease: "none" }, B.gate);
+        tl.fromTo("#s1-glowwrap", { opacity: 0, scale: 0.4 }, { opacity: 1, scale: 1, duration: 0.7, ease: "expo.out" }, B.gate);
+        tl.to(["#s1-pA", "#s1-pB"], { opacity: 0, duration: 0.15, ease: "none" }, B.gate);
+        tl.fromTo("#s1-gate", { opacity: 0, x: -16 }, { opacity: 1, x: 0, duration: 0.45, ease: "expo.out" }, B.gate + 0.08);
+        // exit: the copy slides off left, the gate collapses into a point
+        tl.to("#s1-copy", { x: -90, opacity: 0, duration: 0.42, ease: "power3.in" }, 3.92);
+        tl.to(["#s1-lineA", "#s1-lineB", "#s1-agA", "#s1-agB", "#s1-gate"], { opacity: 0, duration: 0.3, ease: "power2.in" }, 4.02);
+        tl.to("#s1-node", { scale: 6, opacity: 0, duration: 0.34, ease: "power3.in" }, 4.02);
+        tl.to("#s1-glowwrap", { scale: 2.4, opacity: 0, duration: 0.34, ease: "power3.in" }, 4.02);
+
+        /* ---------------- 02 TYPE ---------------- */
+        tl.fromTo("#s2-cap", { opacity: 0, x: -30 }, { opacity: 1, x: 0, duration: 0.4, ease: "expo.out" }, B.w1);
+        tl.fromTo("#s2-rule", { scaleX: 0 }, { scaleX: 1, duration: 3.0, ease: "power1.inOut" }, B.w1);
+        // beat-grid: GATED 4.39, SIGNED 5.48, RECORDED 6.56 (every other beat, held for reading)
+        tl.set("#w1", { opacity: 1 }, B.w1);
+        tl.fromTo("#w1t", { x: 1500, skewX: -20 }, { x: 0, skewX: 0, duration: 0.62, ease: "expo.out" }, B.w1);
+        tl.fromTo("#w1g", { x: 1700 }, { x: 36, duration: 0.95, ease: "power4.out" }, B.w1);
+        tl.set("#i1", { opacity: 1 }, B.w1);
+        tl.set(["#w1", "#i1"], { opacity: 0 }, B.w2);
+
+        tl.set("#w2", { opacity: 1 }, B.w2);
+        tl.fromTo("#w2t", { yPercent: 104 }, { yPercent: 0, duration: 0.55, ease: "expo.out" }, B.w2);
+        tl.fromTo("#w2g", { yPercent: -110 }, { yPercent: -7, duration: 0.8, ease: "power4.out" }, B.w2);
+        tl.set("#i2", { opacity: 1 }, B.w2);
+        tl.set(["#w2", "#i2"], { opacity: 0 }, B.w3);
+
+        tl.set("#w3", { opacity: 1 }, B.w3);
+        tl.fromTo("#w3t", { scaleX: 2.1, x: -120, transformOrigin: "0% 50%" }, { scaleX: 1, x: 0, duration: 0.6, ease: "expo.out" }, B.w3);
+        tl.fromTo("#w3g", { scaleX: 2.6, x: -300, transformOrigin: "0% 50%" }, { scaleX: 1.04, x: 10, duration: 0.9, ease: "power4.out" }, B.w3);
+        tl.set("#i3", { opacity: 1 }, B.w3);
+        tl.to(["#w3t", "#w3g"], { x: -260, opacity: 0, duration: 0.34, ease: "power3.in" }, 7.27);
+        tl.to(["#s2-cap", "#s2-rule", "#i3"], { opacity: 0, duration: 0.25, ease: "power2.in" }, 7.34);
+
+        /* ---------------- 03 GATE ---------------- */
+        tl.fromTo("#s3-lab", { yPercent: 110 }, { yPercent: 0, duration: 0.5, ease: "expo.out" }, B.gateIn + 0.04);
+        tl.fromTo("#s3-h2", { yPercent: 135 }, { yPercent: 0, duration: 0.6, ease: "expo.out" }, B.gateIn + 0.1);
+        tl.fromTo("#s3-panel", { y: 90, rotationX: 16, opacity: 0, transformPerspective: 1600, transformOrigin: "50% 100%" },
+          { y: 0, rotationX: 0, opacity: 1, duration: 0.75, ease: "expo.out" }, B.gateIn);
+        tl.fromTo(["#req1", "#req2"], { opacity: 0, x: -20 }, { opacity: 1, x: 0, duration: 0.45, ease: "expo.out", stagger: 0.1 }, B.gateIn + 0.24);
+        tl.fromTo("#s3-sel", { opacity: 0 }, { opacity: 1, duration: 0.3, ease: "none" }, B.gateIn + 0.3);
+        // beat-locked: 8.74 strong cue, the refusal lands
+        tl.set("#vA", { opacity: 1 }, B.refuse);
+        tl.fromTo("#vA-badge", { scale: 1.5, transformOrigin: "0% 50%" }, { scale: 1, duration: 0.45, ease: "back.out(2)" }, B.refuse);
+        tl.fromTo(".vA-r", { opacity: 0, x: -14 }, { opacity: 1, x: 0, duration: 0.35, ease: "expo.out", stagger: 0.1 }, B.refuse + 0.12);
+        tl.to("#dot1", { backgroundColor: "#d2a676", duration: 0.2, ease: "none" }, B.refuse);
+        tl.to("#s3-panel", { borderColor: "rgba(210,166,118,0.6)", duration: 0.16, ease: "power1.out" }, B.refuse);
+        // beat: 11.46, the owner asks the same question
+        tl.to("#s3-sel", { y: 112, duration: 0.28, ease: "power3.out" }, B.allow);
+        tl.set("#vA", { opacity: 0 }, B.allow);
+        tl.set("#vB", { opacity: 1 }, B.allow);
+        tl.fromTo("#vB-badge", { scale: 1.35, transformOrigin: "0% 50%" }, { scale: 1, duration: 0.4, ease: "back.out(2)" }, B.allow);
+        tl.fromTo(".vB-r", { opacity: 0, x: -14 }, { opacity: 1, x: 0, duration: 0.3, ease: "expo.out", stagger: 0.07 }, B.allow + 0.08);
+        tl.to("#dot2", { backgroundColor: "#fafafa", duration: 0.2, ease: "none" }, B.allow);
+        tl.to("#s3-panel", { borderColor: "rgba(255,255,255,0.16)", duration: 0.3, ease: "power1.out" }, B.allow);
+        // the console collapses into the FAILURE block of the chain (block #3's box)
+        tl.to(["#s3-left", "#s3-right"], { opacity: 0, duration: 0.18, ease: "power2.in" }, 12.66);
+        tl.to("#s3-head", { opacity: 0, duration: 0.2, ease: "power2.in" }, 12.66);
+        tl.to("#s3-panel", {
+          x: 630, y: -52, scaleX: 380 / 1640, scaleY: 260 / 600,
+          borderColor: "rgba(210,166,118,0.75)", transformOrigin: "50% 50%",
+          duration: 0.4, ease: "expo.inOut"
+        }, 12.68);
+
+        /* ---------------- 04 CHAIN ---------------- */
+        // beat-locked: 13.11 strong cue, the verdict is now event #3
+        tl.set("#b3", { opacity: 1 }, B.chain);
+        tl.fromTo("#b3 > *", { opacity: 0 }, { opacity: 1, duration: 0.3, ease: "power1.out", stagger: 0.03 }, B.chain + 0.02);
+        tl.fromTo("#s4-lab", { yPercent: 110 }, { yPercent: 0, duration: 0.5, ease: "expo.out" }, B.chain + 0.1);
+        tl.fromTo("#s4-h2", { yPercent: 135 }, { yPercent: 0, duration: 0.6, ease: "expo.out" }, B.chain + 0.16);
+        tl.fromTo("#s4-run", { opacity: 0 }, { opacity: 1, duration: 0.4, ease: "none" }, B.chain + 0.3);
+        // beat-grid: blocks 13.64 / 14.20 / 14.73 (the set then holds to 18.0)
+        [["#b0", B.b0], ["#b1", B.b1], ["#b2", B.b2]].forEach(function (b) {
+          tl.fromTo(b[0], { opacity: 0, y: -90 }, { opacity: 1, y: 0, duration: 0.5, ease: "expo.out" }, b[1]);
+        });
+        tl.fromTo(["#k0", "#k1", "#k2"], { scaleX: 0 }, { scaleX: 1, duration: 0.3, ease: "power2.out", stagger: 0.09 }, 15.0);
+        tl.fromTo("#s4-formula", { clipPath: "inset(0 100% 0 0)" }, { clipPath: "inset(0 0% 0 0)", duration: 0.6, ease: "steps(44)" }, B.formula);
+        tl.fromTo("#s4-sig", { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.4, ease: "expo.out" }, B.formula + 0.5);
+        // beat-locked: 15.84 strong cue, the evidence surface tilts into depth
+        tl.to("#chain", { rotationY: -24, rotationX: 12, x: 40, z: -160, transformOrigin: "50% 50%", duration: 1.8, ease: "power2.inOut" }, B.tilt);
+        tl.to("#s4-head", { opacity: 0.35, duration: 1.2, ease: "power1.inOut" }, B.tilt + 0.3);
+        tl.to("#chain", { z: 900, rotationY: -34, opacity: 0, duration: 0.36, ease: "power3.in" }, 17.64);
+        tl.to("#s4-head", { opacity: 0, duration: 0.25, ease: "power2.in" }, 17.7);
+
+        /* ---------------- 05 PROPERTIES ---------------- */
+        // beat-grid: 18.02 / 19.10 / 20.19 / 21.28
+        tl.set("#c1", { opacity: 1 }, B.c1);
+        tl.fromTo("#c1w", { x: 1200 }, { x: 0, duration: 0.5, ease: "expo.out" }, B.c1);
+        tl.fromTo("#c1d", { opacity: 0, x: 40 }, { opacity: 1, x: 0, duration: 0.4, ease: "expo.out" }, B.c1 + 0.1);
+        tl.set("#c1", { opacity: 0 }, B.c2);
+
+        tl.set("#c2", { opacity: 1 }, B.c2);
+        tl.fromTo("#c2w", { yPercent: 100 }, { yPercent: 0, duration: 0.5, ease: "expo.out" }, B.c2);
+        tl.fromTo("#c2d", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.4, ease: "expo.out" }, B.c2 + 0.1);
+        tl.set("#c2", { opacity: 0 }, B.c3);
+
+        tl.set("#c3", { opacity: 1 }, B.c3);
+        tl.fromTo("#c3w", { scale: 1.32, transformOrigin: "0% 60%" }, { scale: 1, duration: 0.5, ease: "expo.out" }, B.c3);
+        tl.fromTo("#c3d", { opacity: 0 }, { opacity: 1, duration: 0.35, ease: "none" }, B.c3 + 0.12);
+        tl.set("#c3", { opacity: 0 }, B.c4);
+
+        tl.set("#c4", { opacity: 1 }, B.c4);
+        tl.fromTo("#c4w", { clipPath: "inset(0 100% 0 0)" }, { clipPath: "inset(0 0% 0 0)", duration: 0.5, ease: "expo.out" }, B.c4);
+        tl.fromTo("#c4d", { opacity: 0, x: -30 }, { opacity: 1, x: 0, duration: 0.4, ease: "expo.out" }, B.c4 + 0.1);
+        // a slit of light opens exactly where the portal's doorway will be
+        tl.to(["#c4w", "#c4d", "#c4i"], { opacity: 0, duration: 0.2, ease: "power2.in" }, 22.3);
+        tl.fromTo("#s5-slit", { opacity: 1, scaleY: 0 }, { opacity: 1, scaleY: 1, duration: 0.42, ease: "expo.inOut" }, 22.44);
+
+        /* ---------------- 06 PORTAL ---------------- */
+        tl.fromTo("#s6-cam", { scale: 1 }, { scale: 1.08, duration: 4.07, ease: "power1.inOut" }, B.portal);
+        tl.fromTo("#s6-l1", { yPercent: 135 }, { yPercent: 0, duration: 0.8, ease: "expo.out" }, B.line1);
+        tl.fromTo("#s6-l2", { yPercent: 135 }, { yPercent: 0, duration: 0.8, ease: "expo.out" }, B.line2);
+        tl.fromTo(["#s6-m1", "#s6-m2"], { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.5, ease: "expo.out", stagger: 0.14 }, B.meta);
+        tl.to("#s6-fade", { opacity: 1, duration: 0.42, ease: "power2.in" }, 26.56);
+
+        /* ---------------- 07 MARK ---------------- */
+        // beat-locked: 27.30 strong cue, the two bars lock
+        tl.fromTo("#bar1", { x: -26, opacity: 0 }, { x: 0, opacity: 1, duration: 0.3, ease: "expo.out" }, B.mark - 0.3);
+        tl.fromTo("#bar2", { x: 26, opacity: 0 }, { x: 0, opacity: 0.55, duration: 0.3, ease: "expo.out" }, B.mark - 0.3);
+        tl.fromTo("#s7-n", { yPercent: 135 }, { yPercent: 0, duration: 0.7, ease: "expo.out" }, 27.52);
+        tl.fromTo("#s7-cta", { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.6, ease: "expo.out" }, 27.92);
+        tl.fromTo("#s7-row", { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.6, ease: "expo.out" }, 28.22);
+        tl.fromTo("#s7-foot", { opacity: 0 }, { opacity: 1, duration: 0.5, ease: "none" }, 28.46);
+        tl.fromTo("#s7-stack", { scale: 1 }, { scale: 1.012, duration: 3, ease: "none", transformOrigin: "50% 50%" }, B.end);
+
+        /* ---------------- per-frame layer: timecode, audio, typing, grain ---------------- */
+        var CMD_A = "causalmesh policy check --agent docs --kind path --name src/causalmesh/policy/gate.py";
+        var CMD_B = "causalmesh policy check --agent causalmesh --kind path --name src/causalmesh/policy/gate.py";
+        var SCENES = [
+          [0, "01 Signal"], [B.w1, "02 Type"], [B.gateIn, "03 Gate"], [B.chain, "04 Chain"],
+          [B.c1, "05 Properties"], [B.portal, "06 Portal"], [B.end, "07 Mark"]
+        ];
+        var hud = document.getElementById("hud");
+        var tcEl = document.getElementById("hud-tc");
+        var scEl = document.getElementById("hud-scene");
+        var progEl = document.getElementById("hud-prog");
+        var cmdEl = document.getElementById("s3-cmd");
+        var caretEl = document.getElementById("s3-caret");
+        var grainEl = document.getElementById("grain");
+        var A = window.AUDIO_DATA || { level: [], bass: [] };
+
+        function pad(n) { return n < 10 ? "0" + n : "" + n; }
+        // seeded integer hash, so grain is identical on every render
+        function hash(n) {
+          n = (n ^ 61) ^ (n >>> 16);
+          n = (n + (n << 3)) | 0;
+          n = n ^ (n >>> 4);
+          n = Math.imul(n, 0x27d4eb2d);
+          return (n ^ (n >>> 15)) >>> 0;
+        }
+
+        function drawFrame(f) {
+          var t = f / FPS;
+          tcEl.textContent = "TC 00:00:" + pad(Math.floor(t)) + ":" + pad(f % FPS);
+          var label = SCENES[0][1];
+          for (var i = 0; i < SCENES.length; i++) if (t >= SCENES[i][0]) label = SCENES[i][1];
+          scEl.textContent = label + "  ·  Arm C3";
+          progEl.style.transform = "scaleX(" + (f / (TOTAL - 1)).toFixed(4) + ")";
+          if (t >= B.c2 && t < B.c4) hud.classList.add("ink");
+          else hud.classList.remove("ink");
+
+          var lv = Math.min(1, (A.level[f] || 0) / 0.52);
+          var bs = Math.min(1, A.bass[f] || 0);
+          root.style.setProperty("--lvl", lv.toFixed(3));
+          root.style.setProperty("--bass", bs.toFixed(3));
+
+          var h = hash(f + 1);
+          grainEl.style.backgroundPosition = (h % 256) + "px " + ((h >>> 8) % 256) + "px";
+
+          // the command types at the site's console rate, then the owner's check replaces it
+          var typeStart = 8.0, typeEnd = 8.55, cmd = "";
+          if (t >= B.allow) cmd = CMD_B;
+          else if (t >= typeEnd) cmd = CMD_A;
+          else if (t >= typeStart) cmd = CMD_A.slice(0, Math.ceil(((t - typeStart) / (typeEnd - typeStart)) * CMD_A.length));
+          cmdEl.textContent = cmd;
+          var typing = t >= typeStart && t < typeEnd;
+          var blink = Math.floor(t * 2.4) % 2 === 0;
+          caretEl.style.opacity = typing || (t < B.refuse && blink) || (t >= B.allow + 0.6 && blink) ? "1" : "0";
+        }
+
+        for (var f = 0; f < TOTAL; f++) {
+          tl.call(drawFrame, [f], f / FPS);
+        }
+        drawFrame(0);
+
+        window.__timelines["causalmesh-film"] = tl;
+      })();
+    </script>
+  </body>
+</html>

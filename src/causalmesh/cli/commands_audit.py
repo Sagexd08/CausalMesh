@@ -61,6 +61,17 @@ def write_command(
     experiment_id: Annotated[str | None, typer.Option("--id")] = None,
     latest: Annotated[bool, typer.Option("--latest")] = False,
     force: Annotated[bool, typer.Option("--force", help="Overwrite an existing manifest.")] = False,
+    record_host: Annotated[
+        bool,
+        typer.Option(
+            "--record-host",
+            help=(
+                "Record the real hostname and OS username. Manifests are tracked, so "
+                "committing one written with this flag publishes both. Default: a "
+                "keyed digest of each, or unknown."
+            ),
+        ),
+    ] = False,
     root_option: Annotated[Path | None, typer.Option("--root")] = None,
     as_json: Annotated[bool, typer.Option("--json")] = False,
 ) -> None:
@@ -83,17 +94,24 @@ def write_command(
             repo.experiment_dir(name),
             repository_root=repo.root,
             config={"experiment_id": name},
+            record_host=record_host,
         )
     except ManifestError as exc:
         fail(str(exc))
         raise typer.Exit(Exit.ERROR) from exc
 
     manifest.write(destination)
+    if record_host:
+        note(
+            "--record-host: this manifest names the real hostname and username; "
+            "do not commit it to a repository that publishes data/manifests/"
+        )
     payload = {
         "artifacts": len(manifest.artifacts),
         "bytes": manifest.total_bytes,
         "config_freeze": manifest.config_freeze,
         "experiment_id": name,
+        "host_recorded": record_host,
         "path": str(destination),
     }
     if not emit(payload, as_json=as_json):

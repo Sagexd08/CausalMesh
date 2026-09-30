@@ -167,7 +167,7 @@ class AcceptanceDecision:
         }
 
 
-def decide_acceptance(outcome: TaskOutcome) -> AcceptanceDecision:
+def decide_acceptance(outcome: TaskOutcome, *, interrupted: bool = False) -> AcceptanceDecision:
     """Decide a run's acceptance from its outcome.
 
     §38 already made this a total, automatic function of `succeeded` — this
@@ -176,7 +176,18 @@ def decide_acceptance(outcome: TaskOutcome) -> AcceptanceDecision:
     there is exactly one correct verdict, which is precisely the condition
     the Jev backlog entry names as disqualifying a decision point from
     trading a deterministic answer for a calibrated one.
+
+    The one input besides the outcome is `interrupted`: a run the scheduler's
+    watchdog cut short is never accepted, whatever its half-finished
+    workspace happens to score, because the agents never reached the end of
+    the work the outcome is supposed to judge. The reason is recorded as an
+    extra evidence string, so the signed decision explains itself.
     """
+    if interrupted:
+        return AcceptanceDecision(
+            verdict=AcceptanceVerdict.REJECT,
+            evidence=(*outcome.evidence, "run_interrupted_before_completion"),
+        )
     verdict = AcceptanceVerdict.ACCEPT if outcome.succeeded else AcceptanceVerdict.REJECT
     return AcceptanceDecision(verdict=verdict, evidence=outcome.evidence)
 
