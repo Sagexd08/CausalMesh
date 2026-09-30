@@ -310,6 +310,37 @@ class Relay:
             reason="accepted",
         )
 
+    def resume(self, *, head_hash: str, next_sequence: int, event_ids: Iterable[str]) -> None:
+        """Continue an existing chain instead of starting at genesis.
+
+        For a relay whose store already holds records from an earlier process.
+        The caller has verified those records (the SDK's `EvidenceStore` does,
+        against this session's key ring); this method only moves the relay's
+        head, sequence and duplicate-id set to where the chain left off, so the
+        next event links to `head_hash` and takes `next_sequence`.
+
+        Refuses on a relay that has already ingested anything, and on a head
+        that is not a SHA-256 digest: continuing from a wrong head would sign a
+        chain that does not join up, which is a failure only the verifier
+        would find.
+        """
+        try:
+            head_bytes = bytes.fromhex(head_hash)
+        except (ValueError, TypeError) as exc:
+            raise IngestError(f"resume head is not valid hex: {head_hash!r}") from exc
+        if len(head_bytes) != 32:
+            raise IngestError(f"resume head must be a 32-byte SHA-256 digest, got {head_hash!r}")
+        if next_sequence < 1:
+            raise IngestError(
+                f"cannot resume at sequence {next_sequence}; an empty chain starts fresh"
+            )
+        with self._lock:
+            if self._sequence != 0 or self._head != GENESIS_HASH:
+                raise IngestError("resume() is only valid on a relay that has ingested nothing")
+            self._head = head_hash
+            self._sequence = next_sequence
+            self._seen_event_ids = set(event_ids)
+
     def pending_for(self, agent_id: str) -> tuple[Event, ...]:
         """Peek at an agent's undelivered events without consuming them."""
         with self._lock:
