@@ -1,0 +1,127 @@
+# Task: change an interface's call signature while its consumer keeps calling it.
+#
+# The coordination dependency (spec §35, family interface_consumer):
+#   agent_a owns src/pricing.py and changes format_price(cents) to
+#   format_price(cents, currency): a caller must now pass a currency.
+#   agent_b owns src/checkout.py, which calls format_price by hand, and must
+#   follow the new signature.
+#
+# How this differs from schema_handler_widen, which is also a dependency
+# shape: there the consumer mirrors a DATA declaration (a field list) and
+# drifts silently, failing an assertion. Here the consumer CALLS a function
+# whose signature changed. A stale call does not drift, it raises TypeError
+# the first time it runs, so the integration test fails by exception rather
+# than by a mismatched list. The mechanism is different even though the
+# coordination structure (disjoint ownership, cross-agent dependency) is the
+# same, and no path is contested.
+#
+# What makes the arms differ: agent_b's checkout write is CONDITIONAL on
+# whether it was told about agent_a's change to src/pricing.py.
+#   - informed   -> writes a checkout that passes a currency; tests pass
+#   - uninformed -> writes the checkout it planned from the interface it
+#                   read before the change; the stale-call marker remains
+#
+# The agent stays deterministic: the same observations always produce the
+# same behaviour. What varies between arms is what it was told.
+
+task_id: interface_consumer
+version: "1.0.0"
+family: interface_consumer
+description: >
+  agent_a changes the pricing interface so callers must pass a currency,
+  while agent_b, whose checkout module calls that interface, writes the
+  consumer. agent_b follows the new signature if it is told about the
+  change; without it the consumer keeps calling the old one and fails.
+
+fixture: pricing_interface
+
+# Held out of experiment profiles until admitted (see TaskDefinition.in_design).
+# This task passes the section 37 gate (its integration test runs it), but adding
+# it to `pilot`, `small` and `medium` would silently double their run counts and
+# stop them describing the collection they were calibrated on. To admit it: set
+# this true and bump `version`.
+in_design: false
+
+roles:
+  - agent_id: agent_a
+    owns: [src/pricing.py]
+    description: Changes format_price to require a currency argument.
+  - agent_id: agent_b
+    owns: [src/checkout.py]
+    depends_on: [src/pricing.py]
+    description: Keeps the checkout consumer calling the current interface.
+
+success:
+  integration_test: [python, -m, pytest, -q, tests/]
+  # A stale consumer keeps the call written against the old signature.
+  divergence_file: src/checkout.py
+  divergence_marker: "# call written against the pre-change signature"
+
+contested_paths: []
+
+scenario:
+  agent_a:
+    owns: [src/pricing.py]
+    actions:
+      - read: src/pricing.py
+      - write:
+          path: src/pricing.py
+          content: |
+            """The pricing interface the checkout consumer calls.
+
+            `format_price` now requires the currency a caller is pricing in.
+            """
+
+
+            def format_price(cents, currency):
+                """Render cents as a decimal string with its currency, e.g. "12.50 USD"."""
+                return f"{cents // 100}.{cents % 100:02d} {currency}"
+
+  agent_b:
+    owns: [src/checkout.py]
+    depends_on: [src/pricing.py]
+    actions:
+      # Reads the interface before agent_a's change lands.
+      - read: src/pricing.py
+      # Deliberation window: agent_a's write happens during this (§23).
+      - wait: 2s
+      # Informed path: agent_b learned the signature changed and passes a
+      # currency. It does NOT touch src/pricing.py; that file belongs to
+      # agent_a, and the integrated workspace takes each file from its owner.
+      - write:
+          if_informed_about: src/pricing.py
+          path: src/checkout.py
+          content: |
+            """Consumes the pricing interface. Calls `format_price` by hand."""
+
+            from pricing import format_price
+
+
+            def receipt_line(name, cents, currency="USD"):
+                """One printable receipt line for an item."""
+                return f"{name}: {format_price(cents, currency)}"
+
+
+            def receipt_total(items, currency="USD"):
+                """The printable total for a list of (name, cents) pairs."""
+                return format_price(sum(cents for _, cents in items), currency)
+      # Uninformed path: agent_b never heard, so it writes the consumer it
+      # planned from the signature it read. The stale call remains.
+      - write:
+          if_uninformed_about: src/pricing.py
+          path: src/checkout.py
+          content: |
+            """Consumes the pricing interface. Calls `format_price` by hand."""
+
+            from pricing import format_price
+
+
+            def receipt_line(name, cents):
+                """One printable receipt line for an item."""
+                # call written against the pre-change signature
+                return f"{name}: {format_price(cents)}"
+
+
+            def receipt_total(items):
+                """The printable total for a list of (name, cents) pairs."""
+                return format_price(sum(cents for _, cents in items))
