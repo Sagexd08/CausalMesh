@@ -264,18 +264,28 @@ def validate_command(
     from causalmesh.sdk.errors import ConfigurationError
 
     if config_path is None:
-        # Search upward
-        from causalmesh.policy.contract import Contract
+        # Search upward for the file without parsing it. `Contract.find` loads
+        # what it finds with the strict core schema, which rejects the SDK-only
+        # `agent` and `tools` sections this command exists to check, and raises
+        # rather than reporting. `load_sdk_config` below does the parsing.
+        from causalmesh.policy.contract import CONTRACT_FILENAME
 
-        found = Contract.find()
-        if found is None:
+        here = Path.cwd().resolve()
+        found_path = next(
+            (
+                candidate / CONTRACT_FILENAME
+                for candidate in (here, *here.parents)
+                if (candidate / CONTRACT_FILENAME).is_file()
+            ),
+            None,
+        )
+        if found_path is None:
             fail(
                 "no causalmesh.yaml found",
                 hint="Run `causalmesh init` to create one, or pass a path.",
             )
             raise typer.Exit(Exit.USAGE)
-        assert found.source is not None
-        config_path = found.source
+        config_path = found_path
 
     try:
         contract, sdk_config = load_sdk_config(config_path)
