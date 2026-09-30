@@ -365,7 +365,10 @@ class TestPlan:
             "--json",
         )
         assert result.exit_code == 0, result.stdout
-        assert payload(result)["runs"] == 960
+        # 120 repetitions x 4 arms x 4 authored tasks, one per section 35
+        # family: the 1920-run design. It was 960 while only two families
+        # existed. A CooperBench import is never planned implicitly.
+        assert payload(result)["runs"] == 1920
 
     def test_an_unknown_profile_is_a_usage_error(self) -> None:
         result = invoke("experiment", "plan", "--profile", "nonsense", "--root", str(REPO))
