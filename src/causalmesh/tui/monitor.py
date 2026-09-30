@@ -60,6 +60,7 @@ STATE_STYLE = {
     "FAILED": FAIL,
     "TIMED_OUT": FAIL,
     "ABANDONED": DENIAL,
+    "HANDED_OFF": LIVE,
 }
 
 ARM_CONDITION = {
@@ -91,7 +92,7 @@ class RunView:
 
     @property
     def active(self) -> bool:
-        return self.state in {"PLANNED", "RUNNING"}
+        return self.state in {"PLANNED", "RUNNING", "HANDED_OFF"}
 
     @property
     def outcome(self) -> str:
