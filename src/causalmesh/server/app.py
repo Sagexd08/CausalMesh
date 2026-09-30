@@ -11,7 +11,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from collections.abc import AsyncIterator, Mapping
+from collections.abc import AsyncIterator, Callable, Mapping, Sequence
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -26,6 +26,7 @@ from causalmesh.sdk.errors import MissingResourceError, ToolNotFoundError, Unkno
 from causalmesh.sdk.mesh import CausalMesh
 
 from .auth import Principal, make_auth_checker
+from .credentials import Credential, CredentialStore
 from .errors import register_error_handlers
 from .middleware import BodyLimitMiddleware
 from .models import ExecuteRequest, ExecuteResponse, ToolListResponse, ToolMeta
@@ -87,6 +88,20 @@ def _identity_source(principal: Principal) -> str:
     return "token-bound" if principal.agent_id else "asserted"
 
 
+def _identity_fields(principal: Principal) -> dict[str, str]:
+    """What the chain records about the caller: how the agent was established, and by what.
+
+    `credential_id` is the operator's label for the token. It comes from
+    configuration, so it is the same on every replay of the same run (nothing
+    random, nothing time-based), and it is not derived from the token. It is
+    left out when authentication is off, because then no credential acted.
+    """
+    fields = {"identity_source": _identity_source(principal)}
+    if principal.label:
+        fields["credential_id"] = principal.label
+    return fields
+
+
 def _not_ready_reasons(m: CausalMesh, *, shutting_down: bool) -> list[str]:
     """Why this session cannot take a call, as short stable codes (empty = ready)."""
     reasons: list[str] = []
@@ -116,6 +131,9 @@ def create_app(
     upstream_api_key: str | None = None,
     max_body_bytes: int = DEFAULT_MAX_BODY_BYTES,
     rate_limit_per_minute: int | None = None,
+    credentials: Sequence[Credential] | None = None,
+    tokens_file: str | os.PathLike[str] | None = None,
+    clock: Callable[[], float] = time.time,
 ) -> FastAPI:
     """Application factory.
 
@@ -126,6 +144,13 @@ def create_app(
         key, so the agent is asserted, not proven (see `server/auth.py`).
     agent_tokens: `{agent_id: token}`. A token bound to one agent: the server
         takes the agent from the token and refuses a request that names another.
+    credentials: labelled tokens, each with an optional agent binding and expiry
+        (`server/credentials.py`). The label is recorded in the chain as
+        `credential_id`; it is chosen by the operator and is never the token.
+    tokens_file: a YAML or JSON file of credentials that is re-read when it
+        changes, so a token can be revoked, added or rotated without a restart.
+        A malformed reload keeps the last good set (see `server/credentials.py`).
+    clock: seconds since the epoch, used to judge expiry; injectable for tests.
     auth_disabled: the explicit switch for dev mode (no auth).
     max_body_bytes: requests larger than this are refused with 413.
     rate_limit_per_minute: when set, at most this many requests a minute per
@@ -138,30 +163,46 @@ def create_app(
     """
     if mesh is None and config_path is None:
         raise ValueError("Either mesh or config_path must be provided")
-    tokens_given = api_tokens is not None or bool(agent_tokens)
+    tokens_given = (
+        api_tokens is not None or bool(agent_tokens) or bool(credentials) or tokens_file is not None
+    )
     if auth_disabled and tokens_given:
         raise ValueError("auth_disabled=True contradicts the tokens that were given")
     if not auth_disabled and not tokens_given:
         raise ValueError(
-            "authentication is required: pass api_tokens={...} or agent_tokens={...}, "
-            "or auth_disabled=True to serve without it (dev only)"
+            "authentication is required: pass api_tokens={...}, agent_tokens={...}, "
+            "credentials=[...] or tokens_file=..., or auth_disabled=True to serve "
+            "without it (dev only)"
         )
     if max_body_bytes < 1:
         raise ValueError("max_body_bytes must be at least 1")
     upstream_host = _upstream_host(upstream_base_url) if upstream_base_url else None
     if mesh is None:
         mesh = CausalMesh.from_config(str(config_path))
-    unknown_agents = sorted(set(agent_tokens or {}) - set(mesh.agents))
+    unknown_agents = sorted(
+        (set(agent_tokens or {}) | {c.agent_id for c in credentials or () if c.agent_id})
+        - set(mesh.agents)
+    )
     if unknown_agents:
         raise ValueError(
             f"agent_tokens names agents this session has no key for: {unknown_agents}; "
             "declare them under `roles` in causalmesh.yaml"
         )
 
+    store = (
+        CredentialStore()
+        if auth_disabled
+        else CredentialStore.from_config(
+            api_tokens,
+            agent_tokens,
+            credentials=credentials or (),
+            tokens_file=tokens_file,
+            clock=clock,
+            known_agents=set(mesh.agents),
+        )
+    )
     auth_dep = make_auth_checker(
-        None if auth_disabled else api_tokens,
-        None if auth_disabled else agent_tokens,
-        rate_limit_per_minute=rate_limit_per_minute,
+        None, None, rate_limit_per_minute=rate_limit_per_minute, store=store
     )
 
     @asynccontextmanager
@@ -198,6 +239,9 @@ def create_app(
     app.state.upstream_base_url = upstream_base_url
     app.state.upstream_api_key = upstream_api_key
     app.state.shutting_down = False
+    # For the operator's process: `serve` asks it to reload on SIGHUP and feeds
+    # its `secrets()` to the log redactor.
+    app.state.credentials = store
 
     # `CausalMesh` is not thread-safe: the relay's chain head, the gate's
     # verdict list and the event counter are plain state, and a call reads
@@ -265,7 +309,7 @@ def create_app(
 
         # How the agent was established, recorded on the event so a reader of
         # the chain can tell a credential from a claim (as chat events do).
-        annotations = {"identity_source": _identity_source(principal)}
+        annotations = _identity_fields(principal)
 
         try:
             async with exec_lock:
@@ -431,9 +475,9 @@ def create_app(
                     "allowed": allowed,
                     "reason": reason,
                     "rule": rule,
-                    # How the agent was established, so a reader of the chain
-                    # can tell a claim from a credential.
-                    "identity_source": _identity_source(principal),
+                    # How the agent was established, and by which credential,
+                    # so a reader of the chain can tell a claim from a credential.
+                    **_identity_fields(principal),
                 },
             )
 

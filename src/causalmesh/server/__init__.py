@@ -45,5 +45,6 @@ Or supply an already-constructed CausalMesh session::
 from __future__ import annotations
 
 from .app import create_app
+from .credentials import Credential
 
-__all__ = ["create_app"]
+__all__ = ["Credential", "create_app"]
