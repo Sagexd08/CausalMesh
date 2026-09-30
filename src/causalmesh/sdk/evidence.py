@@ -251,41 +251,42 @@ class EvidenceStore(ChainStore):
 
     def __init__(self, path: Path | str, *, recover: bool = False, fsync: bool = True) -> None:
         super().__init__(None, fsync=fsync)
-        self._path = Path(path)
+        self._file = Path(path)
+        self._path = self._file
         self._poisoned: str | None = None
         self._fh: Any = None
         self.recovery: dict[str, Any] | None = None
 
-        self._path.parent.mkdir(parents=True, exist_ok=True)
-        self._lock_file = _FileLock(self._path.with_name(self._path.name + ".lock"))
+        self._file.parent.mkdir(parents=True, exist_ok=True)
+        self._lock_file = _FileLock(self._file.with_name(self._file.name + ".lock"))
         self._lock_file.acquire()
         try:
             self._load(recover=recover)
-            self._fh = self._path.open("ab", buffering=0)
+            self._fh = self._file.open("ab", buffering=0)
         except BaseException:
             self._lock_file.release()
             raise
 
     def _load(self, *, recover: bool) -> None:
-        if not self._path.exists() or self._path.stat().st_size == 0:
+        if not self._file.exists() or self._file.stat().st_size == 0:
             return
-        scan = scan_evidence(self._path)
+        scan = scan_evidence(self._file)
         if scan.torn_tail is not None:
             if not recover:
-                raise EvidenceCorruptError(_torn_message(self._path, scan), torn=True)
-            sidecar = self._path.with_name(self._path.name + ".torn")
+                raise EvidenceCorruptError(_torn_message(self._file, scan), torn=True)
+            sidecar = self._file.with_name(self._file.name + ".torn")
             with sidecar.open("ab") as out:
                 out.write(scan.torn_tail + b"\n")
                 out.flush()
                 os.fsync(out.fileno())
-            os.truncate(self._path, scan.valid_size)
+            os.truncate(self._file, scan.valid_size)
             self.recovery = {
                 "torn_bytes": len(scan.torn_tail),
                 "preserved_in": str(sidecar),
                 "records_kept": len(scan.records),
             }
         elif scan.unterminated:
-            with self._path.open("ab") as out:
+            with self._file.open("ab") as out:
                 out.write(b"\n")
                 out.flush()
                 os.fsync(out.fileno())
@@ -293,7 +294,7 @@ class EvidenceStore(ChainStore):
 
     @property
     def path(self) -> Path:
-        return self._path
+        return self._file
 
     @property
     def failure(self) -> str | None:
@@ -315,7 +316,7 @@ class EvidenceStore(ChainStore):
             if self._poisoned is not None:
                 raise EvidenceUnavailableError(self._poisoned)
             if self._fh is None:
-                raise StoreError(f"{self._path} is closed")
+                raise StoreError(f"{self._file} is closed")
             good_size = os.fstat(self._fh.fileno()).st_size
             try:
                 view = memoryview(line)
@@ -329,7 +330,7 @@ class EvidenceStore(ChainStore):
                 with contextlib.suppress(OSError):
                     self._fh.truncate(good_size)
                 self._poisoned = (
-                    f"writing to {self._path} failed ({type(exc).__name__}: {exc}); "
+                    f"writing to {self._file} failed ({type(exc).__name__}: {exc}); "
                     "no further calls will run in this session. Restart it to resume "
                     "from the last record that reached the disk."
                 )
