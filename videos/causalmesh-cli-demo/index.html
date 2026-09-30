@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <title>CausalMesh - CLI Demo</title>
+    <script src="assets/vendor/gsap.min.js"></script>
+    <style>
+      @font-face { font-family: "Manrope"; src: url("assets/fonts/Manrope.woff2") format("woff2"); font-weight: 200 800; font-display: block; }
+      @font-face { font-family: "JetBrains Mono"; src: url("assets/fonts/JetBrainsMono.woff2") format("woff2"); font-weight: 400 600; font-display: block; }
+      /* The site's tokens. Sand is the refusal colour and nothing else. */
+      :root {
+        --stage: #050505; --panel: #0a0a0a; --fg: #fafafa; --fg2: #d6d5d5; --muted: #a7a6a6; --dim: #8b8a8a;
+        --line: rgba(255,255,255,0.10); --line-strong: rgba(255,255,255,0.26);
+        --deny: #d2a676; --deny-wash: rgba(210,166,118,0.13);
+      }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--stage); }
+      #root { position: relative; width: 100%; height: 100%; overflow: hidden; background: var(--stage); color: var(--fg);
+        font-family: "Manrope", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+      .clip { position: absolute; inset: 0; }
+      .label { font-family: "JetBrains Mono", monospace; font-size: 18px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim); }
+      .mask { display: block; overflow: hidden; padding-bottom: 0.16em; margin-bottom: -0.16em; }
+      .mask > span { display: block; white-space: nowrap; }
+      .display { font-weight: 300; letter-spacing: -0.045em; line-height: 1.04; }
+      .muted { color: var(--muted); }
+
+      #bg-grid { background-image: linear-gradient(to right, rgba(255,255,255,0.04) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.04) 1px, transparent 1px); background-size: 96px 96px; }
+      #vignette { background: radial-gradient(ellipse at 50% 45%, transparent 58%, rgba(0,0,0,0.55) 100%); pointer-events: none; }
+      #wipe { position: absolute; inset: 0; background: #0c0c0c; z-index: 50; border-right: 2px solid rgba(255,255,255,0.5); }
+      #prog { position: absolute; left: 96px; right: 96px; top: 1046px; height: 2px; background: var(--line); }
+      #prog-fill { position: absolute; inset: 0; background: var(--fg); transform-origin: 0 50%; transform: scaleX(0); }
+
+      /* pipeline strip: Agent -> SDK -> Gateway -> Policy -> Tool -> Evidence */
+      #pipe { position: absolute; left: 96px; top: 40px; width: 1728px; height: 72px; display: flex; align-items: center; opacity: 0; z-index: 40; }
+      .pn { position: relative; width: 232px; height: 72px; border: 1px solid var(--line-strong); border-radius: 8px; background: rgba(10,10,10,0.9); padding: 13px 18px; flex: none; }
+      .pn .ix { display: block; font-family: "JetBrains Mono", monospace; font-size: 12px; letter-spacing: 0.16em; color: var(--dim); }
+      .pn .nm { display: block; margin-top: 6px; font-size: 23px; font-weight: 400; letter-spacing: -0.02em; color: var(--muted); white-space: nowrap; }
+      .pn .tg { position: absolute; right: 14px; top: 13px; font-family: "JetBrains Mono", monospace; font-size: 12px; letter-spacing: 0.1em; color: var(--deny); opacity: 0; }
+      .pc { position: relative; width: 67px; height: 2px; background: var(--line); flex: none; }
+      .pc i { position: absolute; inset: 0; background: var(--fg); transform-origin: 0 50%; transform: scaleX(0); }
+      #status { position: absolute; left: 96px; top: 128px; width: 1728px; height: 30px; z-index: 40; }
+      .st { position: absolute; left: 0; top: 0; font-family: "JetBrains Mono", monospace; font-size: 17px; color: var(--fg2); opacity: 0; white-space: nowrap; }
+      .st b { font-weight: 500; color: var(--fg); }
+      .st.deny { color: var(--deny); }
+      .st.deny b { color: var(--deny); }
+      .cap { position: absolute; left: 96px; top: 1004px; font-family: "JetBrains Mono", monospace; font-size: 16px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim); opacity: 0; z-index: 40; white-space: nowrap; }
+      .cap b { color: var(--fg); font-weight: 500; }
+
+      /* the stage: everything that zooms lives here, clipped so the strip stays clean */
+      .stage { position: absolute; left: 0; top: 166px; width: 1920px; height: 826px; overflow: hidden; z-index: 5; }
+      .cam { position: absolute; inset: 0; transform-origin: 50% 50%; }
+      .tw { position: absolute; background: var(--panel); border: 1px solid var(--line-strong); border-radius: 10px; overflow: hidden; }
+      .tbar { position: absolute; left: 0; right: 0; top: 0; height: 46px; border-bottom: 1px solid var(--line); display: flex; align-items: center; padding: 0 18px; gap: 8px; background: #0e0e0e; }
+      .tbar i { width: 11px; height: 11px; border-radius: 50%; border: 1px solid var(--line-strong); }
+      .tbar .tt { margin-left: 14px; font-family: "JetBrains Mono", monospace; font-size: 14px; letter-spacing: 0.08em; color: var(--dim); }
+      .tbody { position: absolute; left: 0; right: 0; top: 46px; bottom: 0; overflow: hidden; }
+      .tvp { position: absolute; left: 0; right: 0; top: 16px; bottom: 16px; overflow: hidden; }
+      .tin, .ein { padding: 0 20px; }
+      .tin { position: relative; font-family: "JetBrains Mono", monospace; color: var(--fg2); white-space: pre-wrap; word-break: break-all; }
+      .tin .ln { opacity: 0; }
+      .tin .ps { color: var(--dim); }
+      .tin .out { color: var(--muted); }
+      .tin .out.hi { color: var(--fg); }
+      .tin .out.deny, .tin .deny { color: var(--deny); }
+      .tin .out.deny span { color: var(--deny); }
+      .tin .cur::after { content: ""; display: inline-block; width: 0.55em; height: 1.05em; margin-left: 1px; vertical-align: text-bottom; background: var(--fg); }
+      .tin .k { color: var(--fg2); } .tin .s { color: var(--muted); } .tin .v { color: var(--fg); }
+      .hlbar { position: absolute; left: 0; right: 0; background: rgba(255,255,255,0.09); border-left: 3px solid var(--fg); opacity: 0; }
+      .hlbar.deny { background: var(--deny-wash); border-left-color: var(--deny); }
+
+      /* editor */
+      .ein { position: relative; font-family: "JetBrains Mono", monospace; color: var(--fg2); }
+      .el { position: relative; white-space: pre; opacity: 0; }
+      .el .no { display: inline-block; width: 44px; margin-right: 18px; text-align: right; color: var(--dim); }
+      .el .c1 { color: var(--dim); font-style: italic; } .el .c2 { color: var(--muted); } .el .c3 { color: var(--fg); font-weight: 500; } .el .c4 { color: var(--fg2); }
+      .fbar { position: absolute; left: 0; right: 0; background: rgba(255,255,255,0.08); border-left: 3px solid var(--fg); opacity: 0; }
+      .notes { position: absolute; left: 1212px; top: 0; width: 612px; }
+      .note { position: absolute; left: 0; width: 612px; padding: 22px 26px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--panel); opacity: 0; }
+      .note .a { font-family: "JetBrains Mono", monospace; font-size: 16px; letter-spacing: 0.08em; color: var(--fg); }
+      .note .b { margin-top: 10px; font-size: 25px; font-weight: 300; line-height: 1.3; letter-spacing: -0.01em; color: var(--muted); }
+
+      /* title + end card */
+      #s0-label { position: absolute; left: 96px; top: 250px; }
+      #s0-title { position: absolute; left: 90px; top: 310px; font-size: 150px; }
+      #s0-sub { position: absolute; left: 96px; top: 700px; font-family: "JetBrains Mono", monospace; font-size: 22px; color: var(--muted); opacity: 0; letter-spacing: 0.04em; }
+      #e-title { position: absolute; left: 0; right: 0; top: 330px; text-align: center; font-size: 170px; }
+      #e-tag { position: absolute; left: 0; right: 0; top: 560px; text-align: center; font-size: 44px; font-weight: 300; letter-spacing: -0.02em; color: var(--fg2); }
+      #e-note { position: absolute; left: 0; right: 0; top: 760px; text-align: center; font-family: "JetBrains Mono", monospace; font-size: 17px; color: var(--dim); opacity: 0; }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-width="1920" data-height="1080" data-duration="61.062" data-fps="30">
+      <div id="bg-grid" class="clip" data-start="0" data-duration="61.062" data-track-index="0"></div>
+
+      <section id="s0" class="clip" data-start="0" data-duration="4.211" data-track-index="2" style="z-index:5">
+        <div id="s0-label" class="label">product demo / cli walkthrough</div>
+        <h1 id="s0-title" class="display"><span class="mask"><span>How developers</span></span><span class="mask"><span>use CausalMesh</span></span></h1>
+        <div id="s0-sub">install &gt; declare &gt; serve &gt; execute &gt; verify</div>
+      </section>
+
+      <section id="s1" class="clip" data-start="4.211" data-duration="7.37" data-track-index="2"><div class="stage"><div class="cam" id="cam1"></div></div></section>
+
+      <section id="s2" class="clip" data-start="11.581" data-duration="6.317" data-track-index="2"><div class="stage"><div class="cam" id="cam2"><div class="notes"><div class="note" id="nt1" style="top:40px"><div class="a">1  THE HANDLER</div><div class="b">A plain Python function. Nothing CausalMesh-specific.</div></div><div class="note" id="nt2" style="top:222px"><div class="a">2  mutating=True</div><div class="b">The gate is consulted before the handler runs.</div></div><div class="note" id="nt3" style="top:404px"><div class="a">3  resource_args</div><div class="b">Names the argument the gate checks against the contract.</div></div></div></div></div></section>
+
+      <section id="s3" class="clip" data-start="17.898" data-duration="7.369" data-track-index="2"><div class="stage"><div class="cam" id="cam3"></div></div></section>
+
+      <section id="panes" class="clip" data-start="25.267" data-duration="30.531" data-track-index="2"><div class="stage"><div class="cam" id="cam4"></div></div></section>
+
+      <section id="s8" class="clip" data-start="55.798" data-duration="5.264" data-track-index="2" style="z-index:5">
+        <h2 id="e-title" class="display"><span class="mask"><span>CausalMesh</span></span></h2>
+        <div id="e-tag"><span class="mask"><span>The SDK and policy gateway for trustworthy AI agents.</span></span></div>
+        <div id="e-note">pre-alpha  |  in-memory evidence  |  no TLS  |  not production-ready</div>
+      </section>
+
+      <div id="hud" class="clip" data-start="0" data-duration="61.062" data-track-index="72" style="z-index:40">
+        <div id="pipe"><div class="pn" id="pn0"><span class="ix">01</span><span class="nm">Agent</span><span class="tg"></span></div><div class="pc" id="pc0"><i></i></div><div class="pn" id="pn1"><span class="ix">02</span><span class="nm">CausalMesh SDK</span><span class="tg"></span></div><div class="pc" id="pc1"><i></i></div><div class="pn" id="pn2"><span class="ix">03</span><span class="nm">Gateway</span><span class="tg"></span></div><div class="pc" id="pc2"><i></i></div><div class="pn" id="pn3"><span class="ix">04</span><span class="nm">Policy</span><span class="tg">REFUSED</span></div><div class="pc" id="pc3"><i></i></div><div class="pn" id="pn4"><span class="ix">05</span><span class="nm">Tool</span><span class="tg">NOT RUN</span></div><div class="pc" id="pc4"><i></i></div><div class="pn" id="pn5"><span class="ix">06</span><span class="nm">Evidence</span><span class="tg"></span></div></div>
+        <div id="status"><div class="st" id="st1"><b>causalmesh init</b> writes the contract: causalmesh.yaml</div><div class="st" id="st3a"><b>coding-agent</b> owns src/ and tests/</div><div class="st" id="st3b"><b>dba-agent</b> owns production/</div><div class="st" id="st3c">arm C3: the gate refuses. Other arms only record.</div><div class="st" id="st4a">the gateway serves the registered tool over HTTP</div><div class="st" id="st4b"><b>GET /v1/tools</b> lists write_file</div><div class="st" id="st5a">policy check: would this be allowed? <b>records nothing</b></div><div class="st" id="st5b"><b>1</b>  the gateway asks the policy first</div><div class="st" id="st5c"><b>2</b>  only then does the handler run</div><div class="st" id="st5d"><b>3</b>  recorded: true, with an event_id</div><div class="st deny" id="st6a">the same check, another path: <b>REFUSE</b></div><div class="st deny" id="st6b">the policy refuses before the handler is reached</div><div class="st deny" id="st6c">no [handler] line: <b>the tool never ran</b></div><div class="st" id="st6d">and the denial is <b>recorded</b> as evidence</div><div class="st" id="st7a"><b>event 1</b>  WRITE, executed, signed</div><div class="st deny" id="st7b"><b>event 2</b>  the denial is recorded too</div><div class="st" id="st7c">previous_hash <b>7479f1ff8250</b> = chain_hash of event 1</div><div class="st" id="st7d">no token: <b>401</b>. No evidence without auth.</div></div>
+        <div class="cap" id="cap1"><b>step 1 / 7</b>&nbsp;&nbsp;install and initialize</div><div class="cap" id="cap2"><b>step 2 / 7</b>&nbsp;&nbsp;register a tool</div><div class="cap" id="cap3"><b>step 3 / 7</b>&nbsp;&nbsp;declare who may do what</div><div class="cap" id="cap4"><b>step 4 / 7</b>&nbsp;&nbsp;start the gateway</div><div class="cap" id="cap5"><b>step 5 / 7</b>&nbsp;&nbsp;authorized execution</div><div class="cap" id="cap6"><b>step 6 / 7</b>&nbsp;&nbsp;denied execution</div><div class="cap" id="cap7"><b>step 7 / 7</b>&nbsp;&nbsp;evidence recorded</div>
+        <div id="prog"><div id="prog-fill"></div></div>
+      </div>
+      <div id="vignette" class="clip" data-start="0" data-duration="61.062" data-track-index="70"></div>
+      <div id="wipe" class="clip" data-start="0" data-duration="61.062" data-track-index="60"></div>
+
+      <audio id="music" src="assets/music/happy-beats-business-moves-vol-9-by-ende-dot-app.mp3" data-start="0" data-duration="61.062" data-track-index="10" data-volume="0.42"
+        data-automation='{"version":1,"lanes":[{"target":"volume","points":[{"t":0,"v":0},{"t":0.5,"v":1},{"t":58.66,"v":1},{"t":61.062,"v":0}]}]}'></audio>
+      <audio id="sfx0" src="assets/sfx/card-slide-1.ogg" data-start="0.55" data-duration="0.6" data-track-index="20" data-volume="0.6"></audio>
+      <audio id="sfx1" src="assets/sfx/keypress-003.wav" data-start="4.761" data-duration="0.25" data-track-index="21" data-volume="0.4"></audio>
+      <audio id="sfx2" src="assets/sfx/keypress-011.wav" data-start="5.132" data-duration="0.25" data-track-index="22" data-volume="0.4"></audio>
+      <audio id="sfx3" src="assets/sfx/keypress-003.wav" data-start="6.211" data-duration="0.25" data-track-index="23" data-volume="0.4"></audio>
+      <audio id="sfx4" src="assets/sfx/keypress-011.wav" data-start="6.682" data-duration="0.25" data-track-index="24" data-volume="0.4"></audio>
+      <audio id="sfx5" src="assets/sfx/keypress-003.wav" data-start="7.111" data-duration="0.25" data-track-index="25" data-volume="0.4"></audio>
+      <audio id="sfx6" src="assets/sfx/keypress-011.wav" data-start="7.325" data-duration="0.25" data-track-index="26" data-volume="0.4"></audio>
+      <audio id="sfx7" src="assets/sfx/keypress-003.wav" data-start="8.311" data-duration="0.25" data-track-index="27" data-volume="0.4"></audio>
+      <audio id="sfx8" src="assets/sfx/keypress-011.wav" data-start="8.34" data-duration="0.25" data-track-index="28" data-volume="0.4"></audio>
+      <audio id="sfx9" src="assets/sfx/rollover2.ogg" data-start="12.881" data-duration="0.06" data-track-index="29" data-volume="0.5"></audio>
+      <audio id="sfx10" src="assets/sfx/rollover2.ogg" data-start="15.081" data-duration="0.06" data-track-index="30" data-volume="0.5"></audio>
+      <audio id="sfx11" src="assets/sfx/keypress-003.wav" data-start="20.898" data-duration="0.25" data-track-index="31" data-volume="0.4"></audio>
+      <audio id="sfx12" src="assets/sfx/keypress-011.wav" data-start="21.269" data-duration="0.25" data-track-index="32" data-volume="0.4"></audio>
+      <audio id="sfx13" src="assets/sfx/keypress-003.wav" data-start="22.098" data-duration="0.25" data-track-index="33" data-volume="0.4"></audio>
+      <audio id="sfx14" src="assets/sfx/keypress-011.wav" data-start="22.412" data-duration="0.25" data-track-index="34" data-volume="0.4"></audio>
+      <audio id="sfx15" src="assets/sfx/keypress-003.wav" data-start="25.567" data-duration="0.25" data-track-index="35" data-volume="0.4"></audio>
+      <audio id="sfx16" src="assets/sfx/keypress-011.wav" data-start="26.111" data-duration="0.25" data-track-index="36" data-volume="0.4"></audio>
+      <audio id="sfx17" src="assets/sfx/keypress-003.wav" data-start="26.317" data-duration="0.25" data-track-index="37" data-volume="0.4"></audio>
+      <audio id="sfx18" src="assets/sfx/keypress-011.wav" data-start="26.56" data-duration="0.25" data-track-index="38" data-volume="0.4"></audio>
+      <audio id="sfx19" src="assets/sfx/card-slide-4.ogg" data-start="26.667" data-duration="0.46" data-track-index="39" data-volume="0.5"></audio>
+      <audio id="sfx20" src="assets/sfx/keypress-003.wav" data-start="27.567" data-duration="0.25" data-track-index="40" data-volume="0.4"></audio>
+      <audio id="sfx21" src="assets/sfx/keypress-011.wav" data-start="28.111" data-duration="0.25" data-track-index="41" data-volume="0.4"></audio>
+      <audio id="sfx22" src="assets/sfx/keypress-003.wav" data-start="28.367" data-duration="0.25" data-track-index="42" data-volume="0.4"></audio>
+      <audio id="sfx23" src="assets/sfx/keypress-011.wav" data-start="29.276" data-duration="0.25" data-track-index="43" data-volume="0.4"></audio>
+      <audio id="sfx24" src="assets/sfx/keypress-003.wav" data-start="31.834" data-duration="0.25" data-track-index="44" data-volume="0.4"></audio>
+      <audio id="sfx25" src="assets/sfx/keypress-011.wav" data-start="32.574" data-duration="0.25" data-track-index="45" data-volume="0.4"></audio>
+      <audio id="sfx26" src="assets/sfx/impactGlass_light_002.ogg" data-start="32.874" data-duration="0.21" data-track-index="46" data-volume="0.6"></audio>
+      <audio id="sfx27" src="assets/sfx/keypress-003.wav" data-start="33.484" data-duration="0.25" data-track-index="47" data-volume="0.4"></audio>
+      <audio id="sfx28" src="assets/sfx/keypress-011.wav" data-start="35.451" data-duration="0.25" data-track-index="48" data-volume="0.4"></audio>
+      <audio id="sfx29" src="assets/sfx/drop_002.ogg" data-start="36.734" data-duration="0.19" data-track-index="49" data-volume="0.6"></audio>
+      <audio id="sfx30" src="assets/sfx/keypress-003.wav" data-start="40.206" data-duration="0.25" data-track-index="50" data-volume="0.4"></audio>
+      <audio id="sfx31" src="assets/sfx/keypress-011.wav" data-start="40.979" data-duration="0.25" data-track-index="51" data-volume="0.4"></audio>
+      <audio id="sfx32" src="assets/sfx/impactSoft_heavy_002.ogg" data-start="41.329" data-duration="0.58" data-track-index="52" data-volume="0.55"></audio>
+      <audio id="sfx33" src="assets/sfx/keypress-003.wav" data-start="41.906" data-duration="0.25" data-track-index="53" data-volume="0.4"></audio>
+      <audio id="sfx34" src="assets/sfx/keypress-011.wav" data-start="44.006" data-duration="0.25" data-track-index="54" data-volume="0.4"></audio>
+      <audio id="sfx35" src="assets/sfx/impactSoft_medium_001.ogg" data-start="45.156" data-duration="0.19" data-track-index="55" data-volume="0.6"></audio>
+      <audio id="sfx36" src="assets/sfx/keypress-003.wav" data-start="47.626" data-duration="0.25" data-track-index="56" data-volume="0.4"></audio>
+      <audio id="sfx37" src="assets/sfx/keypress-011.wav" data-start="48.484" data-duration="0.25" data-track-index="57" data-volume="0.4"></audio>
+      <audio id="sfx38" src="assets/sfx/drop_002.ogg" data-start="48.684" data-duration="0.19" data-track-index="58" data-volume="0.55"></audio>
+      <audio id="sfx39" src="assets/sfx/keypress-003.wav" data-start="54.276" data-duration="0.25" data-track-index="59" data-volume="0.4"></audio>
+      <audio id="sfx40" src="assets/sfx/keypress-011.wav" data-start="54.791" data-duration="0.25" data-track-index="60" data-volume="0.4"></audio>
+      <audio id="sfx41" src="assets/sfx/impactBell_heavy_004.ogg" data-start="56.848" data-duration="0.3" data-track-index="61" data-volume="0.8"></audio>
+      
+    </div>
+
+    <script>
+      (function () {
+        var D = {"pip": ["Obtaining file:///.../CausalMesh", "  Installing build dependencies: finished with status 'done'", "  ...", "Successfully installed PyYAML-6.0.3 annotated-doc-0.0.5 ... causalmesh-0.1.0 ... fastapi-0.142.1 ... uvicorn-0.54.0"], "init": ["wrote C:\\cmdemo\\agent-demo\\causalmesh.yaml", "edit `owns` to declare ownership, then run `causalmesh policy show`"], "ls": ["causalmesh.yaml"], "validate": ["VALID  C:\\cmdemo\\agent-demo\\causalmesh.yaml", "  arm: C3  roles: 2"], "show": ["contract - arm C3", "+-------------------------------------------------------------+", "| agent        | archetype | owns        | may reach | budget |", "|--------------+-----------+-------------+-----------+--------|", "| coding-agent | writer    | src/        | anywhere  | -      |", "|              |           | tests/      |           |        |", "| dba-agent    | writer    | production/ | anywhere  | -      |", "+-------------------------------------------------------------+", "read from C:\\cmdemo\\agent-demo\\causalmesh.yaml"], "tools": ["{", "    \"tools\": [", "        {", "            \"name\": \"write_file\",", "            \"kind\": \"filesystem\",", "            \"mutating\": true,", "            \"description\": \"Write a file.\"", "        }", "    ]", "}"], "log_start": ["INFO:     Started server process [22140]", "INFO:     Waiting for application startup.", "INFO:     Application startup complete.", "INFO:     Uvicorn running on http://127.0.0.1:8420 (Press CTRL+C to quit)"], "log_tools": ["INFO:     127.0.0.1:51502 - \"GET /v1/tools HTTP/1.1\" 200 OK"], "log_handler": ["[handler] write_file src/app.py"], "log_200": ["INFO:     127.0.0.1:51504 - \"POST /v1/tools/write_file/execute HTTP/1.1\" 200 OK"], "log_403": ["INFO:     127.0.0.1:50215 - \"POST /v1/tools/write_file/execute HTTP/1.1\" 403 Forbidden"], "log_ev200": ["INFO:     127.0.0.1:50217 - \"GET /v1/evidence HTTP/1.1\" 200 OK"], "log_ev401": ["INFO:     127.0.0.1:50219 - \"GET /v1/evidence HTTP/1.1\" 401 Unauthorized"], "check_allow": ["ALLOW  path:src/app.py", "       default-allow  no rule refuses this"], "exec_allow": ["{", "    \"allowed\": true,", "    \"executed\": true,", "    \"denied\": false,", "    \"failed\": false,", "    \"tool\": \"write_file\",", "    \"agent_id\": \"coding-agent\",", "    \"event_id\": \"sdk_coding-agent_000001\",", "    \"recorded\": true,", "    \"reason\": \"allowed\",", "    \"rule\": \"\",", "    \"audit_error\": null,", "    \"would_refuse\": false,", "    \"value\": 8,", "    \"value_omitted\": null", "}"], "check_deny": ["REFUSE  path:production/schema.sql", "       ownership  'production/schema.sql' is owned by 'dba-agent', not", "'coding-agent'"], "exec_deny": ["{", "    \"detail\": {", "        \"message\": \"'production/schema.sql' is owned by 'dba-agent', not 'coding-agent'\",", "        \"rule\": \"ownership\",", "        \"event_id\": \"sdk_coding-agent_000002\",", "        \"recorded\": true", "    }", "}"], "evidence": ["[", "    {", "        \"actor_public_key\": \"f775c374e8d845da74cc52f448da8f0a4cbff7cf3eb5df3821f125d51a7eee58\",", "        \"chain_hash\": \"7479f1ff8250769915c82fca6a5e3ac8f0fb774dfa16deb6d319499489432dac\",", "        \"event\": {", "            \"event_id\": \"sdk_coding-agent_000001\",", "            \"event_type\": \"WRITE\",", "            \"identity\": {", "                \"agent_id\": \"coding-agent\",", "                \"arm\": \"C3\",", "                \"experiment_id\": \"sdk-run\",", "                \"run_id\": \"sdk\",", "                \"task_id\": \"sdk-task\"", "            },", "            \"parent_id\": null,", "            \"paths\": [", "                \"src/app.py\"", "            ],", "            \"payload\": {", "                \"tool\": \"write_file\",", "                \"outcome\": \"executed\"", "            },", "            \"references\": [],", "            \"schema_version\": 1,", "            \"sequence\": 0,", "            \"timestamp_us\": 1790744009881647", "        },", "        \"previous_hash\": \"4cdd748cb4091631a3436a340d31e67dc9a6df610c135788208113afb7fdd822\",", "        \"signature\": \"9a31139961992bbcee7ea805256b297421b193d8806a2937018ce09fb843a643f21442a2d49fbabc80652d0b552ae12f8b981c8ab6ff5214623ab90285f41104\"", "    },", "    {", "        \"actor_public_key\": \"f775c374e8d845da74cc52f448da8f0a4cbff7cf3eb5df3821f125d51a7eee58\",", "        \"chain_hash\": \"a9bde54a34cd400641d62da39ed27cf7237935abaf760ce1dcd1c8c8991481dd\",", "        \"event\": {", "            \"event_id\": \"sdk_coding-agent_000002\",", "            \"event_type\": \"FAILURE\",", "            \"identity\": {", "                \"agent_id\": \"coding-agent\",", "                \"arm\": \"C3\",", "                \"experiment_id\": \"sdk-run\",", "                \"run_id\": \"sdk\",", "                \"task_id\": \"sdk-task\"", "            },", "            \"parent_id\": null,", "            \"paths\": [", "                \"production/schema.sql\"", "            ],", "            \"payload\": {", "                \"tool\": \"write_file\",", "                \"outcome\": \"denied\",", "                \"reason\": \"'production/schema.sql' is owned by 'dba-agent', not 'coding-agent'\",", "                \"holder_agent\": \"dba-agent\",", "                \"blocked_path\": \"production/schema.sql\",", "                \"rule\": \"ownership\"", "            },", "            \"references\": [],", "            \"schema_version\": 1,", "            \"sequence\": 1,", "            \"timestamp_us\": 1790744010384759", "        },", "        \"previous_hash\": \"7479f1ff8250769915c82fca6a5e3ac8f0fb774dfa16deb6d319499489432dac\",", "        \"signature\": \"602a39e70c40f6a3b261d51cdbde64127c39d7c8842d405f5dd0b5019c635ed56701dc5926e03020f232be24e60bd0ff6d2e103b65f97e2f6d8825c0b5433207\"", "    }", "]"], "noauth": ["401"], "gateway_py": ["import os", "import secrets", "", "import uvicorn", "from fastapi import Header, HTTPException", "", "from causalmesh import CausalMesh, Tool", "from causalmesh.server.app import create_app", "", "TOKEN = os.environ[\"CODING_AGENT_TOKEN\"]", "", "", "def write_file(path: str, content: str) -> int:", "    print(f\"[handler] write_file {path}\", flush=True)", "    return len(content.encode())", "", "", "mesh = CausalMesh.from_config(\"causalmesh.yaml\")", "mesh.register_tool(", "    Tool(", "        name=\"write_file\",", "        handler=write_file,", "        kind=\"filesystem\",", "        mutating=True,", "        resource_args=[\"path\"],", "        description=\"Write a file.\",", "    )", ")", "", "app = create_app(mesh=mesh, agent_tokens={\"coding-agent\": TOKEN})", "", "", "@app.get(\"/v1/evidence\")", "def evidence(authorization: str = Header(default=\"\")):", "    if not secrets.compare_digest(authorization, f\"Bearer {TOKEN}\"):", "        raise HTTPException(status_code=401)", "    return mesh.audit_events()", "", "", "if __name__ == \"__main__\":", "    uvicorn.run(app, host=\"127.0.0.1\", port=8420)"], "yaml": ["# causalmesh.yaml - what agents in this repository may do.", "version: 1", "", "roles:", "  - agent_id: coding-agent", "    archetype: writer", "    owns: [src/, tests/]", "", "  - agent_id: dba-agent", "    archetype: writer", "    owns: [production/]", "", "policy:", "  arm: C3", "", "evidence:", "  sign: true"]};
+        var PL = {"dur": 61.062, "wipes": [4.211, 11.581, 17.898, 25.267, 55.798], "s0": {"label": 0.3, "title": 0.55, "sub": 2.0, "pipe": 1.2, "pipeDim": 3.5}, "s8": {"pipe": 55.998, "title": 56.798, "tag": 57.798, "note": 58.998}, "caps": [{"id": "cap1", "t0": 4.511, "t1": 11.311}, {"id": "cap2", "t0": 11.881, "t1": 17.681}, {"id": "cap3", "t0": 18.198, "t1": 25.098}, {"id": "cap4", "t0": 25.567, "t1": 31.367}, {"id": "cap5", "t0": 31.784, "t1": 39.884}, {"id": "cap6", "t0": 40.206, "t1": 47.306}, {"id": "cap7", "t0": 47.576, "t1": 55.676}], "status": [{"id": "st1", "t0": 7.711, "t1": 11.211}, {"id": "st3a", "t0": 19.298, "t1": 20.498}, {"id": "st3b", "t0": 20.498, "t1": 21.698}, {"id": "st3c", "t0": 23.498, "t1": 25.098}, {"id": "st4a", "t0": 27.267, "t1": 29.267}, {"id": "st4b", "t0": 29.567, "t1": 31.467}, {"id": "st5a", "t0": 32.784, "t1": 33.784}, {"id": "st5b", "t0": 36.234, "t1": 36.834}, {"id": "st5c", "t0": 36.884, "t1": 37.934}, {"id": "st5d", "t0": 38.034, "t1": 39.884}, {"id": "st6a", "t0": 41.156, "t1": 42.206}, {"id": "st6b", "t0": 44.856, "t1": 45.506}, {"id": "st6c", "t0": 45.506, "t1": 46.706}, {"id": "st6d", "t0": 46.706, "t1": 47.306}, {"id": "st7a", "t0": 49.476, "t1": 50.776}, {"id": "st7b", "t0": 51.526, "t1": 52.776}, {"id": "st7c", "t0": 52.926, "t1": 54.376}, {"id": "st7d", "t0": 54.526, "t1": 55.376}], "terms": [{"id": "t1", "cam": "cam1", "x": 96, "y": 40, "w": 1728, "h": 746, "fs": 20, "lh": 31, "title": "bash"}, {"id": "t3", "cam": "cam3", "x": 948, "y": 40, "w": 876, "h": 746, "fs": 17, "lh": 27, "title": "bash"}, {"id": "tc", "cam": "cam4", "x": 96, "y": 40, "w": 808, "h": 746, "fs": 16, "lh": 25, "title": "terminal 1 - client"}, {"id": "tg", "cam": "cam4", "x": 940, "y": 40, "w": 884, "h": 746, "fs": 16, "lh": 25, "title": "terminal 2 - gateway"}], "editors": [{"id": "e2", "cam": "cam2", "x": 96, "y": 40, "w": 1080, "h": 746, "fs": 19, "lh": 30, "title": "gateway.py", "lang": "py", "data": "gateway_py"}, {"id": "e3", "cam": "cam3", "x": 96, "y": 40, "w": 820, "h": 746, "fs": 20, "lh": 31, "title": "causalmesh.yaml", "lang": "yaml", "data": "yaml"}], "actions": [{"kind": "cmd", "term": "t1", "t": 4.761, "lines": ["pip install -e \".[server]\""], "cps": 70, "key": null}, {"kind": "out", "term": "t1", "t": 5.352, "data": "pip", "per": 0.12, "cls": null, "json": false, "noscroll": false, "key": null}, {"kind": "cmd", "term": "t1", "t": 6.211, "lines": ["mkdir agent-demo && cd agent-demo"], "cps": 70, "key": null}, {"kind": "cmd", "term": "t1", "t": 7.111, "lines": ["causalmesh init"], "cps": 70, "key": null}, {"kind": "out", "term": "t1", "t": 7.525, "data": "init", "per": 0.15, "cls": null, "json": false, "noscroll": false, "key": null}, {"kind": "cmd", "term": "t1", "t": 8.311, "lines": ["ls"], "cps": 70, "key": null}, {"kind": "out", "term": "t1", "t": 8.54, "data": "ls", "per": 0.1, "cls": null, "json": false, "noscroll": false, "key": null}, {"kind": "idle", "term": "t1", "t": 8.811}, {"kind": "cmd", "term": "t3", "t": 20.898, "lines": ["causalmesh policy validate"], "cps": 70, "key": null}, {"kind": "out", "term": "t3", "t": 21.469, "data": "validate", "per": 0.12, "cls": null, "json": false, "noscroll": false, "key": null}, {"kind": "cmd", "term": "t3", "t": 22.098, "lines": ["causalmesh policy show"], "cps": 70, "key": null}, {"kind": "out", "term": "t3", "t": 22.612, "data": "show", "per": 0.1, "cls": null, "json": false, "noscroll": false, "key": null}, {"kind": "cmd", "term": "tg", "t": 25.567, "lines": ["export CODING_AGENT_TOKEN=cm-dev-7f3a9c2e41b8d605"], "cps": 90, "key": null}, {"kind": "cmd", "term": "tg", "t": 26.317, "lines": ["python gateway.py"], "cps": 70, "key": null}, {"kind": "out", "term": "tg", "t": 26.76, "data": "log_start", "per": 0.12, "cls": "log", "json": false, "noscroll": false, "key": null}, {"kind": "cmd", "term": "tc", "t": 27.567, "lines": ["export CODING_AGENT_TOKEN=cm-dev-7f3a9c2e41b8d605"], "cps": 90, "key": null}, {"kind": "cmd", "term": "tc", "t": 28.367, "lines": ["curl -s localhost:8420/v1/tools -H \"Authorization: Bearer $CODING_AGENT_TOKEN\" | python -m json.tool"], "cps": 110, "key": null}, {"kind": "out", "term": "tc", "t": 29.476, "data": "tools", "per": 0.06, "cls": null, "json": false, "noscroll": false, "key": null}, {"kind": "out", "term": "tg", "t": 29.476, "data": "log_tools", "per": 0.1, "cls": "log", "json": false, "noscroll": false, "key": null}, {"kind": "cmd", "term": "tc", "t": 31.834, "lines": ["causalmesh policy check --agent coding-agent --kind path --name src/app.py"], "cps": 100, "key": null}, {"kind": "out", "term": "tc", "t": 32.774, "data": "check_allow", "per": 0.15, "cls": "check", "json": false, "noscroll": false, "key": null}, {"kind": "cmd", "term": "tc", "t": 33.484, "lines": ["curl -s -X POST localhost:8420/v1/tools/write_file/execute \\", "  -H \"Authorization: Bearer $CODING_AGENT_TOKEN\" \\", "  -H \"Content-Type: application/json\" \\", "  -d '{\"agent_id\": \"coding-agent\",", "       \"arguments\": {\"path\": \"src/app.py\",", "                     \"content\": \"print(1)\"}}' \\", "  | python -m json.tool"], "cps": 150, "key": "post_a"}, {"kind": "out", "term": "tg", "t": 36.734, "data": "log_handler", "per": 0.1, "cls": "log", "json": false, "noscroll": false, "key": null}, {"kind": "out", "term": "tc", "t": 37.034, "data": "exec_allow", "per": 0.04, "cls": null, "json": true, "noscroll": false, "key": "exec_a"}, {"kind": "out", "term": "tg", "t": 37.284, "data": "log_200", "per": 0.1, "cls": "log", "json": false, "noscroll": false, "key": null}, {"kind": "cmd", "term": "tc", "t": 40.206, "lines": ["causalmesh policy check --agent coding-agent --kind path --name production/schema.sql"], "cps": 110, "key": null}, {"kind": "out", "term": "tc", "t": 41.179, "data": "check_deny", "per": 0.15, "cls": "checkDeny", "json": false, "noscroll": false, "key": null}, {"kind": "cmd", "term": "tc", "t": 41.906, "lines": ["curl -s -X POST localhost:8420/v1/tools/write_file/execute \\", "  -H \"Authorization: Bearer $CODING_AGENT_TOKEN\" \\", "  -H \"Content-Type: application/json\" \\", "  -d '{\"agent_id\": \"coding-agent\",", "       \"arguments\": {\"path\": \"production/schema.sql\",", "                     \"content\": \"DROP TABLE users;\"}}' \\", "  | python -m json.tool"], "cps": 150, "key": "post_d"}, {"kind": "out", "term": "tc", "t": 45.006, "data": "exec_deny", "per": 0.05, "cls": "jsonDeny", "json": true, "noscroll": false, "key": "exec_d"}, {"kind": "out", "term": "tg", "t": 45.156, "data": "log_403", "per": 0.1, "cls": "log", "json": false, "noscroll": false, "key": null}, {"kind": "cmd", "term": "tc", "t": 47.626, "lines": ["curl -s localhost:8420/v1/evidence -H \"Authorization: Bearer $CODING_AGENT_TOKEN\" | python -m json.tool"], "cps": 120, "key": "ev_cmd"}, {"kind": "out", "term": "tc", "t": 48.684, "data": "evidence", "per": 0.012, "cls": null, "json": true, "noscroll": true, "key": null}, {"kind": "out", "term": "tg", "t": 48.684, "data": "log_ev200", "per": 0.1, "cls": "log", "json": false, "noscroll": false, "key": null}, {"kind": "cmd", "term": "tc", "t": 54.276, "lines": ["curl -s -o /dev/null -w '%{http_code}\\n' localhost:8420/v1/evidence"], "cps": 130, "key": null}, {"kind": "out", "term": "tc", "t": 54.941, "data": "noauth", "per": 0.1, "cls": null, "json": false, "noscroll": false, "key": null}, {"kind": "out", "term": "tg", "t": 54.941, "data": "log_ev401", "per": 0.1, "cls": "log", "json": false, "noscroll": false, "key": null}], "events": [{"type": "zoom", "cam": "cam1", "t": 4.511, "dur": 6.6, "s": 1.05, "px": 900, "py": 300}, {"type": "scrollEd", "ed": "e2", "line": 7, "t": 11.581}, {"type": "reveal", "ed": "e2", "from": 7, "to": 28, "gap": 0.035, "t": 11.881}, {"type": "dimAll", "t": 11.631}, {"type": "focus", "ed": "e2", "a": 13, "b": 15, "t0": 12.881, "t1": 14.181}, {"type": "note", "id": "nt1", "t0": 12.881, "t1": 14.381}, {"type": "focus", "ed": "e2", "a": 19, "b": 28, "t0": 14.281, "t1": 15.081}, {"type": "focus", "ed": "e2", "a": 24, "b": 24, "t0": 15.081, "t1": 16.281}, {"type": "note", "id": "nt2", "t0": 15.081, "t1": 16.381}, {"type": "focus", "ed": "e2", "a": 25, "b": 25, "t0": 16.281, "t1": 17.581}, {"type": "note", "id": "nt3", "t0": 16.381}, {"type": "lit", "node": 1, "t": 14.381, "noConn": true}, {"type": "lit", "node": 4, "t": 14.581, "noConn": true}, {"type": "zoom", "cam": "cam2", "t": 11.881, "dur": 5.6, "s": 1.04, "px": 700, "py": 300}, {"type": "dimAll", "t": 17.948}, {"type": "reveal", "ed": "e3", "from": 1, "to": 17, "gap": 0.05, "t": 18.198}, {"type": "focus", "ed": "e3", "a": 7, "b": 7, "t0": 19.298, "t1": 20.498}, {"type": "focus", "ed": "e3", "a": 11, "b": 11, "t0": 20.498, "t1": 21.698}, {"type": "lit", "node": 3, "t": 19.298, "noConn": true}, {"type": "zoom", "cam": "cam3", "t": 18.198, "dur": 2.6, "s": 1.05, "px": 480, "py": 300}, {"type": "zoom", "cam": "cam3", "t": 20.898, "dur": 3.8, "s": 1.05, "px": 1150, "py": 300}, {"type": "dimAll", "t": 25.317}, {"type": "lit", "node": 2, "t": 27.167, "noConn": true}, {"type": "zoom", "cam": "cam4", "t": 25.317, "dur": 0.6, "s": 1.12, "px": 1380, "py": 250}, {"type": "zoom", "cam": "cam4", "t": 27.367, "dur": 0.8, "s": 1.12, "px": 500, "py": 250}, {"type": "dimAll", "t": 31.684}, {"type": "lit", "node": 0, "t": 35.634}, {"type": "lit", "node": 1, "t": 35.834}, {"type": "lit", "node": 2, "t": 36.034}, {"type": "lit", "node": 3, "t": 36.284}, {"type": "lit", "node": 4, "t": 36.734}, {"type": "lit", "node": 5, "t": 37.084}, {"type": "hlFind", "term": "tc", "find": "\"recorded\": true", "n": 1, "t0": 38.084, "t1": 39.784, "nth": 0}, {"type": "hlFind", "term": "tc", "find": "\"event_id\"", "n": 1, "t0": 38.084, "t1": 39.784, "nth": 0}, {"type": "zoom", "cam": "cam4", "t": 31.634, "dur": 0.5, "s": 1.12, "px": 500, "py": 250}, {"type": "zoom", "cam": "cam4", "t": 35.484, "dur": 0.6, "s": 1.0, "px": 960, "py": 413}, {"type": "zoom", "cam": "cam4", "t": 36.584, "dur": 0.7, "s": 1.15, "px": 1380, "py": 250}, {"type": "zoom", "cam": "cam4", "t": 37.484, "dur": 0.8, "s": 1.15, "px": 500, "py": 300}, {"type": "dimAll", "t": 40.106}, {"type": "lit", "node": 0, "t": 44.206}, {"type": "lit", "node": 1, "t": 44.406}, {"type": "lit", "node": 2, "t": 44.606}, {"type": "deny", "node": 3, "t": 44.856}, {"type": "tag", "node": 4, "t": 45.406}, {"type": "lit", "node": 5, "t": 45.606, "noConn": true}, {"type": "zoom", "cam": "cam4", "t": 40.056, "dur": 0.5, "s": 1.12, "px": 500, "py": 250}, {"type": "zoom", "cam": "cam4", "t": 44.706, "dur": 0.6, "s": 1.0, "px": 960, "py": 413}, {"type": "zoom", "cam": "cam4", "t": 45.156, "dur": 0.7, "s": 1.15, "px": 1380, "py": 250}, {"type": "zoom", "cam": "cam4", "t": 46.006, "dur": 0.8, "s": 1.15, "px": 500, "py": 300}, {"type": "dimAll", "t": 47.476}, {"type": "scrollKey", "term": "tc", "key": "ev_cmd", "t": 47.576, "dur": 0.35}, {"type": "lit", "node": 5, "t": 48.676, "noConn": true}, {"type": "hlFind", "term": "tc", "find": "\"outcome\": \"executed\"", "n": 1, "t0": 49.476, "t1": 50.776, "nth": 0}, {"type": "scrollFind", "term": "tc", "find": "\"event_id\": \"sdk_coding-agent_000002\"", "nth": 1, "off": -3, "t": 50.876, "dur": 0.5}, {"type": "hlFind", "term": "tc", "find": "\"outcome\": \"denied\"", "n": 1, "t0": 51.576, "t1": 52.776, "nth": 0, "deny": true}, {"type": "hlFind", "term": "tc", "find": "\"rule\": \"ownership\"", "n": 1, "t0": 51.576, "t1": 52.776, "nth": 1, "deny": true}, {"type": "scrollFind", "term": "tc", "find": "\"previous_hash\"", "nth": 1, "off": -22, "t": 52.876, "dur": 0.5}, {"type": "hlFind", "term": "tc", "find": "\"previous_hash\"", "n": 1, "t0": 53.376, "t1": 54.376, "nth": 1}, {"type": "zoom", "cam": "cam4", "t": 47.426, "dur": 0.5, "s": 1.12, "px": 500, "py": 250}, {"type": "dimAll", "t": 55.848}]};
+        var EASE = "power4.out", SOFT = "expo.out";
+        var tl = gsap.timeline({ paused: true });
+        window.__timelines = window.__timelines || {};
+        function q(s) { return document.querySelector(s); }
+        function mk(cls, parent) { var d = document.createElement("div"); d.className = cls; if (parent) parent.appendChild(d); return d; }
+        function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+
+        /* ---------- persistent: grid drift, progress, wipe ---------- */
+        tl.fromTo("#bg-grid", { backgroundPosition: "0px 0px" }, { backgroundPosition: "-192px -96px", duration: PL.dur, ease: "none" }, 0);
+        tl.fromTo("#prog-fill", { scaleX: 0 }, { scaleX: 1, duration: PL.dur, ease: "none" }, 0);
+        tl.set("#wipe", { xPercent: -102 }, 0);
+        PL.wipes.forEach(function (t) {
+          tl.fromTo("#wipe", { xPercent: -102 }, { xPercent: 0, duration: 0.24, ease: "power2.in", immediateRender: false }, t - 0.24);
+          tl.fromTo("#wipe", { xPercent: 0 }, { xPercent: 102, duration: 0.3, ease: "power2.out", immediateRender: false }, t);
+        });
+
+        /* ---------- terminal ---------- */
+        function Term(cam, o) {
+          this.o = o; this.lh = o.lh; this.rows = 0;
+          var el = mk("tw", cam); el.style.cssText = "left:" + o.x + "px;top:" + o.y + "px;width:" + o.w + "px;height:" + o.h + "px";
+          var bar = mk("tbar", el); bar.innerHTML = "<i></i><i></i><i></i><span class='tt'>" + o.title + "</span>";
+          var body = mk("tbody", el); this.inner = mk("tin", mk("tvp", body));
+          this.inner.style.fontSize = o.fs + "px"; this.inner.style.lineHeight = o.lh + "px";
+          this.cap = Math.floor((o.h - 46 - 32) / o.lh);
+          this.cols = Math.floor((o.w - 40) / (o.fs * 0.6));
+          this.lines = [];
+          this.el = el;
+        }
+        Term.prototype.rowsFor = function (n) { return Math.max(1, Math.ceil(n / this.cols)); };
+        Term.prototype.grow = function (t, r) {
+          this.rows += r;
+          if (this.rows > this.cap && !this.noScroll) tl.to(this.inner, { y: -(this.rows - this.cap) * this.lh, duration: 0.18, ease: "power2.out" }, t);
+        };
+        Term.prototype.mkline = function (html, cls) {
+          var ln = mk("ln" + (cls ? " " + cls : ""), this.inner); ln.innerHTML = html; ln._row = -1; return ln;
+        };
+        Term.prototype.cmd = function (t, lines, cps) {
+          var self = this, tx = [], lns = [], lens = [], tot = 0, acc = 0;
+          lines.forEach(function (s, i) {
+            var ln = self.mkline("<span class='ps'>" + (i === 0 ? "$ " : "&gt; ") + "</span><span class='tx'></span>");
+            tx.push(ln.querySelector(".tx")); lns.push(ln); lens.push(s.length); tot += s.length;
+          });
+          lines.forEach(function (s, i) {
+            var ti = i === 0 ? t - 0.22 : t + acc / cps;
+            lns[i]._row = self.rows;
+            tl.set(lns[i], { opacity: 1 }, ti);
+            self.grow(ti, self.rowsFor(s.length + 2));
+            acc += s.length;
+          });
+          var o = { n: 0 };
+          tl.to(o, {
+            n: tot, duration: tot / cps, ease: "none",
+            onUpdate: function () {
+              var n = Math.floor(o.n + 1e-6), used = 0;
+              for (var i = 0; i < lines.length; i++) {
+                var take = Math.max(0, Math.min(lens[i], n - used));
+                tx[i].textContent = lines[i].slice(0, take);
+                var active = (n < tot) && (n >= used) && (n < used + lens[i] || (i === lines.length - 1));
+                tx[i].className = "tx" + (active ? " cur" : "");
+                used += lens[i];
+              }
+            }
+          }, t);
+          this.lines.push({ els: lns, text: lines.join("\n") });
+          return { end: t + tot / cps, first: lns[0] };
+        };
+        Term.prototype.out = function (t, lines, per, opt) {
+          var self = this, els = [];
+          opt = opt || {};
+          var prevNS = this.noScroll; if (opt.noscroll) this.noScroll = true;
+          lines.forEach(function (s, i) {
+            var cls = opt.cls ? opt.cls(s, i) : "";
+            var html = opt.json ? jsonHtml(s) : esc(s === "" ? " " : s);
+            var ln = self.mkline(html, "out " + cls);
+            ln._row = self.rows; ln._text = s; els.push(ln);
+            var ti = t + i * per;
+            tl.set(ln, { opacity: 1 }, ti);
+            self.grow(ti, self.rowsFor(s.length));
+          });
+          this.noScroll = prevNS;
+          this.lines.push({ els: els, text: lines.join("\n"), out: true });
+          return { end: t + lines.length * per, els: els };
+        };
+        Term.prototype.idle = function (t) {
+          var ln = this.mkline("<span class='ps'>$ </span><span class='tx cur'></span>");
+          ln._row = this.rows; tl.set(ln, { opacity: 1 }, t); this.grow(t, 1);
+        };
+        Term.prototype.find = function (text, nth) {
+          var c = 0;
+          for (var b = 0; b < this.lines.length; b++) {
+            var blk = this.lines[b]; if (!blk.out) continue;
+            for (var i = 0; i < blk.els.length; i++) if (blk.els[i]._text.indexOf(text) >= 0) { if (c === (nth || 0)) return blk.els[i]._row; c++; }
+          }
+          throw new Error("term.find: not found: " + text);
+        };
+        Term.prototype.hl = function (row, n, t0, t1, deny) {
+          var b = mk("hlbar" + (deny ? " deny" : ""), this.inner);
+          b.style.top = (row * this.lh) + "px"; b.style.height = (n * this.lh) + "px";
+          tl.fromTo(b, { opacity: 0 }, { opacity: 1, duration: 0.25, immediateRender: false }, t0);
+          tl.to(b, { opacity: 0, duration: 0.3 }, t1);
+        };
+        Term.prototype.scrollRow = function (t, dur, row) {
+          tl.to(this.inner, { y: -Math.max(0, row) * this.lh, duration: dur, ease: "power2.inOut" }, t);
+        };
+        function jsonHtml(s) {
+          var e = esc(s);
+          e = e.replace(/^(\s*)(&quot;|")([^"]+)("):/, function (m, sp, a, k) { return sp + "<span class='k'>\"" + k + "\":</span>"; });
+          e = e.replace(/("(?:[^"\\]|\\.)*")(,?)$/, function (m, str, c) { return "<span class='s'>" + str + "</span>" + c; });
+          e = e.replace(/(:\s)(true|false|null|-?\d+)(,?)$/, function (m, a, v, c) { return a + "<span class='v'>" + v + "</span>" + c; });
+          return e;
+        }
+
+        /* ---------- editor ---------- */
+        function hlCode(s, lang) {
+          var e = esc(s);
+          if (lang === "yaml") {
+            if (/^\s*#/.test(s)) return "<span class='c1'>" + e + "</span>";
+            return e.replace(/^(\s*-?\s*)([A-Za-z_][\w-]*)(:)/, "$1<span class='c3'>$2</span>$3").replace(/(\[.*\])/, "<span class='c4'>$1</span>");
+          }
+          var out = "", re = /(#.*$)|(f?"(?:\\.|[^"\\])*"|f?'(?:\\.|[^'\\])*')|\b(import|from|def|return|if|not|raise|as|True|False|None|class)\b|(@[\w.]+)/g, last = 0, m;
+          while ((m = re.exec(e)) !== null) {
+            out += e.slice(last, m.index);
+            if (m[1]) out += "<span class='c1'>" + m[1] + "</span>";
+            else if (m[2]) out += "<span class='c2'>" + m[2] + "</span>";
+            else if (m[3]) out += "<span class='c3'>" + m[3] + "</span>";
+            else out += "<span class='c4'>" + m[4] + "</span>";
+            last = m.index + m[0].length;
+          }
+          return out + e.slice(last);
+        }
+        function Editor(cam, o) {
+          this.o = o; this.lh = o.lh;
+          var el = mk("tw", cam); el.style.cssText = "left:" + o.x + "px;top:" + o.y + "px;width:" + o.w + "px;height:" + o.h + "px";
+          var bar = mk("tbar", el); bar.innerHTML = "<i></i><i></i><i></i><span class='tt'>" + o.title + "</span>";
+          var body = mk("tbody", el); this.inner = mk("ein", mk("tvp", body));
+          this.inner.style.fontSize = o.fs + "px"; this.inner.style.lineHeight = o.lh + "px";
+          this.els = [];
+          var self = this;
+          o.lines.forEach(function (s, i) {
+            var l = mk("el", self.inner);
+            l.innerHTML = "<span class='no'>" + (i + 1) + "</span>" + hlCode(s, o.lang);
+            self.els.push(l);
+          });
+        }
+        Editor.prototype.reveal = function (t, from, to, gap) {
+          for (var i = from; i <= to; i++) tl.fromTo(this.els[i - 1], { opacity: 0, x: -12 }, { opacity: 1, x: 0, duration: 0.3, ease: EASE, immediateRender: false }, t + (i - from) * gap);
+        };
+        Editor.prototype.showAll = function (t) { this.els.forEach(function (e) { tl.set(e, { opacity: 1 }, t); }); };
+        Editor.prototype.scrollTo = function (t, dur, line) { tl.to(this.inner, { y: -(line - 1) * this.lh, duration: dur, ease: "power2.inOut" }, t); };
+        Editor.prototype.focus = function (a, b, t0, t1) {
+          var f = mk("fbar", this.inner); f.style.top = ((a - 1) * this.lh) + "px"; f.style.height = ((b - a + 1) * this.lh) + "px";
+          tl.fromTo(f, { opacity: 0 }, { opacity: 1, duration: 0.3, immediateRender: false }, t0);
+          tl.to(f, { opacity: 0, duration: 0.3 }, t1);
+        };
+
+        /* ---------- pipeline ---------- */
+        var LIT = { borderColor: "rgba(250,250,250,0.95)", backgroundColor: "rgba(255,255,255,0.10)" };
+        var OFF = { borderColor: "rgba(255,255,255,0.26)", backgroundColor: "rgba(10,10,10,0.9)" };
+        var DENY = { borderColor: "rgba(210,166,118,0.95)", backgroundColor: "rgba(210,166,118,0.13)" };
+        function nodeEl(i) { return q("#pn" + i); }
+        function lit(i, t, noConn) {
+          tl.to(nodeEl(i), Object.assign({ duration: 0.3 }, LIT), t);
+          tl.to("#pn" + i + " .nm", { color: "#fafafa", duration: 0.3 }, t);
+          if (i > 0 && !noConn) tl.to("#pc" + (i - 1) + " i", { scaleX: 1, duration: 0.3, ease: "power2.out" }, t - 0.05);
+        }
+        function deny(i, t) {
+          tl.to(nodeEl(i), Object.assign({ duration: 0.3 }, DENY), t);
+          tl.to("#pn" + i + " .nm", { color: "#d2a676", duration: 0.3 }, t);
+          tl.to("#pn" + i + " .tg", { opacity: 1, duration: 0.3 }, t);
+          if (i > 0) tl.to("#pc" + (i - 1) + " i", { scaleX: 1, backgroundColor: "#d2a676", duration: 0.3, ease: "power2.out" }, t - 0.05);
+        }
+        function dimAll(t) {
+          for (var i = 0; i < 6; i++) {
+            tl.to(nodeEl(i), Object.assign({ duration: 0.25 }, OFF), t);
+            tl.to("#pn" + i + " .nm", { color: "#a7a6a6", duration: 0.25 }, t);
+            tl.to("#pn" + i + " .tg", { opacity: 0, duration: 0.2 }, t);
+            if (i < 5) tl.to("#pc" + i + " i", { scaleX: 0, backgroundColor: "#fafafa", duration: 0.2 }, t);
+          }
+        }
+
+        /* ---------- camera ---------- */
+        var CX = 960, CY = 413;
+        function zoom(cam, t, dur, s, px, py) {
+          tl.to(cam, { scale: s, x: (1 - s) * (px - CX), y: (1 - s) * (py - CY), duration: dur, ease: "power2.inOut" }, t);
+        }
+
+        /* ---------- captions + status ---------- */
+        PL.caps.forEach(function (c) {
+          tl.fromTo("#" + c.id, { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.4, ease: EASE, immediateRender: false }, c.t0);
+          tl.to("#" + c.id, { opacity: 0, duration: 0.3 }, c.t1);
+        });
+        PL.status.forEach(function (c) {
+          tl.fromTo("#" + c.id, { opacity: 0, x: -12 }, { opacity: 1, x: 0, duration: 0.35, ease: EASE, immediateRender: false }, c.t0);
+          tl.to("#" + c.id, { opacity: 0, duration: 0.2 }, c.t1 - 0.25);
+        });
+
+        /* ---------- scene 0: title ---------- */
+        tl.fromTo("#s0-label", { opacity: 0, x: -24 }, { opacity: 1, x: 0, duration: 0.6, ease: EASE }, PL.s0.label);
+        tl.fromTo("#s0-title .mask > span", { yPercent: 115 }, { yPercent: 0, duration: 1.0, ease: SOFT, stagger: 0.14 }, PL.s0.title);
+        tl.fromTo("#s0-sub", { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.6, ease: EASE }, PL.s0.sub);
+        tl.to("#pipe", { opacity: 1, duration: 0.6 }, PL.s0.pipe);
+        for (var pi = 0; pi < 6; pi++) { lit(pi, PL.s0.pipe + 0.4 + pi * 0.22); }
+        dimAll(PL.s0.pipeDim);
+
+        /* ---------- scenes 1..7: terminals, editors, events from the plan ---------- */
+        var cams = { cam1: q("#cam1"), cam2: q("#cam2"), cam3: q("#cam3"), cam4: q("#cam4") };
+        var T = {}, E = {};
+        PL.terms.forEach(function (o) { T[o.id] = new Term(cams[o.cam], o); if (o.noScroll) T[o.id].noScroll = true; });
+        PL.editors.forEach(function (o) { E[o.id] = new Editor(cams[o.cam], Object.assign({}, o, { lines: D[o.data] })); });
+        var CLS = {
+          none: null,
+          deny: function () { return "deny"; },
+          check: function (s, i) { return /^(ALLOW)/.test(s) ? "hi" : ""; },
+          checkDeny: function () { return "deny"; },
+          log: function (s) { return /\[handler\]/.test(s) ? "hi" : (/403 Forbidden|401 Unauthorized/.test(s) ? "deny" : ""); },
+          jsonDeny: function (s) { return /"(message|rule)"/.test(s) ? "deny" : ""; },
+          evidence: function () { return ""; }
+        };
+        var END = {};
+        PL.actions.forEach(function (a) {
+          var r;
+          if (a.kind === "cmd") r = T[a.term].cmd(a.t, a.lines, a.cps);
+          else if (a.kind === "out") r = T[a.term].out(a.t, D[a.data], a.per, { cls: a.cls ? CLS[a.cls] : null, json: !!a.json, noscroll: !!a.noscroll });
+          else if (a.kind === "idle") T[a.term].idle(a.t);
+          if (a.key) END[a.key] = r;
+        });
+        PL.events.forEach(function (e) {
+          if (e.type === "reveal") E[e.ed].reveal(e.t, e.from, e.to, e.gap);
+          else if (e.type === "scrollEd") { if (e.dur) E[e.ed].scrollTo(e.t, e.dur, e.line); else tl.set(E[e.ed].inner, { y: -(e.line - 1) * E[e.ed].lh }, e.t); }
+          else if (e.type === "focus") E[e.ed].focus(e.a, e.b, e.t0, e.t1);
+          else if (e.type === "hlFind") { var row = T[e.term].find(e.find, e.nth || 0); T[e.term].hl(row + (e.off || 0), e.n || 1, e.t0, e.t1, !!e.deny); }
+          else if (e.type === "scrollFind") { var r2 = T[e.term].find(e.find, e.nth || 0); T[e.term].scrollRow(e.t, e.dur, r2 + (e.off || 0)); }
+          else if (e.type === "lit") lit(e.node, e.t, !!e.noConn);
+          else if (e.type === "tag") tl.to("#pn" + e.node + " .tg", { opacity: 1, duration: 0.3 }, e.t);
+          else if (e.type === "scrollKey") T[e.term].scrollRow(e.t, e.dur, END[e.key].first._row + (e.off || 0));
+          else if (e.type === "deny") deny(e.node, e.t);
+          else if (e.type === "dimAll") dimAll(e.t);
+          else if (e.type === "zoom") zoom(cams[e.cam], e.t, e.dur, e.s, e.px, e.py);
+          else if (e.type === "note") {
+            tl.fromTo("#" + e.id, { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.5, ease: EASE, immediateRender: false }, e.t0);
+            if (e.t1) tl.to("#" + e.id, { opacity: 0.35, duration: 0.4 }, e.t1);
+          }
+        });
+
+        /* ---------- scene 8: end card ---------- */
+        for (var ei = 0; ei < 6; ei++) lit(ei, PL.s8.pipe + ei * 0.16);
+        tl.fromTo("#e-title .mask > span", { yPercent: 115 }, { yPercent: 0, duration: 1.0, ease: SOFT }, PL.s8.title);
+        tl.fromTo("#e-tag .mask > span", { yPercent: 115 }, { yPercent: 0, duration: 0.9, ease: EASE }, PL.s8.tag);
+        tl.fromTo("#e-note", { opacity: 0 }, { opacity: 1, duration: 0.8 }, PL.s8.note);
+
+        window.__timelines["main"] = tl;
+        tl.seek(0);
+      })();
+    </script>
+  </body>
+</html>

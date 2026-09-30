@@ -1,0 +1,2 @@
+ALLOW  path:src/app.py
+       default-allow  no rule refuses this

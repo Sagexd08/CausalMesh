@@ -1,0 +1,2 @@
+wrote C:\cmdemo\agent-demo\causalmesh.yaml
+edit `owns` to declare ownership, then run `causalmesh policy show`
