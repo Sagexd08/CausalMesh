@@ -1,18 +1,32 @@
 # CausalMesh's policy plane, containerized. Generic and project-agnostic:
 # no causalmesh.yaml is baked in here -- docker-compose.yml (or an
 # operator's own) bind-mounts one at run time. See docs/adoption.md.
-FROM python:3.12-slim AS base
+ARG PYTHON_IMAGE=python:3.12-slim
 
-WORKDIR /app
+# Build stage: resolve and install the package and its dependencies into a
+# virtualenv. Nothing from this stage but /opt/venv reaches the final image, so
+# pyproject.toml, the source tree and pip's caches stay behind.
+FROM ${PYTHON_IMAGE} AS build
+
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
 
 # The four base runtime dependencies (cryptography, PyYAML, typer, rich)
 # plus the `server` extra (fastapi, uvicorn) that `causalmesh serve` has
 # required since it moved onto FastAPI (Phase 2A) -- the analysis extra
 # stays out, matching this project's "the runtime core is deliberately
-# light" rule (AGENTS.md).
-COPY pyproject.toml ./
+# light" rule (AGENTS.md). Copy only what the build reads (see .dockerignore).
+WORKDIR /build
+COPY pyproject.toml README.md LICENSE ./
 COPY src/ ./src/
 RUN pip install --no-cache-dir ".[server]"
+
+# Runtime stage: the same base image, the virtualenv, and nothing else.
+FROM ${PYTHON_IMAGE} AS base
+
+ENV PATH="/opt/venv/bin:$PATH"     PYTHONDONTWRITEBYTECODE=1     PYTHONUNBUFFERED=1
+COPY --from=build /opt/venv /opt/venv
+WORKDIR /app
 
 # Not root. `serve` needs to read the contract and open a socket above 1024,
 # and nothing else, so a compromise of the process should not be a compromise
