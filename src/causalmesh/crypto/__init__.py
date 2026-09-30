@@ -13,6 +13,7 @@ from .chain import (
     compute_chain_hash,
     link_event,
 )
+from .keyring import KeyRingError, load_key_ring
 from .keys import (
     DERIVATION_INFO,
     KeyPair,
@@ -28,10 +29,12 @@ __all__ = [
     "ChainError",
     "ChainedEvent",
     "KeyPair",
+    "KeyRingError",
     "PublicKeyRing",
     "SignatureError",
     "compute_chain_hash",
     "derive_signing_key",
     "link_event",
+    "load_key_ring",
     "verify_signature",
 ]
