@@ -8,7 +8,14 @@ against.
 
 from __future__ import annotations
 
+import getpass
 import json
+import os
+import platform
+import re
+import stat
+import subprocess
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -91,13 +98,154 @@ class TestEnvironment:
         env = Environment.capture(REPO)
         assert env.python_version.count(".") == 2
         assert env.platform_name
-        assert env.machine_id
+        assert env.machine_id  # a digest or "unknown", never empty
 
     def test_the_run_config_subset_is_what_runs_carry(self) -> None:
         """These three `RunConfig` fields existed and defaulted to
         "unknown" because nothing populated them."""
         subset = Environment.capture(REPO).to_run_config()
         assert set(subset) == {"git_commit", "machine_id", "operator_id"}
+
+
+HOST = "sentinel-host-7f3a"
+USER = "sentinel-user-9c1e"
+
+
+@pytest.fixture
+def known_identity(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(platform, "node", lambda: HOST)
+    monkeypatch.setattr(getpass, "getuser", lambda: USER)
+
+
+def init_repo(path: Path) -> Path:
+    path.mkdir(parents=True, exist_ok=True)
+    subprocess.run(["git", "init", "-q", str(path)], check=True)
+    return path
+
+
+def _real_user() -> str:
+    try:
+        return getpass.getuser()
+    except Exception:  # noqa: BLE001 - any failure means there is no name to scan for
+        return ""
+
+
+class TestIdentityPrivacy:
+    """A tracked manifest must not name the person who wrote it."""
+
+    def test_the_default_records_neither_value(self, tmp_path: Path, known_identity: None) -> None:
+        env = Environment.capture(init_repo(tmp_path / "repo"))
+        rendered = json.dumps(env.to_dict()) + json.dumps(env.to_run_config())
+        assert HOST not in rendered
+        assert USER not in rendered
+
+    def test_the_default_is_a_labelled_digest_where_a_key_can_be_kept(
+        self, tmp_path: Path, known_identity: None
+    ) -> None:
+        env = Environment.capture(init_repo(tmp_path / "repo"))
+        for value in (env.machine_id, env.operator_id):
+            assert re.fullmatch(r"keyed:[0-9a-f]{16}", value)
+        assert env.machine_id != env.operator_id
+
+    def test_the_digest_is_stable_within_a_clone_and_tells_machines_apart(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        repo = init_repo(tmp_path / "repo")
+        monkeypatch.setattr(platform, "node", lambda: "machine-a")
+        first = Environment.capture(repo).machine_id
+        assert Environment.capture(repo).machine_id == first
+        monkeypatch.setattr(platform, "node", lambda: "machine-b")
+        assert Environment.capture(repo).machine_id != first
+
+    def test_a_different_clone_has_a_different_key(
+        self, tmp_path: Path, known_identity: None
+    ) -> None:
+        """So a digest cannot be tested against a guessed hostname without
+        this clone's secret."""
+        a = Environment.capture(init_repo(tmp_path / "a")).machine_id
+        b = Environment.capture(init_repo(tmp_path / "b")).machine_id
+        assert a != b
+
+    def test_the_key_lives_in_the_git_directory_not_the_tree(
+        self, tmp_path: Path, known_identity: None
+    ) -> None:
+        repo = init_repo(tmp_path / "repo")
+        Environment.capture(repo)
+        key = repo / ".git" / "causalmesh" / "identity.key"
+        assert key.is_file()
+        listing = subprocess.run(
+            ["git", "-C", str(repo), "status", "--porcelain", "--ignored"],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+        assert "identity.key" not in listing
+        if sys.platform != "win32":
+            assert stat.S_IMODE(os.stat(key).st_mode) == 0o600
+
+    def test_no_key_means_unknown_never_an_unkeyed_hash(
+        self, tmp_path: Path, known_identity: None
+    ) -> None:
+        not_a_repo = tmp_path / "plain"
+        not_a_repo.mkdir()
+        env = Environment.capture(not_a_repo)
+        assert env.machine_id == "unknown"
+        assert env.operator_id == "unknown"
+
+    def test_a_corrupt_key_is_unknown_not_a_guess(
+        self, tmp_path: Path, known_identity: None
+    ) -> None:
+        repo = init_repo(tmp_path / "repo")
+        Environment.capture(repo)
+        (repo / ".git" / "causalmesh" / "identity.key").write_text("short\n", encoding="ascii")
+        assert Environment.capture(repo).machine_id == "unknown"
+
+    def test_an_absent_hostname_is_unknown_not_a_digest_of_nothing(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(platform, "node", lambda: "")
+        assert Environment.capture(init_repo(tmp_path / "repo")).machine_id == "unknown"
+
+    def test_opting_in_records_the_real_values(self, tmp_path: Path, known_identity: None) -> None:
+        env = Environment.capture(init_repo(tmp_path / "repo"), record_host=True)
+        assert env.machine_id == HOST
+        assert env.operator_id == USER
+        assert env.to_run_config()["machine_id"] == HOST
+
+    def test_a_default_manifest_contains_neither_sentinel(
+        self, tmp_path: Path, known_identity: None
+    ) -> None:
+        repo = init_repo(tmp_path / "repo")
+        directory = make_collection(repo)
+        written = build(directory, repository_root=repo).write(tmp_path / "m.manifest.json")
+        text = written.read_text(encoding="utf-8").lower()
+        assert HOST not in text
+        assert USER not in text
+
+    def test_a_default_manifest_contains_neither_real_value(self, tmp_path: Path) -> None:
+        """Scans for this machine's actual hostname and username, unpatched.
+
+        Values shorter than four characters are skipped: a two-letter
+        username would match unrelated text and prove nothing.
+        """
+        repo = init_repo(tmp_path / "repo")
+        directory = make_collection(repo)
+        written = build(directory, repository_root=repo).write(tmp_path / "m.manifest.json")
+        text = written.read_text(encoding="utf-8").lower()
+        for value in (v.lower() for v in {platform.node(), _real_user()} if len(v) >= 4):
+            assert value not in text
+
+    def test_a_manifest_written_with_record_host_does_name_them(
+        self, tmp_path: Path, known_identity: None
+    ) -> None:
+        repo = init_repo(tmp_path / "repo")
+        directory = make_collection(repo)
+        written = build(directory, repository_root=repo, record_host=True).write(
+            tmp_path / "m.manifest.json"
+        )
+        text = written.read_text(encoding="utf-8")
+        assert HOST in text
+        assert USER in text
 
 
 class TestManifestBuild:

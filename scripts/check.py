@@ -54,6 +54,7 @@ TEST_DEPENDENCIES: tuple[tuple[str, ...], ...] = (
     ("uvicorn",),
     ("httpx", "httpx2"),
     ("langchain_core",),
+    ("pydantic",),
     ("numpy",),
     ("pandas",),
     ("scipy",),

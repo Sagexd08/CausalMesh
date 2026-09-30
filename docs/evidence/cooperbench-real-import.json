@@ -1,0 +1,254 @@
+{
+ "cooperbench_commit": "63b9d44d9f39a02fccf5bf0052db48a917a011fd",
+ "failures": [],
+ "failures_by_reason": {},
+ "features_total": 199,
+ "pairs_attempted": 652,
+ "pairs_failed": 0,
+ "pairs_imported": 652,
+ "pairs_with_a_contested_path": 652,
+ "per_task": {
+  "dottxt_ai_outlines_task/task1371": {
+   "failed": 0,
+   "features": 4,
+   "gold_patches_conflict_under_git_merge": 6,
+   "imported": 6,
+   "pairs": 6,
+   "pairs_with_a_contested_path": 6
+  },
+  "dottxt_ai_outlines_task/task1655": {
+   "failed": 0,
+   "features": 10,
+   "gold_patches_conflict_under_git_merge": 28,
+   "imported": 45,
+   "pairs": 45,
+   "pairs_with_a_contested_path": 45
+  },
+  "dottxt_ai_outlines_task/task1706": {
+   "failed": 0,
+   "features": 8,
+   "gold_patches_conflict_under_git_merge": 27,
+   "imported": 28,
+   "pairs": 28,
+   "pairs_with_a_contested_path": 28
+  },
+  "dspy_task/task8394": {
+   "failed": 0,
+   "features": 5,
+   "gold_patches_conflict_under_git_merge": 9,
+   "imported": 10,
+   "pairs": 10,
+   "pairs_with_a_contested_path": 10
+  },
+  "dspy_task/task8563": {
+   "failed": 0,
+   "features": 6,
+   "gold_patches_conflict_under_git_merge": 7,
+   "imported": 15,
+   "pairs": 15,
+   "pairs_with_a_contested_path": 15
+  },
+  "dspy_task/task8587": {
+   "failed": 0,
+   "features": 6,
+   "gold_patches_conflict_under_git_merge": 14,
+   "imported": 15,
+   "pairs": 15,
+   "pairs_with_a_contested_path": 15
+  },
+  "dspy_task/task8635": {
+   "failed": 0,
+   "features": 6,
+   "gold_patches_conflict_under_git_merge": 8,
+   "imported": 15,
+   "pairs": 15,
+   "pairs_with_a_contested_path": 15
+  },
+  "go_chi_task/task26": {
+   "failed": 0,
+   "features": 4,
+   "gold_patches_conflict_under_git_merge": 6,
+   "imported": 6,
+   "pairs": 6,
+   "pairs_with_a_contested_path": 6
+  },
+  "go_chi_task/task27": {
+   "failed": 0,
+   "features": 4,
+   "gold_patches_conflict_under_git_merge": 6,
+   "imported": 6,
+   "pairs": 6,
+   "pairs_with_a_contested_path": 6
+  },
+  "go_chi_task/task56": {
+   "failed": 0,
+   "features": 5,
+   "gold_patches_conflict_under_git_merge": 8,
+   "imported": 10,
+   "pairs": 10,
+   "pairs_with_a_contested_path": 10
+  },
+  "huggingface_datasets_task/task3997": {
+   "failed": 0,
+   "features": 5,
+   "gold_patches_conflict_under_git_merge": 8,
+   "imported": 10,
+   "pairs": 10,
+   "pairs_with_a_contested_path": 10
+  },
+  "huggingface_datasets_task/task6252": {
+   "failed": 0,
+   "features": 6,
+   "gold_patches_conflict_under_git_merge": 8,
+   "imported": 15,
+   "pairs": 15,
+   "pairs_with_a_contested_path": 15
+  },
+  "huggingface_datasets_task/task7309": {
+   "failed": 0,
+   "features": 2,
+   "gold_patches_conflict_under_git_merge": 1,
+   "imported": 1,
+   "pairs": 1,
+   "pairs_with_a_contested_path": 1
+  },
+  "llama_index_task/task17070": {
+   "failed": 0,
+   "features": 3,
+   "gold_patches_conflict_under_git_merge": 3,
+   "imported": 3,
+   "pairs": 3,
+   "pairs_with_a_contested_path": 3
+  },
+  "llama_index_task/task17244": {
+   "failed": 0,
+   "features": 7,
+   "gold_patches_conflict_under_git_merge": 12,
+   "imported": 21,
+   "pairs": 21,
+   "pairs_with_a_contested_path": 21
+  },
+  "llama_index_task/task18813": {
+   "failed": 0,
+   "features": 6,
+   "gold_patches_conflict_under_git_merge": 13,
+   "imported": 15,
+   "pairs": 15,
+   "pairs_with_a_contested_path": 15
+  },
+  "openai_tiktoken_task/task0": {
+   "failed": 0,
+   "features": 10,
+   "gold_patches_conflict_under_git_merge": 45,
+   "imported": 45,
+   "pairs": 45,
+   "pairs_with_a_contested_path": 45
+  },
+  "pallets_click_task/task2068": {
+   "failed": 0,
+   "features": 12,
+   "gold_patches_conflict_under_git_merge": 66,
+   "imported": 66,
+   "pairs": 66,
+   "pairs_with_a_contested_path": 66
+  },
+  "pallets_click_task/task2800": {
+   "failed": 0,
+   "features": 7,
+   "gold_patches_conflict_under_git_merge": 12,
+   "imported": 21,
+   "pairs": 21,
+   "pairs_with_a_contested_path": 21
+  },
+  "pallets_click_task/task2956": {
+   "failed": 0,
+   "features": 8,
+   "gold_patches_conflict_under_git_merge": 17,
+   "imported": 28,
+   "pairs": 28,
+   "pairs_with_a_contested_path": 28
+  },
+  "pallets_jinja_task/task1465": {
+   "failed": 0,
+   "features": 10,
+   "gold_patches_conflict_under_git_merge": 45,
+   "imported": 45,
+   "pairs": 45,
+   "pairs_with_a_contested_path": 45
+  },
+  "pallets_jinja_task/task1559": {
+   "failed": 0,
+   "features": 10,
+   "gold_patches_conflict_under_git_merge": 8,
+   "imported": 45,
+   "pairs": 45,
+   "pairs_with_a_contested_path": 45
+  },
+  "pallets_jinja_task/task1621": {
+   "failed": 0,
+   "features": 10,
+   "gold_patches_conflict_under_git_merge": 18,
+   "imported": 45,
+   "pairs": 45,
+   "pairs_with_a_contested_path": 45
+  },
+  "pillow_task/task25": {
+   "failed": 0,
+   "features": 5,
+   "gold_patches_conflict_under_git_merge": 7,
+   "imported": 10,
+   "pairs": 10,
+   "pairs_with_a_contested_path": 10
+  },
+  "pillow_task/task290": {
+   "failed": 0,
+   "features": 5,
+   "gold_patches_conflict_under_git_merge": 8,
+   "imported": 10,
+   "pairs": 10,
+   "pairs_with_a_contested_path": 10
+  },
+  "pillow_task/task68": {
+   "failed": 0,
+   "features": 5,
+   "gold_patches_conflict_under_git_merge": 9,
+   "imported": 10,
+   "pairs": 10,
+   "pairs_with_a_contested_path": 10
+  },
+  "react_hook_form_task/task153": {
+   "failed": 0,
+   "features": 6,
+   "gold_patches_conflict_under_git_merge": 15,
+   "imported": 15,
+   "pairs": 15,
+   "pairs_with_a_contested_path": 15
+  },
+  "react_hook_form_task/task85": {
+   "failed": 0,
+   "features": 5,
+   "gold_patches_conflict_under_git_merge": 4,
+   "imported": 10,
+   "pairs": 10,
+   "pairs_with_a_contested_path": 10
+  },
+  "samuelcolvin_dirty_equals_task/task43": {
+   "failed": 0,
+   "features": 9,
+   "gold_patches_conflict_under_git_merge": 36,
+   "imported": 36,
+   "pairs": 36,
+   "pairs_with_a_contested_path": 36
+  },
+  "typst_task/task6554": {
+   "failed": 0,
+   "features": 10,
+   "gold_patches_conflict_under_git_merge": 45,
+   "imported": 45,
+   "pairs": 45,
+   "pairs_with_a_contested_path": 45
+  }
+ },
+ "tasks_attempted": 30,
+ "tasks_with_at_least_one_imported_pair": 30
+}

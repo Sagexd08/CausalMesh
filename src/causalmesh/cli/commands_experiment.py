@@ -132,6 +132,33 @@ def plan_command(
     raise typer.Exit(Exit.OK)
 
 
+def _attach_checkpoint_prompt(run_config: dict[str, Any], *, has_checkpoints: bool) -> None:
+    """Install the terminal handler, only when a person can actually answer.
+
+    Without an interactive stdin the flag does nothing and the default
+    `AutoDenyHandler` stays: a prompt nobody is there to read must not be
+    answered by whatever happens to be piped in. It is also said aloud, so an
+    operator is not left believing a person approved something.
+    """
+    import sys
+
+    from causalmesh.policy.terminal_handler import TerminalCheckpointHandler
+
+    if not has_checkpoints:
+        note("--checkpoint-prompt: the contract declares no policy.checkpoints; nothing to ask")
+        return
+    if not sys.stdin.isatty():
+        note("--checkpoint-prompt ignored: stdin is not interactive; checkpoints are refused")
+        return
+    run_config["checkpoint_handler"] = TerminalCheckpointHandler(
+        input_stream=sys.stdin, require_tty=True
+    )
+    note(
+        "--checkpoint-prompt: matched checkpoints will be put to you here "
+        "(asked on every arm, enforced only on C3; the run is not reproducible)"
+    )
+
+
 @app.command("run")
 def run_command(
     profile_name: Annotated[str, typer.Option("--profile")] = "smoke",
@@ -142,6 +169,17 @@ def run_command(
         typer.Option("--limit", help="Stop after this many runs; the rest stay planned."),
     ] = None,
     allow_gated: Annotated[bool, typer.Option("--allow-gated")] = False,
+    run_timeout: Annotated[
+        float | None,
+        typer.Option(
+            "--run-timeout",
+            help=(
+                "Wall-clock budget per run, in seconds. A run that exceeds it is interrupted "
+                "at its next await, keeps its partial evidence and is recorded timed out "
+                "(never retried). Default: no timeout."
+            ),
+        ),
+    ] = None,
     use_contract: Annotated[
         bool,
         typer.Option(
@@ -152,6 +190,27 @@ def run_command(
             ),
         ),
     ] = True,
+    record_host: Annotated[
+        bool,
+        typer.Option(
+            "--record-host",
+            help=(
+                "Record the real hostname and OS username in each run's envelope. "
+                "Default: a keyed digest of each, or unknown."
+            ),
+        ),
+    ] = False,
+    checkpoint_prompt: Annotated[
+        bool,
+        typer.Option(
+            "--checkpoint-prompt",
+            help=(
+                "Ask a person at this terminal to decide each matched policy.checkpoints "
+                "rule. Needs a contract and an interactive stdin; otherwise checkpoints "
+                "keep being refused automatically. The run is then not reproducible."
+            ),
+        ),
+    ] = False,
     root_option: Annotated[Path | None, typer.Option("--root")] = None,
     as_json: Annotated[bool, typer.Option("--json")] = False,
 ) -> None:
@@ -159,6 +218,10 @@ def run_command(
     from causalmesh.policy.contract import Contract, ContractError
     from causalmesh.provenance import Environment
     from causalmesh.scheduler import ExperimentRunner, RunEnvironment
+
+    if run_timeout is not None and not run_timeout > 0:
+        fail("--run-timeout must be greater than zero", hint="Omit it for no timeout.")
+        raise typer.Exit(Exit.USAGE)
 
     repo = _repo_or_exit(root_option)
     name = experiment_id or f"exp_{profile_name}"
@@ -173,7 +236,7 @@ def run_command(
         index_path=repo.index_path(name),
     )
 
-    captured = Environment.capture(repo.root)
+    captured = Environment.capture(repo.root, record_host=record_host)
     run_config = captured.to_run_config()
 
     if use_contract:
@@ -185,10 +248,16 @@ def run_command(
         if contract is not None:
             run_config["contract_path"] = str(contract.source)
             note(f"causalmesh.yaml found; ContractGate installed (arm={contract.arm})")
+            if checkpoint_prompt:
+                _attach_checkpoint_prompt(run_config, has_checkpoints=bool(contract.checkpoints))
         else:
             note("no causalmesh.yaml found; arms install their own gate")
+            if checkpoint_prompt:
+                note("--checkpoint-prompt ignored: no contract, so there are no checkpoints")
     else:
         note("--no-contract: skipping causalmesh.yaml discovery")
+        if checkpoint_prompt:
+            note("--checkpoint-prompt ignored: there is no contract, so there are no checkpoints")
 
     note(f"{name}: {len(plan)} runs planned ({plan.profile} profile)")
     if captured.git.dirty:
@@ -199,6 +268,7 @@ def run_command(
         environment=environment,
         master_seed=_seed_bytes(seed),
         run_config=run_config,
+        run_timeout_s=run_timeout,
     ) as runner:
         registered = runner.prepare()
         if registered:
@@ -214,6 +284,7 @@ def run_command(
         rendered.add_row("executed", str(report.executed))
         rendered.add_row("completed", str(report.completed))
         rendered.add_row("failed", str(report.failed))
+        rendered.add_row("timed out", str(report.timed_out))
         rendered.add_row("already done", str(report.already_done))
         rendered.add_row("task successes", f"{report.succeeded_tasks} of {report.planned}")
         out_console.print(rendered)
@@ -223,6 +294,45 @@ def run_command(
         note(f"verify with: causalmesh verify --id {name}")
 
     raise typer.Exit(Exit.OK if report.is_complete else Exit.FAILED)
+
+
+@app.command("scalability")
+def scalability_command(
+    profile_name: Annotated[
+        str,
+        typer.Option("--profile", help="scalability, scalability_smoke."),
+    ] = "scalability_smoke",
+    seed: Annotated[str, typer.Option("--seed")] = "causalmesh-scalability-seed-0001",
+    as_json: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Measure delivery cost against agent count (broadcast vs path-scoped).
+
+    Runs scripted mock agents on a generated N-agent task, in a scratch
+    directory that is removed afterwards, and prints what was measured on
+    this machine. Nothing is written to the repository and no gate applies:
+    the profile registers no hypothesis and says nothing about real agents.
+    """
+    import tempfile
+
+    from causalmesh.experiments.scalability import scalability_profile
+    from causalmesh.tasks.scalability import render_scalability, run_scalability
+
+    try:
+        selected = scalability_profile(profile_name)
+    except ValueError as exc:
+        fail(str(exc), hint="Try scalability_smoke for a quick check.")
+        raise typer.Exit(Exit.USAGE) from exc
+
+    note(f"{selected.name}: {selected.run_count()} runs (scripted mock agents)")
+    with tempfile.TemporaryDirectory(prefix="causalmesh_scal_") as scratch:
+        report = asyncio.run(
+            run_scalability(selected, workspace_root=Path(scratch), seed=_seed_bytes(seed))
+        )
+
+    if not emit(report.to_dict(), as_json=as_json):
+        typer.echo(render_scalability(report))
+    bad = [run for run in report.runs if not run.chain_valid]
+    raise typer.Exit(Exit.OK if not bad else Exit.FAILED)
 
 
 @app.command("status")

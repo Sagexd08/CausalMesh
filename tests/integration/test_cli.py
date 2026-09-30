@@ -365,7 +365,10 @@ class TestPlan:
             "--json",
         )
         assert result.exit_code == 0, result.stdout
-        assert payload(result)["runs"] == 960
+        # 120 repetitions x 4 arms x 4 authored tasks, one per section 35
+        # family: the 1920-run design. It was 960 while only two families
+        # existed. A CooperBench import is never planned implicitly.
+        assert payload(result)["runs"] == 1920
 
     def test_an_unknown_profile_is_a_usage_error(self) -> None:
         result = invoke("experiment", "plan", "--profile", "nonsense", "--root", str(REPO))
@@ -602,16 +605,18 @@ class TestAnalyze:
     def test_edges_on_an_artifact_older_than_the_feature_reports_none(self) -> None:
         """The pilot predates edge population; that is a fact, not an error.
 
-        `edges_for_run` treats a missing `edges` key as "none recorded"
-        rather than raising, so an artifact from before this feature shipped
-        still analyzes cleanly instead of failing.
+        A missing `edges` key reads as unknown, not as zero: the artifact
+        cannot say the run had no relationships, only that it never recorded
+        any. It still analyzes cleanly instead of failing.
         """
         result = invoke(
             "analyze", "--edges", "--id", "pilot_landing", "--root", str(REPO), "--json"
         )
         assert result.exit_code == 0, result.stdout
         report = payload(result)
-        assert report["total_edges"] == 0
+        assert report["total_edges"] is None
+        assert report["by_relationship"] is None
+        assert report["runs_edges_unknown"] == 24
         assert report["total_runs"] == 24
 
 
@@ -688,6 +693,24 @@ class TestAnalyzeEdgesEndToEnd:
             assert report["total_edges"] >= 1
             edge = report["runs"][0]["edges"][0]
             assert edge["relationship"] == "REQUIRED"
+
+            # The denial edge and the acceptance edge both resolve against the
+            # artifact's own chain: no endpoint is unknown or unresolved.
+            edges = report["runs"][0]["edges"]
+            assert len(edges) == report["total_edges"]
+            assert report["by_relationship"]["REQUIRED"] == len(edges)
+            for recorded in edges:
+                assert recorded["from_label"] not in ("unknown", "unresolved")
+                assert recorded["to_label"] not in ("unknown", "unresolved")
+            assert any(
+                e["from_label"].startswith("ACCEPTANCE_DECIDED")
+                and e["to_label"].startswith("INTEGRATION_TEST_RESULT")
+                for e in edges
+            )
+            assert any(
+                e["from_label"].startswith("FAILURE") and e["to_label"].startswith("POLICY_VERDICT")
+                for e in edges
+            )
         finally:
             self._cleanup(experiment_id)
 
@@ -774,3 +797,46 @@ class TestManifestAndAudit:
         assert entry["chains"]["runs"] == 1
         assert entry["chains"]["verified"] == 0
         assert any("failed verification" in f for f in entry["findings"])
+
+
+class TestManifestPrivacy:
+    """`manifest write` must not publish who ran it.
+
+    Independent of the pilot artifacts: the collection is built in `tmp_path`.
+    """
+
+    def test_the_written_manifest_names_neither_host_nor_user_by_default(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import getpass
+        import platform
+
+        monkeypatch.setattr(platform, "node", lambda: "sentinel-host-7f3a")
+        monkeypatch.setattr(getpass, "getuser", lambda: "sentinel-user-9c1e")
+        root = TestManifestAndAudit._checkout(tmp_path)
+        written = invoke("manifest", "write", "--id", "exp", "--root", str(root), "--json")
+        assert written.exit_code == 0, written.stdout
+        assert payload(written)["host_recorded"] is False
+        manifest = (root / "data" / "manifests" / "exp.manifest.json").read_text(encoding="utf-8")
+        assert "sentinel-host-7f3a" not in manifest
+        assert "sentinel-user-9c1e" not in manifest
+
+    def test_record_host_is_an_explicit_opt_in(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import getpass
+        import platform
+
+        monkeypatch.setattr(platform, "node", lambda: "sentinel-host-7f3a")
+        monkeypatch.setattr(getpass, "getuser", lambda: "sentinel-user-9c1e")
+        root = TestManifestAndAudit._checkout(tmp_path)
+        written = invoke(
+            "manifest", "write", "--id", "exp", "--root", str(root), "--record-host", "--json"
+        )
+        assert written.exit_code == 0, written.stdout
+        assert payload(written)["host_recorded"] is True
+        manifest = json.loads(
+            (root / "data" / "manifests" / "exp.manifest.json").read_text(encoding="utf-8")
+        )
+        assert manifest["environment"]["machine_id"] == "sentinel-host-7f3a"
+        assert manifest["environment"]["operator_id"] == "sentinel-user-9c1e"

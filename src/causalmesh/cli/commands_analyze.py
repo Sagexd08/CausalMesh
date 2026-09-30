@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
+from rich.markup import escape
 
 from causalmesh.cli._context import Repo, find_root
 from causalmesh.cli._output import Exit, emit, fail, note, out_console, table
@@ -51,16 +52,33 @@ def _resolve_experiment(repo: Repo, *, experiment_id: str | None, latest: bool) 
     return experiment_id
 
 
+def _count_cell(value: int | None) -> str:
+    """A count, or `unknown` when nothing it counted was recorded."""
+    return "unknown" if value is None else str(value)
+
+
 def _analyze_edges(repo: Repo, experiment_id: str, *, as_json: bool) -> None:
     """`causalmesh analyze --edges`: the causal edges a collection recorded.
 
     Reads `result.edges` straight out of each run artifact (see
     `causalmesh.edges.report`) rather than through the cost-accounting path
-    above — an edge is evidence about relationships between events, not a
+    above -- an edge is evidence about relationships between events, not a
     cost, and routing it through `RunMetrics` would stretch that type to
     carry something outside its stated scope.
+
+    A run whose artifact has no `edges` key predates edges. It is reported
+    as `unknown`, never as zero, and it is left out of every count rather
+    than contributing a 0 to it. Descriptive only, like the rest of this
+    command: per-edge rows are PILOT (what the pilot's runs recorded), the
+    counts over them are DERIVED.
     """
-    from causalmesh.edges import EdgeReportError, collect_edges, run_edges_to_dict
+    from causalmesh.edges import (
+        EdgeReportError,
+        collect_edges,
+        count_by_relationship,
+        run_edges_to_dict,
+        total_edges,
+    )
 
     try:
         runs = collect_edges(repo.experiment_dir(experiment_id))
@@ -68,37 +86,58 @@ def _analyze_edges(repo: Repo, experiment_id: str, *, as_json: bool) -> None:
         fail(str(exc))
         raise typer.Exit(Exit.ERROR) from exc
 
-    total_edges = sum(len(run.edges) for run in runs)
+    known = [run for run in runs if run.recorded]
+    unknown_count = len(runs) - len(known)
+    by_relationship = count_by_relationship(runs)
+    total = total_edges(runs)
     payload = {
+        "by_relationship": by_relationship,
         "experiment_id": experiment_id,
+        "label": "PILOT",
         "runs": [run_edges_to_dict(run) for run in runs],
-        "runs_with_edges": sum(1 for run in runs if run.edges),
-        "total_edges": total_edges,
+        "runs_edges_unknown": unknown_count,
+        "runs_with_edges": sum(1 for run in known if run.edges) if known else None,
+        "total_edges": total,
         "total_runs": len(runs),
     }
 
     if not emit(payload, as_json=as_json):
+        counts = table(f"{experiment_id} - causal edges by kind  [DERIVED]", ["kind", "edges"])
+        if by_relationship is None:
+            counts.add_row("unknown", "unknown")
+        else:
+            for kind, count in by_relationship.items():
+                counts.add_row(kind, str(count))
+        out_console.print(counts)
+
         rendered = table(
-            f"{experiment_id} - causal edges",
-            ["run", "arm", "task", "relationship", "from (effect)", "to (cause)"],
+            f"{experiment_id} - causal edges  [PILOT]",
+            ["run", "arm", "task", "kind", "from (effect)", "to (cause)"],
         )
-        for run in runs:
+        for run in known:
             for edge in run.edges:
                 rendered.add_row(
-                    run.run_id,
-                    run.arm,
-                    run.task_id,
+                    escape(run.run_id),
+                    escape(run.arm),
+                    escape(run.task_id),
                     str(edge.relationship),
-                    edge.from_event_id,
-                    edge.to_event_id,
+                    escape(f"{edge.from_event_id}\n{run.label_for(edge.from_event_id)}"),
+                    escape(f"{edge.to_event_id}\n{run.label_for(edge.to_event_id)}"),
                 )
         out_console.print(rendered)
-        if total_edges == 0:
+
+        if unknown_count:
             note(
-                "no edges recorded in this collection; edges are populated only "
-                "when a contract refuses at least one call"
+                f"{unknown_count} of {len(runs)} run(s) predate edges: their edges are "
+                "unknown, not zero, and are left out of every count above"
             )
-        note(f"{total_edges} edge(s) across {len(runs)} run(s)")
+        if known and total == 0:
+            note("no edges recorded by the runs that record them")
+        note(
+            f"{_count_cell(total)} edge(s) across {len(known)} run(s) that record edges; "
+            "labels come from each artifact's chain and read unknown where it has none"
+        )
+        note("descriptive only: edges are recorded relationships, not a causal estimate")
 
     raise typer.Exit(Exit.OK)
 

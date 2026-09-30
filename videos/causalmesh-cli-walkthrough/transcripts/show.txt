@@ -1,0 +1,9 @@
+contract - arm C3                                              
++-------------------------------------------------------------+
+| agent        | archetype | owns        | may reach | budget |
+|--------------+-----------+-------------+-----------+--------|
+| coding-agent | writer    | src/        | anywhere  | -      |
+|              |           | tests/      |           |        |
+| dba-agent    | writer    | production/ | anywhere  | -      |
++-------------------------------------------------------------+
+read from C:\demo\cli_demo\causalmesh.yaml
