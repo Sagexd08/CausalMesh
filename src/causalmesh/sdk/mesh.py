@@ -49,11 +49,17 @@ Architecture::
 
 from __future__ import annotations
 
+import threading
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
-from causalmesh.crypto.keys import KeyPair, SignatureError, load_identity_keys
+from causalmesh.crypto.keys import (
+    KeyPair,
+    PublicKeyRing,
+    SignatureError,
+    load_identity_keys,
+)
 from causalmesh.events.schema import EventIdentity
 from causalmesh.hooks.lifecycle import LifecycleBoundary
 from causalmesh.hooks.policy_gate import ContractGate
@@ -65,7 +71,15 @@ from ..gateway.gateway import ToolGateway
 from ..gateway.result import GatewayResult
 from ..gateway.tool import Tool
 from .config import SDKConfig, load_sdk_config
-from .errors import ConfigurationError
+from .errors import ConfigurationError, EvidenceError, EvidenceUnavailableError
+from .evidence import (
+    EvidenceStore,
+    last_event_counter,
+    load_evidence,
+    resume_chain,
+    write_evidence,
+    write_public_keys,
+)
 from .identity import make_identity
 
 __all__ = ["CausalMesh"]
@@ -113,6 +127,16 @@ class CausalMesh:
                     that declares a total (``usd_total``, ``tokens``, ...)
                     needs one: without it the gate refuses the spend, since a
                     total nothing records is a total nothing enforces.
+        evidence_path: An append-only JSONL file the session writes every signed
+                    record to (flushed and ``fsync``-ed per event).  If the file
+                    already holds a chain it is verified against this session's
+                    keys and continued, so the same ``seed=`` (or
+                    ``identity.keys``) and ``run_id`` must be used on restart.
+                    See ``causalmesh.sdk.evidence`` for the guarantees.
+        recover_evidence: Repair a torn final line (an interrupted write): the
+                    fragment moves to ``<file>.torn`` and the chain resumes
+                    from the last whole record.  Off by default, so a torn
+                    file is refused rather than silently trimmed.
     """
 
     def __init__(
@@ -124,21 +148,37 @@ class CausalMesh:
         seed: bytes | None = None,
         agents: Iterable[str] = (),
         ledger: Ledger | None = None,
+        evidence_path: str | Path | None = None,
+        recover_evidence: bool = False,
         _sdk_config: SDKConfig | None = None,
     ) -> None:
         self._agent_id = agent_id
         self._contract = contract
         self._run_id = run_id or _DEFAULT_RUN_ID
         self._sdk_config = _sdk_config
+        self._closed = False
+        self._close_lock = threading.Lock()
+        self._evidence: EvidenceStore | None = None
 
         agent_ids = sorted({agent_id, *(role.agent_id for role in contract.roles), *agents})
-        self._relay, self._boundary, self._gate = _build_runtime(
-            contract=contract,
-            run_id=self._run_id,
-            agent_ids=agent_ids,
-            seed=seed,
-            ledger=ledger,
-        )
+        if evidence_path is not None:
+            self._evidence = EvidenceStore(evidence_path, recover=recover_evidence)
+        try:
+            self._relay, self._boundary, self._gate = _build_runtime(
+                contract=contract,
+                run_id=self._run_id,
+                agent_ids=agent_ids,
+                seed=seed,
+                ledger=ledger,
+                store=self._evidence,
+            )
+            resumed = 0
+            if self._evidence is not None:
+                resumed = resume_chain(self._relay, self._evidence, run_id=self._run_id)
+        except BaseException:
+            if self._evidence is not None:
+                self._evidence.close()
+            raise
 
         def _identity_factory(aid: str) -> EventIdentity:
             return make_identity(aid, contract=contract, run_id=self._run_id)
@@ -151,9 +191,11 @@ class CausalMesh:
             gate=self._gate,
             ledger=ledger,
         )
+        if resumed:
+            self._gateway.resume_event_counter(last_event_counter(self._relay.records()))
 
     # ------------------------------------------------------------------ #
-    # Construction                                                        #
+    # Construction                                                       #
     # ------------------------------------------------------------------ #
 
     @classmethod
@@ -165,11 +207,14 @@ class CausalMesh:
         seed: bytes | None = None,
         agents: Iterable[str] = (),
         ledger: Ledger | None = None,
+        evidence_path: str | Path | None = None,
+        recover_evidence: bool = False,
     ) -> CausalMesh:
         """Build a ``CausalMesh`` from a ``causalmesh.yaml`` file.
 
-        ``run_id``, ``seed`` and ``agents`` are passed through to the
-        constructor; see the class docstring.
+        ``run_id``, ``seed``, ``agents``, ``ledger``, ``evidence_path`` and
+        ``recover_evidence`` are passed through to the constructor; see the
+        class docstring.
 
         Raises:
             ConfigurationError: When the file is missing, invalid, or
@@ -192,6 +237,8 @@ class CausalMesh:
                 seed=seed,
                 agents=agents,
                 ledger=ledger,
+                evidence_path=evidence_path,
+                recover_evidence=recover_evidence,
                 _sdk_config=sdk_config,
             )
         except SignatureError as exc:
@@ -256,6 +303,7 @@ class CausalMesh:
             ToolNotFoundError: When ``tool`` is not registered.
         """
         aid = agent_id or self._agent_id
+        self._require_evidence_writable()
         return self._gateway.execute(
             aid,
             tool,
@@ -278,6 +326,7 @@ class CausalMesh:
         See ``execute()`` for argument details.
         """
         aid = agent_id or self._agent_id
+        self._require_evidence_writable()
         return await self._gateway.execute_async(
             agent_id=aid,
             tool=tool,
@@ -331,6 +380,99 @@ class CausalMesh:
         """Per-outcome counts and hook latency from the lifecycle boundary."""
         return self._boundary.summary()
 
+    # ------------------------------------------------------------------ #
+    # Evidence persistence and export                                     #
+    # ------------------------------------------------------------------ #
+
+    @property
+    def evidence_path(self) -> Path | None:
+        """The file this session persists to, or ``None`` when memory-only."""
+        return self._evidence.path if self._evidence is not None else None
+
+    @property
+    def evidence_recovery(self) -> dict[str, Any] | None:
+        """What ``recover_evidence`` repaired on open, or ``None`` if nothing.
+
+        ``{"torn_bytes", "preserved_in", "records_kept"}``: the size of the
+        interrupted final write, where it was kept, and how many whole
+        records survived.
+        """
+        return self._evidence.recovery if self._evidence is not None else None
+
+    @property
+    def evidence_head(self) -> str:
+        """The chain head hash right now: what an external anchor should hold.
+
+        Truncating a chain from the end leaves a shorter chain that still
+        verifies.  Only a copy of the head, kept somewhere the writer cannot
+        reach, shows that it happened.
+        """
+        return self._relay.head_hash
+
+    def key_ring(self) -> PublicKeyRing:
+        """The public keys this session signs with."""
+        return self._relay.key_ring()
+
+    def export_evidence(self, path: str | Path) -> Path:
+        """Write this session's whole chain to `path` as JSONL, atomically.
+
+        Works for a memory-only session and for a persisted one (it is then a
+        copy; the live file is never the destination).  Read it back with
+        ``load_evidence`` and verify it with ``causalmesh verify --evidence``.
+        """
+        destination = Path(path)
+        if self._evidence is not None and _same_file(destination, self._evidence.path):
+            raise EvidenceError(
+                f"{destination} is this session's live evidence file; export to another path"
+            )
+        return write_evidence(destination, self._relay.records())
+
+    def export_public_keys(self, directory: str | Path) -> list[Path]:
+        """Write one ``<agent_id>.pub`` per agent into `directory`.
+
+        The format ``causalmesh verify --keys`` reads.  Only public keys are
+        written.  A ring exported from the machine that also holds the log is
+        not independent trust: take it away before the session, or from
+        wherever the keys were issued.
+        """
+        return write_public_keys(self.key_ring(), directory)
+
+    @staticmethod
+    def load_evidence(path: str | Path, *, allow_torn_tail: bool = False) -> list[dict[str, Any]]:
+        """Read an evidence file back into records; see ``sdk.evidence.load_evidence``."""
+        return load_evidence(path, allow_torn_tail=allow_torn_tail)
+
+    def close(self) -> None:
+        """Release the evidence file and its lock.  Safe to call twice."""
+        with self._close_lock:
+            if self._closed:
+                return
+            self._closed = True
+        if self._evidence is not None:
+            self._evidence.close()
+
+    def __enter__(self) -> CausalMesh:
+        return self
+
+    def __exit__(self, *exc_info: object) -> None:
+        self.close()
+
+    def _require_evidence_writable(self) -> None:
+        """Refuse to run a tool whose record could not be written.
+
+        Checked before the gate, so the handler never runs after the evidence
+        file has failed or the session has been closed.
+        """
+        if self._evidence is None:
+            return
+        if self._closed:
+            raise EvidenceUnavailableError(
+                f"this session is closed; {self._evidence.path} is no longer being written"
+            )
+        failure = self._evidence.failure
+        if failure is not None:
+            raise EvidenceUnavailableError(failure)
+
 
 # ------------------------------------------------------------------ #
 # Internal assembly                                                    #
@@ -344,6 +486,7 @@ def _build_runtime(
     agent_ids: list[str],
     seed: bytes | None,
     ledger: Ledger | None = None,
+    store: EvidenceStore | None = None,
 ) -> tuple[Relay, LifecycleBoundary, ContractGate]:
     """Assemble the relay, boundary, and gate for one SDK session.
 
@@ -353,6 +496,7 @@ def _build_runtime(
     relay = Relay(
         run_id=run_id,
         keypairs=_keypairs(contract, agent_ids, seed),
+        store=store,
         delivery=NullDelivery(),  # SDK runs: no peer fan-out needed
     )
 
@@ -382,3 +526,10 @@ def _keypairs(contract: Contract, agent_ids: list[str], seed: bytes | None) -> d
     if seed is not None:
         return {agent: KeyPair.derive(seed, agent) for agent in agent_ids}
     return {agent: KeyPair.generate(agent) for agent in agent_ids}
+
+
+def _same_file(a: Path, b: Path) -> bool:
+    try:
+        return a.resolve() == b.resolve()
+    except OSError:
+        return a.absolute() == b.absolute()
