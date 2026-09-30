@@ -145,3 +145,55 @@ class TestDescribe:
             "terminal": False,
             "transitions": [RunState.RUNNING],
         }
+
+
+class TestHandedOff:
+    """The transition for "this run continues under a different agent".
+
+    HANDED_OFF is a step inside a run, not an outcome. Every property here
+    exists to stop it being mistaken for one: picked up as unstarted work,
+    counted as a verdict, or skipped straight to COMPLETED.
+    """
+
+    def test_a_running_run_can_be_handed_off_and_resume(self) -> None:
+        check_transition(RunState.RUNNING, RunState.HANDED_OFF)
+        check_transition(RunState.HANDED_OFF, RunState.RUNNING)
+
+    def test_a_run_that_never_started_cannot_be_handed_off(self) -> None:
+        with pytest.raises(InvalidTransitionError):
+            check_transition(RunState.PLANNED, RunState.HANDED_OFF)
+
+    def test_a_handoff_cannot_complete_the_run_by_itself(self) -> None:
+        # The successor has to take over (back to RUNNING) and produce the
+        # verdict; a run whose only recorded work is a handoff has no result.
+        with pytest.raises(InvalidTransitionError):
+            check_transition(RunState.HANDED_OFF, RunState.COMPLETED)
+
+    def test_it_is_neither_terminal_nor_retryable(self) -> None:
+        # Retryable would let claim_next re-execute a run that is mid-flight.
+        assert not is_terminal(RunState.HANDED_OFF)
+        assert not is_retryable(RunState.HANDED_OFF)
+
+    def test_a_crash_during_a_handoff_leaves_a_way_out(self) -> None:
+        # Otherwise a process that died between relieving one agent and
+        # installing the next would strand the run forever.
+        assert can_transition(RunState.HANDED_OFF, RunState.ABANDONED)
+
+    def test_a_handoff_cannot_be_used_to_leave_a_terminal_state(self) -> None:
+        for state in TERMINAL_STATES:
+            assert not can_transition(state, RunState.HANDED_OFF)
+
+
+class TestTimedOut:
+    def test_a_timeout_is_a_result_and_never_retried(self) -> None:
+        """The property the whole-run watchdog depends on.
+
+        "Ran out of time" is exactly the outcome a second, luckier attempt
+        would erase, so the machine must refuse to run it again.
+        """
+        assert is_terminal(RunState.TIMED_OUT)
+        assert not is_retryable(RunState.TIMED_OUT)
+        assert TRANSITIONS[RunState.TIMED_OUT] == frozenset()
+
+    def test_a_timeout_is_reachable_from_running(self) -> None:
+        check_transition(RunState.RUNNING, RunState.TIMED_OUT)

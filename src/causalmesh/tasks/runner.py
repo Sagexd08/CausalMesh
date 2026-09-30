@@ -15,12 +15,15 @@ noticed.
 
 from __future__ import annotations
 
+import asyncio
 import os
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from ..agents import AgentContext, AgentIdentity, MockAgent, Scenario
+from ..agents.script import AgentScript
 from ..channels import MetadataChannel, NullChannel, Room, TranscriptChannel
 from ..channels.base import CoordinationChannel
 from ..claims import ClaimRegistry
@@ -34,7 +37,15 @@ from ..relay import ChainStore, Relay, policy_for_arm
 from ..relevance import AgentInterests
 from ..tools import Toolbox, ToolExecutor
 from ..tools.api import _INHERITED_ENVIRONMENT
+from .deadline import PartialRun, RunDeadline, RunTimedOutError
 from .definition import TaskDefinition
+from .handoff import (
+    HandoffDirective,
+    HandoffError,
+    build_handoff_record,
+    handoff_payload,
+    snapshot_workspace,
+)
 from .outcome import (
     AcceptanceDecision,
     TaskOutcome,
@@ -115,6 +126,7 @@ class RunResult:
     boundary_summaries: dict[str, dict[str, Any]] = field(default_factory=dict)
     gate_summary: dict[str, Any] = field(default_factory=dict)
     edges: list[dict[str, Any]] = field(default_factory=list)
+    handoffs: list[dict[str, Any]] = field(default_factory=list)
     error: str | None = None
 
     @property
@@ -128,6 +140,14 @@ class RunResult:
         )
 
     def to_dict(self) -> dict[str, Any]:
+        payload = self._base_dict()
+        # Present only on a run that had a handoff, so the artifact of every
+        # other run is byte-for-byte what it was before handoffs existed.
+        if self.handoffs:
+            payload["handoffs"] = self.handoffs
+        return payload
+
+    def _base_dict(self) -> dict[str, Any]:
         return {
             "agent_summaries": self.agent_summaries,
             "arm": self.arm,
@@ -208,6 +228,27 @@ def _gate_for(config: RunConfig, *, registry: Any, contract: Any = None):
     )
 
 
+_RESERVED_IDENTITIES = frozenset({"policy_gate", "checkpoint", "acceptance", "handoff"})
+
+
+def _check_handoff_request(handoff: HandoffDirective, agent_ids: list[str]) -> None:
+    """Refuse a handoff that cannot be carried out, before anything runs.
+
+    Checked up front for the reason `Scenario.from_dict` validates scripts
+    up front: a typo in an operator's directive should fail before a run
+    starts, not halfway through one.
+    """
+    if handoff.from_agent not in agent_ids:
+        raise HandoffError(
+            f"cannot hand off {handoff.from_agent!r}: the task's agents are {sorted(agent_ids)}"
+        )
+    if handoff.to_agent in agent_ids or handoff.to_agent in _RESERVED_IDENTITIES:
+        raise HandoffError(
+            f"{handoff.to_agent!r} is already an identity in this run; a successor "
+            "must be a new one, or its events could not be told from the original's"
+        )
+
+
 async def execute_task(
     task: TaskDefinition,
     config: RunConfig,
@@ -215,15 +256,33 @@ async def execute_task(
     workspace_root: Path,
     fixtures_root: Path,
     chain_path: Path | None = None,
+    deadline: RunDeadline | None = None,
+    handoff: HandoffDirective | None = None,
+    on_handoff: Callable[[str, dict[str, Any]], None] | None = None,
 ) -> RunResult:
     """Run one task under one arm and return the result with its evidence.
 
     Follows the §79 loop: prepare isolated workspaces, initialize agents and
     the relay, run the task, collect coordination and claims, run the
     success check, and return everything.
+
+    `deadline` bounds the run in wall-clock time. It is checked before every
+    turn and before every agent acts; when it has expired the run stops
+    cleanly and raises `RunTimedOutError` carrying the chain written so far.
+    Nothing about the deadline is written to the chain.
+
+    `handoff` is an operator's explicit instruction to relieve one agent for
+    another at a given turn (see `tasks.handoff`). It puts one `HANDOFF`
+    event on the chain, signed by a dedicated `handoff` identity and fanned
+    out to nobody, and the successor inherits the predecessor's workspace and
+    claims. `on_handoff` is told about the two halves of the swap ("relieved",
+    then "resumed") so a scheduler can mirror them in its state machine.
     """
     scenario = Scenario.from_dict(task.scenario)
     agent_ids = list(task.agent_ids)
+
+    if handoff is not None:
+        _check_handoff_request(handoff, agent_ids)
 
     workspaces = build_run_workspaces(
         base=workspace_root,
@@ -244,6 +303,8 @@ async def execute_task(
         if contract.checkpoints:
             keypairs["checkpoint"] = KeyPair.derive(config.master_seed, "checkpoint")
     keypairs["acceptance"] = KeyPair.derive(config.master_seed, "acceptance")
+    if handoff is not None:
+        keypairs["handoff"] = KeyPair.derive(config.master_seed, "handoff")
     claims = (
         ClaimRegistry(workspace_root / f"{config.run_id}_claims.db") if config.arm == "C3" else None
     )
@@ -262,8 +323,16 @@ async def execute_task(
 
     agents: dict[str, MockAgent] = {}
     boundaries: dict[str, LifecycleBoundary] = {}
-    for agent_id in agent_ids:
-        role = task.role_for(agent_id)
+
+    def build_agent(agent_id: str, *, seat: str, script: AgentScript) -> MockAgent:
+        """One agent, wired identically whether it starts the run or takes over.
+
+        `seat` is the agent id whose role and workspace this agent works in.
+        For everyone who starts the run it is their own id; for a successor
+        it is the predecessor's, so the role, the channel interests and the
+        workspace are inherited rather than reinvented.
+        """
+        role = task.role_for(seat)
         identity = AgentIdentity(
             experiment_id=config.experiment_id,
             task_id=task.task_id,
@@ -279,13 +348,13 @@ async def execute_task(
         )
         boundary = LifecycleBoundary(gate=gate)
         boundaries[agent_id] = boundary
-        agents[agent_id] = MockAgent(
+        return MockAgent(
             identity,
-            script=scenario.agents[agent_id],
+            script=script,
             executor=ToolExecutor(
                 agent_id=agent_id,
                 identity=identity.to_event_identity(),
-                toolbox=Toolbox(workspaces[agent_id]),
+                toolbox=Toolbox(workspaces[seat]),
                 boundary=boundary,
                 relay=relay,
             ),
@@ -300,6 +369,11 @@ async def execute_task(
             tick_us=config.tick_us,
         )
 
+    for agent_id in agent_ids:
+        agents[agent_id] = build_agent(agent_id, seat=agent_id, script=scenario.agents[agent_id])
+
+    baseline = snapshot_workspace(workspaces[handoff.from_agent]) if handoff is not None else {}
+
     if claims is not None:
         for agent_id in agent_ids:
             for index, path in enumerate(sorted(task.role_for(agent_id).owns)):
@@ -313,15 +387,122 @@ async def execute_task(
                 )
 
     error: str | None = None
+    handoff_records: list[dict[str, Any]] = []
+    retired_summaries: dict[str, dict[str, Any]] = {}
+    timeout: RunTimedOutError | None = None
+
+    async def hand_off(turn: int) -> None:
+        """Swap `handoff.from_agent` for `handoff.to_agent` at the top of a turn."""
+        assert handoff is not None
+        predecessor = agents[handoff.from_agent]
+        remaining = predecessor.remaining_actions
+        now_us = config.base_time_us + turn * config.tick_us
+        record = build_handoff_record(
+            run_id=config.run_id,
+            task_id=task.task_id,
+            task_hash=task.content_hash(),
+            directive=handoff,
+            records=relay.records(),
+            head_hash=relay.head_hash,
+            baseline=baseline,
+            workspace=workspaces[handoff.from_agent],
+            informed_paths=predecessor.informed_paths,
+            remaining_actions=len(remaining),
+            predecessor_turns=len(predecessor.turns),
+            predecessor_finished=bool(predecessor.turns and predecessor.turns[-1].finished),
+            predecessor_crashed=any(t.crashed for t in predecessor.turns),
+            policy_verdicts=[v.to_dict() for v in getattr(gate, "verdicts", ())],
+        )
+        ingested = relay.ingest(
+            event_id=f"{config.run_id}_handoff_0",
+            agent_id="handoff",
+            event_type=EventType.HANDOFF,
+            identity=EventIdentity(
+                experiment_id=config.experiment_id,
+                task_id=task.task_id,
+                run_id=config.run_id,
+                agent_id="handoff",
+                arm=config.arm,
+            ),
+            timestamp_us=now_us,
+            payload=handoff_payload(record),
+            # A control-plane event: on the chain, but never delivered to a
+            # peer. Delivery is the experimental manipulation.
+            deliver=False,
+        )
+        if not ingested.accepted:
+            raise RuntimeError(f"handoff could not be recorded on the chain: {ingested.reason}")
+        if on_handoff is not None:
+            on_handoff("relieved", record)
+
+        retired_summaries[handoff.from_agent] = predecessor.summary()
+        relay.replace_participant(
+            old=handoff.from_agent,
+            new=handoff.to_agent,
+            keypair=KeyPair.derive(config.master_seed, handoff.to_agent),
+        )
+        if claims is not None:
+            for index, path in enumerate(sorted(task.role_for(handoff.from_agent).owns)):
+                claims.release(
+                    claim_id=f"{config.run_id}_{handoff.from_agent}_{index}",
+                    agent_id=handoff.from_agent,
+                    now_us=now_us,
+                )
+                claims.acquire(
+                    claim_id=f"{config.run_id}_{handoff.to_agent}_{index}",
+                    path=path,
+                    agent_id=handoff.to_agent,
+                    run_id=config.run_id,
+                    now_us=now_us,
+                    duration_us=config.lease_us,
+                )
+
+        original = scenario.agents[handoff.from_agent]
+        script = handoff.successor_script or AgentScript(
+            agent_id=handoff.to_agent,
+            actions=list(remaining),
+            owned_paths=original.owned_paths,
+            dependency_paths=original.dependency_paths,
+        )
+        successor = build_agent(handoff.to_agent, seat=handoff.from_agent, script=script)
+        # Seeded from the record, so what the successor knows is what the
+        # signed package says and nothing else.
+        successor.informed_paths.update(record["informed_paths"])
+        await successor.initialize()
+
+        # Same seat, same place in the turn order: swapping in place keeps
+        # the order agents act in, and with it the order events are chained.
+        seats = {
+            (handoff.to_agent if key == handoff.from_agent else key): (
+                successor if key == handoff.from_agent else value
+            )
+            for key, value in agents.items()
+        }
+        agents.clear()
+        agents.update(seats)
+        handoff_records.append(record)
+        if on_handoff is not None:
+            on_handoff("resumed", record)
+
+    turns_started = -1
     try:
+        if deadline is not None:
+            deadline.bind_chain(relay.records, lambda: relay.head_hash)
         for agent in agents.values():
             await agent.initialize()
 
         for turn in range(config.max_turns):
+            if deadline is not None:
+                deadline.check(f"before turn {turn}")
+            turns_started = turn
+            if handoff is not None and not handoff_records and turn == handoff.at_turn:
+                await hand_off(turn)
             active = [a for a in agents.values() if not (a.turns and a.turns[-1].finished)]
             if not active:
                 break
             for agent in active:
+                if deadline is not None:
+                    deadline.check(f"before {agent.agent_id} acts in turn {turn}")
                 context = AgentContext(
                     turn=turn, now_us=config.base_time_us + turn * config.tick_us
                 )
@@ -330,9 +511,50 @@ async def execute_task(
                 await agent.act(context)
 
         summaries = {agent_id: await agent.finalize() for agent_id, agent in agents.items()}
+        summaries.update(retired_summaries)
+        if handoff is not None and not handoff_records:
+            error = (
+                f"handoff {handoff.from_agent} -> {handoff.to_agent} was requested at turn "
+                f"{handoff.at_turn} but the run ended after turn {turns_started} without "
+                "reaching it; no HANDOFF event was recorded"
+            )
+    except RunTimedOutError as exc:
+        timeout = exc
+    except asyncio.CancelledError:
+        # Only the watchdog's cancellation is a timeout. A cancellation with
+        # the deadline still open is someone else's, and is passed on.
+        if deadline is None or not deadline.expired:
+            raise
+        timeout = RunTimedOutError(
+            f"run exceeded its {deadline.limit_s:g}s wall-clock limit "
+            f"(cancelled during turn {turns_started})",
+            detected_by="cancelled",
+        )
     except Exception as exc:
         error = f"{type(exc).__name__}: {exc}"
         summaries = {agent_id: agent.summary() for agent_id, agent in agents.items()}
+        summaries.update(retired_summaries)
+
+    if timeout is not None:
+        # Stop here: no integration test, no acceptance decision. A run that
+        # was cut off has no verdict to record, and the acceptance rule is a
+        # function of an outcome this run never produced. The chain so far is
+        # returned as it stands; a prefix of a hash chain verifies like any
+        # other chain.
+        timeout.partial = PartialRun(
+            run_id=config.run_id,
+            records=relay.records(),
+            head_hash=relay.head_hash,
+            where=str(timeout).rsplit("(", 1)[-1].rstrip(")"),
+            agent_summaries={
+                **{agent_id: agent.summary() for agent_id, agent in agents.items()},
+                **retired_summaries,
+            },
+        )
+        store.close()
+        if claims is not None:
+            claims.close()
+        raise timeout
 
     integrated = _integrate_workspaces(
         task,
@@ -463,6 +685,7 @@ async def execute_task(
             denials=claims.denials(run_id=config.run_id) if claims else [],
             gate_summary=gate.to_dict() if hasattr(gate, "to_dict") else {},
             edges=edges,
+            handoffs=handoff_records,
             relay_summary=relay.summary(),
             boundary_summaries={
                 agent_id: boundary.summary() for agent_id, boundary in boundaries.items()

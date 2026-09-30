@@ -382,8 +382,38 @@ class RunIndex:
                 connection.execute("SELECT * FROM runs WHERE run_id = ?", (run_id,)).fetchone()
             )
 
+    def transition(self, run_id: str, *, to_state: str, now_us: int, note: str = "") -> RunRecord:
+        """Move a run between two non-terminal states, recording why.
+
+        For steps inside a run (RUNNING to HANDED_OFF and back). A terminal
+        destination is refused here: a verdict carries an outcome, an
+        artifact and a head hash, and `finish` is the one place that writes
+        them together. Letting this method reach COMPLETED would make a
+        verdict possible without any of that.
+        """
+        if is_terminal(to_state):
+            raise ValueError(
+                f"{to_state!r} is a terminal state; record it with finish(), which also "
+                "records the outcome and the artifact"
+            )
+        with self._write() as connection:
+            row = connection.execute("SELECT * FROM runs WHERE run_id = ?", (run_id,)).fetchone()
+            if row is None:
+                raise KeyError(f"no run {run_id!r} in the index")
+            current = RunRecord._from_row(row)
+            check_transition(current.state, to_state)
+            connection.execute("UPDATE runs SET state = ? WHERE run_id = ?", (to_state, run_id))
+            connection.execute(
+                "INSERT INTO transitions (run_id, from_state, to_state, at_us, note) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (run_id, current.state, to_state, now_us, note or to_state),
+            )
+            return RunRecord._from_row(
+                connection.execute("SELECT * FROM runs WHERE run_id = ?", (run_id,)).fetchone()
+            )
+
     def abandon_running(self, experiment_id: str, *, now_us: int, note: str = "") -> int:
-        """Mark every RUNNING run of this experiment ABANDONED.
+        """Mark every RUNNING (or mid-handoff) run of this experiment ABANDONED.
 
         Called when a collection starts, to clean up after a previous
         process that was killed. A run left RUNNING by a crash is not a
@@ -392,9 +422,12 @@ class RunIndex:
         would strand it forever, since `claim_next` skips that state.
         """
         with self._write() as connection:
+            # HANDED_OFF is swept too: a process that died between relieving
+            # one agent and installing its successor leaves the run there, and
+            # `claim_next` skips that state just as it skips RUNNING.
             rows = connection.execute(
-                "SELECT run_id FROM runs WHERE experiment_id = ? AND state = ?",
-                (experiment_id, RunState.RUNNING),
+                "SELECT run_id, state FROM runs WHERE experiment_id = ? AND state IN (?, ?)",
+                (experiment_id, RunState.RUNNING, RunState.HANDED_OFF),
             ).fetchall()
             for row in rows:
                 connection.execute(
@@ -406,7 +439,7 @@ class RunIndex:
                     "VALUES (?, ?, ?, ?, ?)",
                     (
                         row["run_id"],
-                        RunState.RUNNING,
+                        row["state"],
                         RunState.ABANDONED,
                         now_us,
                         note or "found running at startup; previous process did not finish",

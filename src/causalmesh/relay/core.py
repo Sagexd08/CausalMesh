@@ -214,8 +214,15 @@ class Relay:
         references: tuple[str, ...] = (),
         parent_id: str | None = None,
         payload: dict[str, Any] | None = None,
+        deliver: bool = True,
     ) -> IngestResult:
         """Admit one event: assign a sequence, chain it, sign it, persist, fan out.
+
+        `deliver=False` records the event and fans it out to nobody. It is for
+        events that are the harness talking to itself (a scheduler handoff),
+        which must be on the chain but must never reach an agent: delivery is
+        the experimental manipulation, and an agent reading a control-plane
+        event would be an unmeasured side channel.
 
         The relay assigns `sequence` itself. An agent-chosen sequence would
         let a fast agent claim an earlier position than it earned, which would
@@ -290,10 +297,14 @@ class Relay:
             self._sequence += 1
             self._seen_event_ids.add(event_id)
 
-            recipients = tuple(
-                agent
-                for agent in self._delivery.recipients(event, self._participants)
-                if agent != agent_id and agent in self._inboxes
+            recipients = (
+                tuple(
+                    agent
+                    for agent in self._delivery.recipients(event, self._participants)
+                    if agent != agent_id and agent in self._inboxes
+                )
+                if deliver
+                else ()
             )
             for agent in recipients:
                 self._inboxes[agent].append(event)
@@ -309,6 +320,29 @@ class Relay:
             delivered_to=recipients,
             reason="accepted",
         )
+
+    def replace_participant(self, *, old: str, new: str, keypair: KeyPair) -> None:
+        """Hand `old`'s seat to `new` for the rest of the run.
+
+        The successor inherits whatever was waiting undelivered for its
+        predecessor, so nothing addressed to the seat is lost in the swap,
+        and the predecessor stops receiving anything. `new` gets a signing
+        key, which puts its public key in the key ring an offline verifier
+        reads: events it signs verify like any other agent's.
+
+        Raises rather than overwrites: reusing an id that already has a key
+        would let one actor's events be attributed to another.
+        """
+        with self._lock:
+            if old not in self._inboxes:
+                raise IngestError(f"{old!r} is not a participant of run {self.run_id!r}")
+            if new in self._keypairs or new in self._inboxes:
+                raise IngestError(f"{new!r} already exists in run {self.run_id!r}; ids are unique")
+            self._keypairs[new] = keypair
+            self._inboxes[new] = self._inboxes.pop(old)
+            self._participants = tuple(
+                new if agent == old else agent for agent in self._participants
+            )
 
     def pending_for(self, agent_id: str) -> tuple[Event, ...]:
         """Peek at an agent's undelivered events without consuming them."""

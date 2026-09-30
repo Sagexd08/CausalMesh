@@ -105,6 +105,16 @@ class MockAgent(CodingAgent):
         self.informed_paths: set[str] = set()
         self.skipped_actions: list[tuple[int, str]] = []
 
+    @property
+    def remaining_actions(self) -> tuple[Action, ...]:
+        """The scripted actions this agent has not yet taken.
+
+        Public so a scheduler handing the seat to a successor can seed the
+        successor from where this agent stopped, without reaching into the
+        private cursor.
+        """
+        return tuple(self.script.actions[self._cursor :])
+
     async def initialize(self) -> None:
         self._initialized = True
 

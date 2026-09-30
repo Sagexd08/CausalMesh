@@ -302,3 +302,67 @@ class TestReading:
         with RunIndex(path) as second:
             assert second.counts("exp")[RunState.COMPLETED] == 1
             assert second.get(record.run_id).succeeded is True
+
+
+class TestHandoffStates:
+    def test_a_handoff_is_recorded_in_the_transition_log(self, index: RunIndex, plan) -> None:
+        index.register_plan(plan, now_us=1)
+        record = index.claim_next("exp", now_us=2)
+        index.transition(
+            record.run_id, to_state=RunState.HANDED_OFF, now_us=3, note="b relieved for b2"
+        )
+        index.transition(record.run_id, to_state=RunState.RUNNING, now_us=4, note="under b2")
+
+        log = index.transitions(record.run_id)
+        assert [t["to_state"] for t in log][-2:] == [RunState.HANDED_OFF, RunState.RUNNING]
+        assert log[-2]["note"] == "b relieved for b2"
+        # Resuming under a successor is not a second attempt at the run.
+        assert index.get(record.run_id).attempts == 1
+
+    def test_transition_refuses_an_illegal_move(self, index: RunIndex, plan) -> None:
+        index.register_plan(plan, now_us=1)
+        planned = index.runs("exp")[0]
+        with pytest.raises(InvalidTransitionError):
+            index.transition(planned.run_id, to_state=RunState.HANDED_OFF, now_us=2)
+
+    def test_transition_cannot_write_a_verdict(self, index: RunIndex, plan) -> None:
+        # A verdict carries an outcome, an artifact and a head hash, and
+        # finish() is the one place that records them together.
+        index.register_plan(plan, now_us=1)
+        record = index.claim_next("exp", now_us=2)
+        with pytest.raises(ValueError, match="terminal"):
+            index.transition(record.run_id, to_state=RunState.COMPLETED, now_us=3)
+
+    def test_a_handed_off_run_is_never_claimed_as_unstarted_work(
+        self, index: RunIndex, plan
+    ) -> None:
+        index.register_plan(plan, now_us=1)
+        record = index.claim_next("exp", now_us=2)
+        index.transition(record.run_id, to_state=RunState.HANDED_OFF, now_us=3)
+        while (other := index.claim_next("exp", now_us=4)) is not None:
+            assert other.run_id != record.run_id
+        assert index.get(record.run_id).state == RunState.HANDED_OFF
+
+    def test_a_run_stranded_mid_handoff_is_abandoned_at_startup(
+        self, index: RunIndex, plan
+    ) -> None:
+        index.register_plan(plan, now_us=1)
+        record = index.claim_next("exp", now_us=2)
+        index.transition(record.run_id, to_state=RunState.HANDED_OFF, now_us=3)
+
+        assert index.abandon_running("exp", now_us=4) == 1
+        assert index.get(record.run_id).state == RunState.ABANDONED
+        log = index.transitions(record.run_id)
+        # The log names the state it really came from.
+        assert log[-1]["from_state"] == RunState.HANDED_OFF
+
+    def test_a_timeout_records_an_unknown_outcome_not_a_failed_one(
+        self, index: RunIndex, plan
+    ) -> None:
+        index.register_plan(plan, now_us=1)
+        record = index.claim_next("exp", now_us=2)
+        done = index.finish(record.run_id, state=RunState.TIMED_OUT, now_us=3, succeeded=None)
+        assert done.state == RunState.TIMED_OUT
+        assert done.succeeded is None
+        assert index.is_complete("exp") is False  # the other runs are still planned
+        assert index.counts("exp")[RunState.TIMED_OUT] == 1

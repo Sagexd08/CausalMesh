@@ -9,6 +9,7 @@ outcome it is also recording.
 
 from __future__ import annotations
 
+from ..tasks import HandoffDirective, RunTimedOutError
 from .loop import ExperimentRunner, LoopReport, RunEnvironment
 from .states import (
     TERMINAL_STATES,
@@ -21,18 +22,22 @@ from .states import (
     is_retryable,
     is_terminal,
 )
+from .watchdog import run_with_deadline
 
 __all__ = [
     "TERMINAL_STATES",
     "TRANSITIONS",
     "ExperimentRunner",
+    "HandoffDirective",
     "InvalidTransitionError",
     "LoopReport",
     "RunEnvironment",
     "RunState",
+    "RunTimedOutError",
     "can_transition",
     "check_transition",
     "describe",
     "is_retryable",
     "is_terminal",
+    "run_with_deadline",
 ]

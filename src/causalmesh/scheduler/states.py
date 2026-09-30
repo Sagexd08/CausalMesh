@@ -5,9 +5,18 @@ declared as data:
 
     PLANNED ─→ RUNNING ─→ COMPLETED
                   │  ├───→ FAILED
-                  │  ├───→ TIMED_OUT
-                  │  └───→ ABANDONED
+                  │  ├───→ TIMED_OUT       (the whole-run watchdog, `watchdog.py`)
+                  │  ├───→ ABANDONED
+                  │  └───→ HANDED_OFF ─→ RUNNING   (same run, different agent)
                   └─→ (crash) ─→ ABANDONED ─→ RUNNING   (resume)
+
+HANDED_OFF is the one place a run's state says "the agent that held this
+seat has been relieved and its successor has not yet taken over". It is a
+step *inside* a run, not an outcome: the run goes back to RUNNING under the
+successor and earns its verdict there. It is neither terminal nor retryable
+(`claim_next` must never pick it up as if it had not started), and it cannot
+go straight to COMPLETED, because a run whose only recorded work is a
+handoff has not produced a result.
 
 Why a machine rather than a boolean. §81 requires a failed run to produce
 full evidence, which means "failed" must be a recorded destination, not the
@@ -56,8 +65,9 @@ class RunState:
     FAILED = "failed"
     TIMED_OUT = "timed_out"
     ABANDONED = "abandoned"
+    HANDED_OFF = "handed_off"
 
-    ALL = frozenset({PLANNED, RUNNING, COMPLETED, FAILED, TIMED_OUT, ABANDONED})
+    ALL = frozenset({PLANNED, RUNNING, COMPLETED, FAILED, TIMED_OUT, ABANDONED, HANDED_OFF})
 
 
 TERMINAL_STATES = frozenset({RunState.COMPLETED, RunState.FAILED, RunState.TIMED_OUT})
@@ -68,6 +78,17 @@ TRANSITIONS: dict[str, frozenset[str]] = {
     RunState.RUNNING: frozenset(
         {
             RunState.COMPLETED,
+            RunState.FAILED,
+            RunState.TIMED_OUT,
+            RunState.ABANDONED,
+            RunState.HANDED_OFF,
+        }
+    ),
+    # Everything RUNNING can become except COMPLETED: the successor has to
+    # take over (back to RUNNING) before the run can produce a verdict.
+    RunState.HANDED_OFF: frozenset(
+        {
+            RunState.RUNNING,
             RunState.FAILED,
             RunState.TIMED_OUT,
             RunState.ABANDONED,
@@ -119,7 +140,12 @@ def is_retryable(state: str) -> bool:
 
     Only PLANNED (never started) and ABANDONED (interrupted before it could
     record a verdict) qualify. FAILED and TIMED_OUT are results and are left
-    alone: re-running them until they pass would select on the outcome.
+    alone: re-running them until they pass would select on the outcome. A
+    timeout is the sharper case of the two, since "ran out of time" is
+    exactly the outcome a second, luckier attempt would erase.
+
+    HANDED_OFF is not retryable either: the run is mid-flight under an
+    operator's decision, not waiting to start.
     """
     return state in (RunState.PLANNED, RunState.ABANDONED)
 
