@@ -60,6 +60,9 @@ _access_log = logging.getLogger("causalmesh.server.access")
 
 REDACTED = "[redacted]"
 
+# Secrets as a fixed collection, or a callable returning the current ones.
+SecretSource = Iterable[str] | Callable[[], Iterable[str]]
+
 # Where the middleware leaves the id for code that runs outside it.
 SCOPE_KEY = "causalmesh.request_id"
 
@@ -101,20 +104,33 @@ class RedactingFormatter(logging.Formatter):
     the log without protecting anything (and `serve` warns about weak tokens).
     """
 
-    def __init__(self, fmt: str, secrets: Iterable[str] = ()) -> None:
+    def __init__(self, fmt: str, secrets: SecretSource = ()) -> None:
         super().__init__(fmt)
+        # A callable is asked on every record, so a secret that appears after
+        # start-up (a token added by a reload of `--tokens-file`) is scrubbed
+        # from the next line written, and one that was revoked stays scrubbed.
+        self._source = secrets
+        self._fixed = None if callable(secrets) else self._prepare(secrets)
+
+    @staticmethod
+    def _prepare(secrets: Iterable[str]) -> list[str]:
         # Longest first, so a secret that contains another is removed whole.
-        self._secrets = sorted({s for s in secrets if s and len(s) >= 4}, key=len, reverse=True)
+        return sorted({s for s in secrets if s and len(s) >= 4}, key=len, reverse=True)
 
     def format(self, record: logging.LogRecord) -> str:
         text = super().format(record)
-        for secret in self._secrets:
+        if self._fixed is not None:
+            current = self._fixed
+        else:
+            assert callable(self._source)
+            current = self._prepare(self._source())
+        for secret in current:
             if secret in text:
                 text = text.replace(secret, REDACTED)
         return text
 
 
-def configure_logging(*, level: str = "info", secrets: Iterable[str] = ()) -> Callable[[], None]:
+def configure_logging(*, level: str = "info", secrets: SecretSource = ()) -> Callable[[], None]:
     """Send `causalmesh.*` logs to stderr with request ids and redaction.
 
     Returns a function that undoes it, restoring the logger's previous

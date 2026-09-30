@@ -10,6 +10,8 @@ reached it, it had no authentication, and it still carried defects fixed here.
 
 from __future__ import annotations
 
+import signal
+import time
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -44,14 +46,37 @@ def serve_command(
             help="A token any client may use, naming any agent it likes (asserted, not proven).",
         ),
     ] = None,
+    api_token_expires: Annotated[
+        str | None,
+        typer.Option(
+            "--api-token-expires",
+            envvar="CAUSALMESH_API_TOKEN_EXPIRES",
+            help="When --api-token stops working: ISO 8601 (2026-12-31T00:00:00Z) or unix seconds.",
+        ),
+    ] = None,
     agent_token: Annotated[
         list[str] | None,
         typer.Option(
             "--agent-token",
             envvar="CAUSALMESH_AGENT_TOKENS",
             help=(
-                "AGENT=TOKEN, repeatable. A token bound to one agent: the server takes the "
-                "agent from the token and refuses a request that names another."
+                "AGENT=TOKEN[@EXPIRY], repeatable. A token bound to one agent: the server "
+                "takes the agent from the token and refuses a request that names another. "
+                "EXPIRY is ISO 8601 (2026-12-31T00:00:00Z) or unix seconds; after it the "
+                "token gets 401. Use --tokens-file for a token that itself ends in @ and a date."
+            ),
+        ),
+    ] = None,
+    tokens_file: Annotated[
+        Path | None,
+        typer.Option(
+            "--tokens-file",
+            envvar="CAUSALMESH_TOKENS_FILE",
+            help=(
+                "YAML or JSON file of credentials (id, token, agent, expires), re-read when it "
+                "changes or on SIGHUP (POSIX), so a token can be revoked, added or rotated "
+                "without a restart. A bad edit keeps the last good set. On POSIX it must not "
+                "be accessible to group or other (chmod 600). See docs/security.md."
             ),
         ),
     ] = None,
@@ -158,6 +183,12 @@ def serve_command(
     from causalmesh.sdk.errors import ConfigurationError
     from causalmesh.sdk.mesh import CausalMesh
     from causalmesh.server.app import create_app
+    from causalmesh.server.credentials import (
+        Credential,
+        agent_token_label,
+        parse_expiry,
+        split_token_expiry,
+    )
     from causalmesh.server.observability import configure_logging
     from causalmesh.server.tls import TlsConfigError, is_loopback, key_password, validate_tls
     from causalmesh.server.tools import ToolLoadError, load_tools
@@ -183,7 +214,13 @@ def serve_command(
         fail("--dev mode disables authentication and is only allowed on localhost/127.0.0.1")
         raise typer.Exit(Exit.USAGE)
 
+    # Tokens with no expiry go through `create_app`'s plain arguments exactly
+    # as before; one with an expiry is a labelled `Credential` (`agent-token:NAME`,
+    # `api-token`: stable, from configuration, never from the secret).
     bound: dict[str, str] = {}
+    expiring: list[Credential] = []
+    seen_agents: set[str] = set()
+    now = time.time()
     for pair in agent_token or []:
         agent, separator, secret = pair.partition("=")
         if not separator or not agent.strip() or not secret.strip():
@@ -192,13 +229,54 @@ def serve_command(
                 hint="For example: --agent-token coder=s3cret-value",
             )
             raise typer.Exit(Exit.USAGE)
-        if agent in bound:
+        if agent in seen_agents:
             fail(f"--agent-token names {agent!r} twice")
             raise typer.Exit(Exit.USAGE)
-        bound[agent] = secret
+        seen_agents.add(agent)
+        try:
+            secret, expires_at = split_token_expiry(secret)
+        except ValueError as exc:
+            fail(f"--agent-token for {agent!r}: {exc}")
+            raise typer.Exit(Exit.USAGE) from None
+        if expires_at is None:
+            bound[agent] = secret
+            continue
+        if expires_at <= now:
+            fail(f"--agent-token for {agent!r} is already expired")
+            raise typer.Exit(Exit.USAGE)
+        try:
+            expiring.append(Credential(agent_token_label(agent), secret, agent, expires_at))
+        except ValueError as exc:
+            fail(str(exc))
+            raise typer.Exit(Exit.USAGE) from None
 
-    if not dev and api_token is None and not bound:
-        fail("--api-token or --agent-token is required when not in --dev mode")
+    if api_token_expires is not None:
+        if api_token is None:
+            fail("--api-token-expires needs --api-token")
+            raise typer.Exit(Exit.USAGE)
+        try:
+            api_expires_at = parse_expiry(api_token_expires)
+        except ValueError as exc:
+            fail(f"--api-token-expires: {exc}")
+            raise typer.Exit(Exit.USAGE) from None
+        if api_expires_at <= now:
+            fail("--api-token is already expired (--api-token-expires is in the past)")
+            raise typer.Exit(Exit.USAGE)
+        expiring.append(Credential("api-token", api_token, None, api_expires_at))
+        api_token = None
+        expiring_api = True
+    else:
+        expiring_api = False
+
+    if tokens_file is not None and not tokens_file.is_file():
+        fail(f"--tokens-file {tokens_file} is not a file")
+        raise typer.Exit(Exit.USAGE)
+
+    authenticated = bool(api_token or expiring_api or bound or expiring or tokens_file)
+    if not dev and not authenticated:
+        fail(
+            "a token is required when not in --dev mode: --api-token, --agent-token, --tokens-file"
+        )
         raise typer.Exit(Exit.USAGE)
 
     passphrase = key_password()
@@ -250,22 +328,23 @@ def serve_command(
             mesh=mesh,
             api_tokens=tokens,
             agent_tokens=bound or None,
-            auth_disabled=tokens is None and not bound,
+            credentials=expiring or None,
+            tokens_file=tokens_file,
+            auth_disabled=not authenticated,
             upstream_base_url=upstream,
             upstream_api_key=upstream_api_key,
             max_body_bytes=max_body_bytes,
             rate_limit_per_minute=rate_limit,
         )
     except ValueError as exc:
-        fail(str(exc), hint="Check --upstream (an http:// or https:// URL) and --agent-token.")
+        fail(
+            str(exc),
+            hint="Check --upstream (an http:// or https:// URL), --agent-token and --tokens-file.",
+        )
         raise typer.Exit(Exit.USAGE) from None
 
-    weak = [
-        name
-        for name, secret in [("--api-token", api_token), *bound.items()]
-        if secret and len(secret) < 16
-    ]
-    if weak:
+    store = fastapi_app.state.credentials
+    if any(len(secret) < 16 for secret in store.secrets()):
         note(
             "a token shorter than 16 characters can be guessed; use a long random one "
             '(for example `python -c "import secrets; print(secrets.token_urlsafe(32))"`)'
@@ -277,6 +356,9 @@ def serve_command(
     )
     if loaded:
         note(f"tools loaded by --tools: {', '.join(sorted(loaded))}")
+    if tokens_file is not None:
+        reload_hint = "on change or SIGHUP" if hasattr(signal, "SIGHUP") else "on change"
+        note(f"credentials are re-read from {tokens_file} ({reload_hint}); a bad edit is ignored")
     if upstream:
         note(f"forwarding allowed calls to {upstream}")
     else:
@@ -286,10 +368,21 @@ def serve_command(
 
     # Access logging is ours (method, path, status: never headers or bodies),
     # so uvicorn's is off. Every configured secret is scrubbed from what is written.
+    # The credential store is asked on every record, so a token added by a
+    # reload is scrubbed from the next line, and a revoked one stays scrubbed.
     restore_logging = configure_logging(
         level=log_level,
-        secrets=[api_token or "", *bound.values(), upstream_api_key or "", passphrase or ""],
+        secrets=lambda: [*store.secrets(), upstream_api_key or "", passphrase or ""],
     )
+    # SIGHUP asks for a re-read on the next request. Only set when there is a
+    # file to re-read, so the default action (terminate) is otherwise untouched.
+    restore_sighup = None
+    if tokens_file is not None and hasattr(signal, "SIGHUP"):
+        try:
+            previous_handler = signal.signal(signal.SIGHUP, lambda *_: store.request_reload())
+            restore_sighup = (signal.SIGHUP, previous_handler)
+        except ValueError:  # not the main thread: the mtime check still works
+            pass
     ssl_options: dict[str, Any] = {}
     if tls_on:
         ssl_options = {
@@ -309,5 +402,7 @@ def serve_command(
             **ssl_options,
         )
     finally:
+        if restore_sighup is not None:
+            signal.signal(*restore_sighup)
         restore_logging()
     raise typer.Exit(Exit.OK)
