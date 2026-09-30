@@ -28,6 +28,7 @@ event-emission logic by delegating to the relay directly.
 
 from __future__ import annotations
 
+import threading
 from typing import Any
 
 from causalmesh.events.schema import EventIdentity, EventType, utc_now_micros
@@ -94,6 +95,7 @@ class ToolGateway:
         self._gate = gate
         self._tools: dict[str, Tool] = {}
         self._event_counter = 0
+        self._event_counter_lock = threading.Lock()
         self._resolver = ResourceResolver()
 
     # ------------------------------------------------------------------ #
@@ -354,8 +356,29 @@ class ToolGateway:
     # ------------------------------------------------------------------ #
 
     def _next_event_id(self, agent_id: str) -> str:
-        self._event_counter += 1
-        return f"sdk_{agent_id}_{self._event_counter:06d}"
+        # Locked: two threads must never draw the same id, or the relay would
+        # refuse the second as a duplicate and that call would go unrecorded.
+        with self._event_counter_lock:
+            self._event_counter += 1
+            return f"sdk_{agent_id}_{self._event_counter:06d}"
+
+    def reserve_event_id(self, agent_id: str) -> str:
+        """Draw the next event id from this gateway's counter.
+
+        For records the SDK writes itself (a checkpoint decision, a lease), so
+        every id in a session comes from one counter and none can collide.
+        """
+        return self._next_event_id(agent_id)
+
+    def resume_event_counter(self, last_used: int) -> None:
+        """Continue numbering after `last_used`, for a chain resumed from disk.
+
+        Without this a restarted session would issue ``sdk_<agent>_000001``
+        again and the verifier would report a duplicate event id.  The counter
+        only ever moves forward.
+        """
+        with self._event_counter_lock:
+            self._event_counter = max(self._event_counter, last_used)
 
     def _identity_for(self, agent_id: str) -> EventIdentity:
         if self._identity_factory is not None:

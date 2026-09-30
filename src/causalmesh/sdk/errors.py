@@ -11,6 +11,10 @@ from __future__ import annotations
 __all__ = [
     "CausalMeshError",
     "ConfigurationError",
+    "EvidenceCorruptError",
+    "EvidenceError",
+    "EvidenceLockedError",
+    "EvidenceUnavailableError",
     "InvalidResourceError",
     "MissingResourceError",
     "PolicyError",
@@ -88,4 +92,47 @@ class PolicyError(CausalMeshError):
 
     Raised when the contract is structurally valid YAML but semantically
     unusable — for example, an unknown arm value.
+    """
+
+
+class EvidenceError(CausalMeshError):
+    """The evidence file cannot be opened, read, resumed or written.
+
+    Base class for the four evidence failures below.  Every one of them means
+    the same thing to the caller: the session's record is not in a state the
+    SDK will build on, so it refuses instead of carrying on with a record it
+    cannot vouch for.
+    """
+
+
+class EvidenceCorruptError(EvidenceError):
+    """The evidence file is damaged, truncated, or does not verify.
+
+    Raised on open (or ``load_evidence``) for a torn final line, a line in
+    the middle of the file that is not a record, a chain that no longer
+    verifies against this session's keys, or a run id that differs from the
+    session's.  ``torn`` is True when the only damage is an incomplete final
+    line, the one case ``recover_evidence=True`` may repair.
+    """
+
+    def __init__(self, message: str, *, torn: bool = False) -> None:
+        super().__init__(message)
+        self.torn = torn
+
+
+class EvidenceLockedError(EvidenceError):
+    """Another live session already holds this evidence file.
+
+    Two writers appending to one chain would fork it.  The lock is held for
+    the life of the session and released by ``close()`` or by process exit.
+    """
+
+
+class EvidenceUnavailableError(EvidenceError):
+    """A previous evidence write failed, so this session stopped executing.
+
+    The handler is never run.  A call whose record cannot be written is an
+    action with no evidence behind it, so after the first failed write every
+    later call is refused until the session is restarted.  Restarting
+    resumes the chain from the last record that reached the disk.
     """
