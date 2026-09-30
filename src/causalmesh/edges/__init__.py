@@ -9,20 +9,33 @@ over them.
 
 It is additive. Nothing here changes what is signed or how the chain is
 verified: an edge is never hashed into `crypto.chain`'s digest and carries no
-signature. `tasks/runner.py` populates one relationship today — a denied
-write's `FAILURE` event back to the `POLICY_VERDICT` that refused it — and
-callers record further edges explicitly, the same way `Event.references` is
+signature. `tasks/runner.py` populates two relationships today — a denied
+write's `FAILURE` event back to the `POLICY_VERDICT` that refused it, and the
+acceptance decision back to the `INTEGRATION_TEST_RESULT` it was decided
+from — and callers record further edges explicitly, the same way `Event.references` is
 plumbed through but left for a caller to use.
 """
 
 from __future__ import annotations
 
 from .query import EdgeIndex
-from .report import EdgeReportError, RunEdges, collect_edges, edges_for_run, run_edges_to_dict
+from .report import (
+    UNKNOWN,
+    UNRESOLVED,
+    EdgeReportError,
+    RunEdges,
+    collect_edges,
+    count_by_relationship,
+    edges_for_run,
+    run_edges_to_dict,
+    total_edges,
+)
 from .store import EdgeStore, EdgeStoreError, load_edges
 from .types import CausalEdge, EdgeValidationError, RelationshipType
 
 __all__ = [
+    "UNKNOWN",
+    "UNRESOLVED",
     "CausalEdge",
     "EdgeIndex",
     "EdgeReportError",
@@ -32,7 +45,9 @@ __all__ = [
     "RelationshipType",
     "RunEdges",
     "collect_edges",
+    "count_by_relationship",
     "edges_for_run",
     "load_edges",
     "run_edges_to_dict",
+    "total_edges",
 ]
