@@ -77,6 +77,13 @@ whole model traffic, rather than calling a per-tool-call hook.
 causalmesh serve --upstream https://api.openai.com
 ```
 
+By default it only gates and records `/v1/chat/completions`. `--tools MODULE:FUNC`
+(or `FILE.py:FUNC`) also loads your own tool registrations, so `/v1/tools` and
+`/v1/tools/NAME/execute` are live; that imports and runs your code with the server's
+privileges, so name only code you would deploy. `--ssl-certfile` and `--ssl-keyfile`
+serve HTTPS (a non-loopback bind without them warns, and `--require-tls` refuses).
+See `docs/security.md` for what is and is not protected.
+
 ### With Docker Compose
 
 In your own project, next to your `causalmesh.yaml`:

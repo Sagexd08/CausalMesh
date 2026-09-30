@@ -108,6 +108,11 @@ Fitted from the implementation, not assumed. One new event per turn, `w = 8`:
 
 C1 follows `mu * T(T+1)/2` with **mu = 9.000 and zero error at every T**.
 
+`MetadataChannel` re-counts its carried-over backlog into `events_available` on
+every turn, so summing that field across turns exceeds what the relay delivered
+(the scalability profile found a 1440-event run reporting 3826). It is not a
+delivery count; the profile counts what agents drained. See `docs/backlog.md`.
+
 ### A correction worth recording
 
 §46 states transcript cost as `C_tr(T) = mu * T(T-1)/2`. That form counts
