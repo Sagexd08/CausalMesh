@@ -1,30 +1,48 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+# setuptools>=77 is the first release that accepts an SPDX `license` string and
+# `license-files` (PEP 639), so it is the floor. `wheel` is not listed: setuptools
+# has built wheels itself since 70.1.
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "causalmesh"
-version = "0.1.0"
+# The one place the version is written is `src/causalmesh/__init__.py`
+# (`__version__`); setuptools reads it from there without importing the package.
+dynamic = ["version"]
 description = "An experimental platform separating information from enforcement in distributed LLM coding agents"
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "Sagexd08" }]
 keywords = [
     "multi-agent",
     "coordination",
     "llm-agents",
+    "policy",
+    "audit",
+    "evidence",
     "reproducible-research",
     "experimental-platform",
 ]
+# Pre-Alpha on purpose: nothing here has been run against a hosted model or in
+# production (AGENTS.md). Do not raise this without evidence that changed.
 classifiers = [
     "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: MIT License",
+    "Environment :: Console",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: System :: Distributed Computing",
+    "Typing :: Typed",
 ]
 
 # Runtime core is deliberately light (spec §7). The coordination substrate —
@@ -113,13 +131,25 @@ langchain = [
 [project.urls]
 Homepage = "https://github.com/Sagexd08/CausalMesh"
 Repository = "https://github.com/Sagexd08/CausalMesh"
+Source = "https://github.com/Sagexd08/CausalMesh"
 Issues = "https://github.com/Sagexd08/CausalMesh/issues"
+Changelog = "https://github.com/Sagexd08/CausalMesh/blob/main/CHANGELOG.md"
+Documentation = "https://github.com/Sagexd08/CausalMesh/tree/main/docs"
 
 [project.scripts]
 causalmesh = "causalmesh.cli.main:app"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.dynamic]
+version = { attr = "causalmesh.__version__" }
+
+[tool.setuptools.package-data]
+# PEP 561 marker. The package reads no other non-Python file at run time (the
+# init and quickstart templates are built in code), so nothing else is listed;
+# `tests/unit/test_packaging.py` fails if that stops being true.
+causalmesh = ["py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
