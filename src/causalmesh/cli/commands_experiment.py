@@ -132,6 +132,33 @@ def plan_command(
     raise typer.Exit(Exit.OK)
 
 
+def _attach_checkpoint_prompt(run_config: dict[str, Any], *, has_checkpoints: bool) -> None:
+    """Install the terminal handler, only when a person can actually answer.
+
+    Without an interactive stdin the flag does nothing and the default
+    `AutoDenyHandler` stays: a prompt nobody is there to read must not be
+    answered by whatever happens to be piped in. It is also said aloud, so an
+    operator is not left believing a person approved something.
+    """
+    import sys
+
+    from causalmesh.policy.terminal_handler import TerminalCheckpointHandler
+
+    if not has_checkpoints:
+        note("--checkpoint-prompt: the contract declares no policy.checkpoints; nothing to ask")
+        return
+    if not sys.stdin.isatty():
+        note("--checkpoint-prompt ignored: stdin is not interactive; checkpoints are refused")
+        return
+    run_config["checkpoint_handler"] = TerminalCheckpointHandler(
+        input_stream=sys.stdin, require_tty=True
+    )
+    note(
+        "--checkpoint-prompt: matched checkpoints will be put to you here "
+        "(asked on every arm, enforced only on C3; the run is not reproducible)"
+    )
+
+
 @app.command("run")
 def run_command(
     profile_name: Annotated[str, typer.Option("--profile")] = "smoke",
@@ -152,6 +179,17 @@ def run_command(
             ),
         ),
     ] = True,
+    checkpoint_prompt: Annotated[
+        bool,
+        typer.Option(
+            "--checkpoint-prompt",
+            help=(
+                "Ask a person at this terminal to decide each matched policy.checkpoints "
+                "rule. Needs a contract and an interactive stdin; otherwise checkpoints "
+                "keep being refused automatically. The run is then not reproducible."
+            ),
+        ),
+    ] = False,
     root_option: Annotated[Path | None, typer.Option("--root")] = None,
     as_json: Annotated[bool, typer.Option("--json")] = False,
 ) -> None:
@@ -185,10 +223,16 @@ def run_command(
         if contract is not None:
             run_config["contract_path"] = str(contract.source)
             note(f"causalmesh.yaml found; ContractGate installed (arm={contract.arm})")
+            if checkpoint_prompt:
+                _attach_checkpoint_prompt(run_config, has_checkpoints=bool(contract.checkpoints))
         else:
             note("no causalmesh.yaml found; arms install their own gate")
+            if checkpoint_prompt:
+                note("--checkpoint-prompt ignored: no contract, so there are no checkpoints")
     else:
         note("--no-contract: skipping causalmesh.yaml discovery")
+        if checkpoint_prompt:
+            note("--checkpoint-prompt ignored: there is no contract, so there are no checkpoints")
 
     note(f"{name}: {len(plan)} runs planned ({plan.profile} profile)")
     if captured.git.dirty:
