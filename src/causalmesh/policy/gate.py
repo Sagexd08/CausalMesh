@@ -22,12 +22,22 @@ denial counts depend on how often the gate was consulted.
 running total held in memory.** An in-process counter would be wrong the
 moment two agent processes shared a budget, which is the case the whole
 project exists to handle.
+
+**A plain `check` is a question; a check with `holds` is a reservation.**
+Read-then-record lets two callers both pass before either records. A caller
+that is about to act passes a list as `holds`, and the budget rule then takes
+a hold in the ledger in the same transaction that compares it to the limit
+(`Ledger.reserve`). The hold is appended to the list; the caller commits it
+once the action happened, or releases it. A refusal anywhere in the same
+check releases what that check took, so a refused call holds nothing.
 """
 
 from __future__ import annotations
 
+from contextlib import suppress
 from dataclasses import dataclass, field
 from decimal import Decimal
+from functools import partial
 from typing import TYPE_CHECKING, Any
 
 from causalmesh.policy.checkpoints import AutoDenyHandler, CheckpointHandler, evaluate_checkpoints
@@ -36,6 +46,7 @@ from causalmesh.policy.resource import Resource, ResourceKind
 if TYPE_CHECKING:
     from causalmesh.claims.registry import ClaimRegistry
     from causalmesh.policy.contract import Contract
+    from causalmesh.policy.ledger import Reservation
 
 __all__ = ["Gate", "Verdict"]
 
@@ -101,13 +112,33 @@ class Gate:
         self.require_ledger = require_ledger
         self.checkpoint_handler = checkpoint_handler or AutoDenyHandler()
 
-    def check(self, *, agent_id: str, resource: Resource, now_us: int) -> Verdict:
-        """Decide whether this agent may act on this resource. Read-only.
+    def check(
+        self,
+        *,
+        agent_id: str,
+        resource: Resource,
+        now_us: int,
+        holds: list[Reservation] | None = None,
+    ) -> Verdict:
+        """Decide whether this agent may act on this resource.
 
-        Records nothing. A caller that actually performed the action, or was
-        actually stopped, reports that separately — see the module docstring.
+        Read-only unless `holds` is given. Records nothing: a caller that
+        actually performed the action, or was actually stopped, reports that
+        separately — see the module docstring.
+
+        With `holds`, an allowed total (`spend` or `budget` with a declared
+        limit) is reserved in the ledger atomically with the comparison, and
+        the reservation is appended to `holds` for the caller to commit or
+        release. A check that ends refused releases its own reservation before
+        returning, so the caller only ever holds what an allowed call needs.
         """
-        verdict = self._evaluate(agent_id=agent_id, resource=resource, now_us=now_us)
+        taken: list[Reservation] = []
+        verdict = self._evaluate(
+            agent_id=agent_id,
+            resource=resource,
+            now_us=now_us,
+            holds=taken if holds is not None else None,
+        )
 
         if not verdict.refused:
             checkpoint_verdict = self._check_checkpoints(
@@ -115,6 +146,11 @@ class Gate:
             )
             if checkpoint_verdict is not None:
                 verdict = checkpoint_verdict
+
+        if verdict.refused and self.enforcing:
+            self.release(taken)
+        elif holds is not None:
+            holds.extend(taken)
 
         if verdict.refused and not self.enforcing:
             return Verdict(
@@ -153,7 +189,14 @@ class Gate:
             detail={"checkpoint": decision.checkpoint.to_dict()},
         )
 
-    def _evaluate(self, *, agent_id: str, resource: Resource, now_us: int) -> Verdict:
+    def _evaluate(
+        self,
+        *,
+        agent_id: str,
+        resource: Resource,
+        now_us: int,
+        holds: list[Reservation] | None = None,
+    ) -> Verdict:
         """The rules, in the order they are allowed to refuse.
 
         Ordered cheapest and most specific first: a declaration the operator
@@ -165,7 +208,7 @@ class Gate:
             self._rule_ownership,
             self._rule_allowlist,
             self._rule_ceiling,
-            self._rule_budget,
+            partial(self._rule_budget, holds=holds),
             self._rule_claim,
         ):
             verdict = rule(agent_id=agent_id, resource=resource, now_us=now_us)
@@ -247,12 +290,24 @@ class Gate:
             detail={"ceiling": f"{ceiling:f}", "requested": f"{resource.amount:f}"},
         )
 
-    def _rule_budget(self, *, agent_id: str, resource: Resource, now_us: int) -> Verdict | None:
+    def _rule_budget(
+        self,
+        *,
+        agent_id: str,
+        resource: Resource,
+        now_us: int,
+        holds: list[Reservation] | None = None,
+    ) -> Verdict | None:
         """The total an agent may consume over the run.
 
         Checked against what the ledger has already recorded rather than an
         in-memory tally, because agents run as separate processes and a
         per-process counter would let each one spend the whole budget.
+
+        Recorded consumption *and* live holds count, so a read-only check does
+        not admit a call that an in-flight one has already claimed the room
+        for. With `holds`, the comparison and the hold are one ledger
+        transaction (see the module docstring).
         """
         if resource.kind not in (ResourceKind.SPEND, ResourceKind.BUDGET):
             return None
@@ -277,22 +332,42 @@ class Gate:
                 rule="budget",
                 detail={"limit": f"{limit:f}", "ledger": "absent"},
             )
-        spent = self.spent(agent_id=agent_id, resource=resource)
-        if spent + resource.amount <= limit:
+        ledger = getattr(self, "_ledger", None)
+        if holds is not None and ledger is not None:
+            outcome = ledger.reserve(
+                agent_id=agent_id,
+                resource=resource,
+                limit=limit,
+                now_us=now_us,
+                enforce=self.enforcing,
+            )
+            spent, held = outcome.spent, outcome.held
+            if outcome.reservation is not None:
+                holds.append(outcome.reservation)
+        else:
+            spent = self.spent(agent_id=agent_id, resource=resource)
+            held = self.held(agent_id=agent_id, resource=resource)
+        # Decided on the numbers the reservation saw. Not `granted`: an
+        # unenforced gate takes the hold regardless and must still report
+        # what it would have refused.
+        if spent + held + resource.amount <= limit:
             return None
+        detail = {
+            "limit": f"{limit:f}",
+            "requested": f"{resource.amount:f}",
+            "spent": f"{spent:f}",
+        }
+        if held:
+            detail["held"] = f"{held:f}"
         return Verdict(
             allowed=False,
             resource=resource,
             reason=(
                 f"{resource.describe()} would take {agent_id!r} to "
-                f"{spent + resource.amount:f} against a limit of {limit:f}"
+                f"{spent + held + resource.amount:f} against a limit of {limit:f}"
             ),
             rule="budget",
-            detail={
-                "limit": f"{limit:f}",
-                "requested": f"{resource.amount:f}",
-                "spent": f"{spent:f}",
-            },
+            detail=detail,
         )
 
     def _rule_claim(self, *, agent_id: str, resource: Resource, now_us: int) -> Verdict | None:
@@ -334,6 +409,29 @@ class Gate:
             return Decimal(0)
         total: Decimal = ledger.total(agent_id=agent_id, resource=resource)
         return total
+
+    def held(self, *, agent_id: str, resource: Resource) -> Decimal:
+        """What live reservations currently hold against this resource's allowance."""
+        ledger = getattr(self, "_ledger", None)
+        if ledger is None:
+            return Decimal(0)
+        held: Decimal = ledger.held(agent_id=agent_id, resource=resource)
+        return held
+
+    def release(self, holds: list[Reservation]) -> None:
+        """Give back reservations this gate handed out. Never raises.
+
+        A hold that cannot be released stays counted, which over-counts and so
+        fails closed; raising here would mask the outcome the caller is about
+        to report.
+        """
+        ledger = getattr(self, "_ledger", None)
+        if ledger is None:
+            return
+        for hold in holds:
+            with suppress(Exception):
+                ledger.release(hold)
+        holds.clear()
 
     def attach_ledger(self, ledger: Any) -> None:
         """Give the gate a record of what has already been consumed."""
