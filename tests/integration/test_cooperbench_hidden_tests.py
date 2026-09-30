@@ -14,7 +14,7 @@ discriminate, using the two properties CooperBench states for its own data
 The dataset here is synthetic and built on the fly from real `git diff`
 output; it is not CooperBench data. The same two checks were run by hand
 against the real click, jinja and dirty-equals tasks, see
-`docs/fragments/cooperbench-real.md`.
+`docs/backlog.md`, "CooperBench import".
 """
 
 from __future__ import annotations

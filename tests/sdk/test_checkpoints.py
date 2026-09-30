@@ -7,7 +7,7 @@ no way in. ``CausalMesh(checkpoint_handler=...)`` forwards one to the gate.
 What the chain records is pinned as it is, not as it might be: a refused
 checkpoint is a FAILURE event whose payload names the rule, and an approved
 one leaves no record of its own (the call's WRITE event is all there is).
-``docs/fragments/sdk-claims-checkpoints.md`` lists that as a gap.
+``docs/backlog.md`` ("SDK claims and a human checkpoint handler") lists that as a gap.
 """
 
 from __future__ import annotations

@@ -383,9 +383,11 @@ class CausalMesh:
 
         The lease is taken under this session's ``run_id``, which is the
         namespace the gate consults, so what is granted here is what the gate
-        enforces.  ``now_us`` defaults to the wall clock; a caller that
-        passes its own ``now_us`` to ``execute()`` must pass the same clock
-        here, or expiry is judged against two different clocks.
+        enforces.  ``now_us`` defaults to the session's logical time
+        (``now_us``), the clock the gate reads, so a lease lasts ``duration_us``
+        of it and then expires.  A caller that passes its own ``now_us`` to
+        ``execute()`` must pass the same clock here, or expiry is judged
+        against two different clocks.
 
         Raises:
             ConfigurationError: The session was built without ``claims=``.
@@ -410,7 +412,7 @@ class CausalMesh:
             path=resource.identity,
             agent_id=aid,
             run_id=self._run_id,
-            now_us=now_us if now_us is not None else utc_now_micros(),
+            now_us=now_us if now_us is not None else self.now_us,
             duration_us=duration_us,
         )
 
@@ -427,7 +429,7 @@ class CausalMesh:
         return registry.release(
             claim_id=claim_id,
             agent_id=aid,
-            now_us=now_us if now_us is not None else utc_now_micros(),
+            now_us=now_us if now_us is not None else self.now_us,
         )
 
     def denials(self) -> list[dict[str, Any]]:

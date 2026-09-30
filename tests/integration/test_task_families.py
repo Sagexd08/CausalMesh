@@ -17,7 +17,7 @@ the information; every run uses a deterministic mock agent.
 The harness runs `python -m pytest` as a subprocess, so these tests need a
 `python` on PATH that has pytest installed. Where it does not, every arm
 fails identically, the gate reports NOT SENSITIVE, and the reason is the
-environment rather than the task. See docs/fragments/task-families.md.
+environment rather than the task. See docs/backlog.md, "Remaining task families".
 """
 
 from __future__ import annotations
