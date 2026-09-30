@@ -1,0 +1,24 @@
+# causalmesh.yaml - the contract for the local CLI demo.
+#
+# Start from `causalmesh init`, then declare who owns what. A directory owns
+# everything under it, and the gate refuses a write to a path another agent
+# owns. Check any rule with:
+#     causalmesh policy check --agent coding-agent --kind path --name src/app.py
+version: 1
+
+roles:
+  - agent_id: coding-agent
+    archetype: writer
+    owns: [src/, tests/]
+
+  - agent_id: dba-agent
+    archetype: writer
+    owns: [production/]
+
+policy:
+  # Only C3 refuses. The other arms let the call run and record what C3
+  # would have refused.
+  arm: C3
+
+evidence:
+  sign: true

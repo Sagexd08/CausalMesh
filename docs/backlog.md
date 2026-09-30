@@ -1020,3 +1020,60 @@ runs `manifest write` and commits publishes their own. Hashing or omitting both 
 default, with an opt-in to record them, is not built: where a run happened is what
 the field is for.
 
+
+## Developer demo (2026-09-30)
+
+`examples/cli_demo/` is the one canonical local journey: contract, gateway, an
+allowed call, a denied call, and evidence that is read back and verified. It needs
+no key, model or network beyond localhost, and `python examples/cli_demo/run_demo.py`
+runs it unattended; `tests/integration/test_cli_demo.py` runs it in the suite. It
+uses only public API. Building it found the items below.
+
+### `causalmesh policy validate` crashed on the SDK sections (fixed)
+
+**Status:** fixed 2026-09-30. Run with no path, `validate` located the file with
+`Contract.find`, which parses it with the strict core schema. That schema rejects the
+SDK-only `agent:` and `tools:` sections, so the repository's own
+`examples/causalmesh.yaml` crashed the command with a traceback, and so did any
+invalid contract. It now finds the file without parsing it and lets `load_sdk_config`
+report. Pinned by `tests/integration/test_cli_policy_validate.py`; reverting the fix
+makes four of its six tests fail. The command had no tests before.
+
+### The CLI reads two contract schemas
+
+**Status:** open, by choice. `policy show`, `policy check` and `serve` load the core
+schema and refuse a contract with `agent:` or `tools:` (a clean error, exit 2);
+`policy validate` and `CausalMesh.from_config` accept both. The same file is
+therefore valid to one command and rejected by another. It is not changed here
+because the strict core schema is what catches a misspelled key, and widening it is a
+contract-schema decision. **What it would take:** either accept and ignore the two
+keys in the core schema, or load through `load_sdk_config` in those commands. The demo
+contract leaves the two sections out.
+
+### `causalmesh verify` trusts the keys inside the artifact
+
+**Status:** open, found and tested 2026-09-30. `verify` builds its key ring from the
+`actor_public_key` in the records it is checking (`cli/commands_verify.py`,
+`_key_ring_for`). That proves the chain is internally consistent and each signature
+matches the embedded key. It does not prove the key belongs to the named actor, which is
+what `verify_chain`'s own docstring and `docs/security.md` say a verifier must not rely
+on. Test: a chain produced by a second `CausalMesh` with an attacker's seed verifies as
+valid against the ring `verify` builds, and is rejected against the operator's ring.
+**What it would take:** `verify` reading an operator-supplied `PublicKeyRing`, or
+saying plainly in its output that attribution was not checked. Not exploited or changed
+here.
+
+### An SDK session cannot be verified from the CLI
+
+**Status:** by construction. `CausalMesh.audit_events()` returns the records; nothing
+exports them (persistence is not built) and `causalmesh verify --run` reads experiment
+artifacts (`run.json`), not SDK sessions. Verifying an SDK session takes the public
+`verify_chain` and a key ring the operator builds, as `examples/cli_demo/verify_evidence.py`
+does with `KeyPair.derive(seed, agent)` over `CausalMesh.agents`. **What it would take:**
+an export on `CausalMesh` plus a CLI reader for it, which is the persistence item above.
+
+### The README's `policy check --agent buyer` example answered ALLOW
+
+**Status:** fixed 2026-09-30 in the README. The starter contract comments out the
+`buyer` role, and an agent the contract does not name is unrestricted, so the example
+only refuses once that role is uncommented. The README now says so.
