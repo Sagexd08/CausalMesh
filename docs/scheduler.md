@@ -121,9 +121,23 @@ of runs and defeat resume completely
 PLANNED ─→ RUNNING ─→ COMPLETED
               │  ├───→ FAILED
               │  ├───→ TIMED_OUT
+              │  ├───→ HANDED_OFF ─→ RUNNING      (continues under another agent)
               │  └───→ ABANDONED
               └─→ (crash) ─→ ABANDONED ─→ RUNNING   (resume)
 ```
+
+**TIMED_OUT is assigned, opt-in and cooperative.** With
+`ExperimentRunner(run_timeout_s=...)` (CLI: `causalmesh experiment run
+--run-timeout SECONDS`) a watchdog cancels a run that outlives its budget; the run
+seals the chain it has, is recorded `TIMED_OUT` with `succeeded=None` (outcome
+unknown, not failed), and is never retried. The budget and elapsed time live in the
+artifact's unsigned envelope, and the artifact is marked `reproducible: false`.
+Cancellation lands only where an agent awaits, so a run blocked in a synchronous call
+is not interrupted. See `docs/backlog.md` ("Timeout as a distinct run state").
+
+**HANDED_OFF is a prerequisite, not a capability.** The state and the `HandoffPackage`
+record exist, but nothing in the loop assigns the state: a run still has exactly one
+agent. See `docs/backlog.md` ("Agent handoff package on recovery").
 
 **COMPLETED does not mean the task succeeded.** It means the run reached
 its end and produced a verdict. A run whose agents failed the task is

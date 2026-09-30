@@ -1,10 +1,11 @@
 """Framework-neutral integration interface for CausalMesh.
 
 ``GenericAdapter`` (no framework dependency), ``OpenAIAdapter`` (function
-calling, no vendor SDK) and ``LangChainAdapter`` (requires
-``langchain-core``, isolated behind an import guard) are implemented.
-Anthropic ``tool_use``, LangGraph and CrewAI adapters are not; see
-``docs/backlog.md``.
+calling) and ``AnthropicAdapter`` (Messages ``tool_use`` / ``tool_result``
+blocks), both without a vendor SDK, plus ``LangChainAdapter``,
+``LangGraphAdapter`` and ``CrewAIAdapter`` (each needs its framework, isolated
+behind an import guard) are implemented. None has been driven by a real hosted
+model; ``docs/adapters.md`` says what each is tested against.
 
 The key abstraction is ``AgentAdapter``: a protocol that any framework can
 implement to route its tool calls through a ``CausalMesh`` session. Every
@@ -26,17 +27,24 @@ Example::
 
 from __future__ import annotations
 
-from .base import BaseFrameworkAdapter
+from .anthropic import AnthropicAdapter
+from .base import BaseFrameworkAdapter, Observation
+from .crewai import CrewAIAdapter
 from .generic import AgentAdapter, GenericAdapter
 from .langchain import LangChainAdapter
+from .langgraph import LangGraphAdapter
 from .openai import OpenAIAdapter
 from .schema import tool_to_json_schema
 
 __all__ = [
     "AgentAdapter",
+    "AnthropicAdapter",
     "BaseFrameworkAdapter",
+    "CrewAIAdapter",
     "GenericAdapter",
     "LangChainAdapter",
+    "LangGraphAdapter",
+    "Observation",
     "OpenAIAdapter",
     "tool_to_json_schema",
 ]

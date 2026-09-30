@@ -15,6 +15,7 @@ noticed.
 
 from __future__ import annotations
 
+import asyncio
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -73,9 +74,14 @@ class RunConfig:
     git_commit: str = "unknown"
     contract_path: str | None = None
     checkpoint_handler: Any = None
+    delivery_mode: str | None = None
+    """Fan-out policy for the informed arms: None (the default) is whatever
+    the arm prescribes, broadcast; "path_scoped" installs `PathScopedDelivery`
+    with interests taken from the task's declared roles (spec section 86).
+    C0 is isolated whatever this says."""
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        record: dict[str, Any] = {
             "arm": self.arm,
             "base_time_us": self.base_time_us,
             "experiment_id": self.experiment_id,
@@ -88,6 +94,11 @@ class RunConfig:
             "tick_us": self.tick_us,
             "window": self.window,
         }
+        # Recorded only when set, so a run that never chose a delivery mode
+        # serialises exactly as it did before the option existed.
+        if self.delivery_mode is not None:
+            record["delivery_mode"] = self.delivery_mode
+        return record
 
 
 @dataclass
@@ -116,6 +127,12 @@ class RunResult:
     gate_summary: dict[str, Any] = field(default_factory=dict)
     edges: list[dict[str, Any]] = field(default_factory=list)
     error: str | None = None
+    # True only when the run was cancelled mid-flight (the scheduler's
+    # whole-run watchdog) and this result is what had been done by then. A
+    # result with `interrupted=True` is partial evidence: `outcome` describes
+    # the half-finished workspace and says nothing about whether the agents
+    # would have succeeded.
+    interrupted: bool = False
 
     @property
     def succeeded(self) -> bool:
@@ -141,6 +158,7 @@ class RunResult:
             "events": len(self.records),
             "gate": self.gate_summary,
             "head_hash": self.head_hash,
+            "interrupted": self.interrupted,
             "outcome": self.outcome.to_dict(),
             "relay_summary": self.relay_summary,
             "run_id": self.run_id,
@@ -215,12 +233,24 @@ async def execute_task(
     workspace_root: Path,
     fixtures_root: Path,
     chain_path: Path | None = None,
+    preserve_evidence_on_cancel: bool = False,
 ) -> RunResult:
     """Run one task under one arm and return the result with its evidence.
 
     Follows the §79 loop: prepare isolated workspaces, initialize agents and
     the relay, run the task, collect coordination and claims, run the
     success check, and return everything.
+
+    `preserve_evidence_on_cancel` is how the scheduler's whole-run watchdog
+    interrupts a run without losing it. Off (the default), a cancellation
+    propagates as it always did. On, a cancellation that lands while agents
+    are running is caught at the agent loop, the chain so far is sealed the
+    normal way (verdicts, then an acceptance decision, all at the fixed
+    post-run time, so no wall-clock value enters the signed chain) and a
+    `RunResult` with `interrupted=True` is returned. The cancellation is
+    consumed on purpose: the caller asked for partial evidence, not for an
+    exception that would discard it. Cancellation is cooperative, so it can
+    only land where an agent awaits.
     """
     scenario = Scenario.from_dict(task.scenario)
     agent_ids = list(task.agent_ids)
@@ -243,6 +273,7 @@ async def execute_task(
         keypairs["policy_gate"] = KeyPair.derive(config.master_seed, "policy_gate")
         if contract.checkpoints:
             keypairs["checkpoint"] = KeyPair.derive(config.master_seed, "checkpoint")
+    keypairs["integration_test"] = KeyPair.derive(config.master_seed, "integration_test")
     keypairs["acceptance"] = KeyPair.derive(config.master_seed, "acceptance")
     claims = (
         ClaimRegistry(workspace_root / f"{config.run_id}_claims.db") if config.arm == "C3" else None
@@ -253,7 +284,13 @@ async def execute_task(
         run_id=config.run_id,
         keypairs=keypairs,
         store=store,
-        delivery=policy_for_arm(config.arm),
+        delivery=policy_for_arm(
+            config.arm,
+            mode=config.delivery_mode,
+            interests={
+                role.agent_id: frozenset(role.owns | role.depends_on) for role in task.roles
+            },
+        ),
         claims=claims,
         participants=agent_ids,
     )
@@ -313,6 +350,7 @@ async def execute_task(
                 )
 
     error: str | None = None
+    interrupted = False
     try:
         for agent in agents.values():
             await agent.initialize()
@@ -330,6 +368,15 @@ async def execute_task(
                 await agent.act(context)
 
         summaries = {agent_id: await agent.finalize() for agent_id, agent in agents.items()}
+    except asyncio.CancelledError:
+        if not preserve_evidence_on_cancel:
+            raise
+        interrupted = True
+        error = "interrupted: run cancelled before the agents finished"
+        current = asyncio.current_task()
+        if current is not None:
+            current.uncancel()
+        summaries = {agent_id: agent.summary() for agent_id, agent in agents.items()}
     except Exception as exc:
         error = f"{type(exc).__name__}: {exc}"
         summaries = {agent_id: agent.summary() for agent_id, agent in agents.items()}
@@ -423,7 +470,37 @@ async def execute_task(
                     ).to_dict()
                 )
 
-        decision = decide_acceptance(outcome)
+        # The harness's own integration-test run becomes a chain event so the
+        # acceptance decision has a real event to point at. The payload is
+        # reproducible by construction: the task's fixed command and the exit
+        # code (None when the test never ran, recorded as `ran: false` rather
+        # than as a confident 0). Output, duration and the workspace path are
+        # deliberately absent -- they differ from run to run.
+        integration_test_event_id = f"{config.run_id}_integration_test"
+        ingested = relay.ingest(
+            event_id=integration_test_event_id,
+            agent_id="integration_test",
+            event_type=EventType.INTEGRATION_TEST_RESULT,
+            identity=EventIdentity(
+                experiment_id=config.experiment_id,
+                task_id=task.task_id,
+                run_id=config.run_id,
+                agent_id="integration_test",
+                arm=config.arm,
+            ),
+            timestamp_us=post_run_time_us,
+            payload={
+                "command": list(task.success.integration_test),
+                "exit_code": exit_code,
+                "ran": exit_code is not None,
+            },
+        )
+        if not ingested.accepted:
+            raise RuntimeError(
+                f"integration test result could not be recorded on the chain: {ingested.reason}"
+            )
+
+        decision = decide_acceptance(outcome, interrupted=interrupted)
         acceptance_identity = EventIdentity(
             experiment_id=config.experiment_id,
             task_id=task.task_id,
@@ -443,6 +520,21 @@ async def execute_task(
             raise RuntimeError(
                 f"acceptance decision could not be recorded on the chain: {ingested.reason}"
             )
+        # `decide_acceptance` reads `outcome`, which was built from this exit
+        # code, so the dependency is real. It is REQUIRED, not CAUSED: the
+        # decision has a second input (the divergence-marker check on the
+        # integrated workspace) that is not a chain event.
+        edges.append(
+            CausalEdge(
+                from_event_id=f"{config.run_id}_acceptance",
+                to_event_id=integration_test_event_id,
+                relationship=RelationshipType.REQUIRED,
+                note=(
+                    "acceptance requires the integration test result; "
+                    "the divergence check is its other input and is not a chain event"
+                ),
+            ).to_dict()
+        )
 
         result = RunResult(
             run_id=config.run_id,
@@ -468,6 +560,7 @@ async def execute_task(
                 agent_id: boundary.summary() for agent_id, boundary in boundaries.items()
             },
             error=error,
+            interrupted=interrupted,
         )
     finally:
         store.close()
