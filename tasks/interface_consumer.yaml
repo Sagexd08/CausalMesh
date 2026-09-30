@@ -1,0 +1,128 @@
+# Task: change an interface's signature while another agent consumes it.
+#
+# The coordination dependency (spec §35, family interface_consumer):
+#   agent_a owns src/pricing.py and changes quote(item) to
+#   quote(item, region), with no default and no shim.
+#   agent_b owns src/cart.py, calls pricing.quote, and is adding a new
+#   receipt() feature on top of it.
+#
+# How the dependency exists BY CONSTRUCTION, and what that does and does not
+# mean:
+#   - Structurally: agent_b declares src/pricing.py as a dependency and
+#     agent_a writes it, so a change by one can invalidate the other's work.
+#     Nothing is contested; ownership is disjoint.
+#   - In the fixture: the signature change is breaking. A caller using the
+#     old shape raises TypeError at call time, so the integration test
+#     fails. A backward-compatible change (a default argument) would make
+#     the dependency vanish, which is why it is not used.
+#   - In the script: agent_b's write is CONDITIONAL on whether it was told
+#     about agent_a's change. That guard is the experimental manipulation,
+#     and it is authored, not discovered. The task shows that information
+#     CAN change the outcome when an agent acts on it; it says nothing
+#     about whether a real model would.
+#
+# How this differs from schema_handler_widen: there the stale consumer is
+# silently inconsistent (a field list that is out of step). Here it fails
+# loudly at call time, and the stale marker is a call shape, not data.
+#
+# agent_b reads the interface, deliberates (the `wait`), then writes the
+# cart. During that window agent_a changes what agent_b read (§23).
+#   - informed   -> calls quote(item, pricing.DEFAULT_REGION); tests pass
+#   - uninformed -> calls quote(item), the shape it read; the marker remains
+
+task_id: interface_consumer
+version: "1.0.0"
+family: interface_consumer
+description: >
+  agent_a changes the pricing interface to require a region while agent_b,
+  which consumes it, builds a receipt feature on top. agent_b uses the new
+  call shape if it is told about the change; without that it uses the one
+  it read.
+
+fixture: interface_consumer
+
+roles:
+  - agent_id: agent_a
+    owns: [src/pricing.py]
+    description: Makes quote() region-aware, changing its signature.
+  - agent_id: agent_b
+    owns: [src/cart.py]
+    depends_on: [src/pricing.py]
+    description: Adds a receipt feature to the cart, built on pricing.quote.
+
+success:
+  integration_test: [python, -m, pytest, -q, tests/]
+  # A stale consumer still calls the interface the way it read it.
+  divergence_file: src/cart.py
+  divergence_marker: "pricing.quote(item)"
+
+contested_paths: []
+
+scenario:
+  agent_a:
+    owns: [src/pricing.py]
+    actions:
+      - read: src/pricing.py
+      - write:
+          path: src/pricing.py
+          content: |
+            """The pricing interface. agent_a owns it; agent_b's cart consumes it."""
+
+            DEFAULT_REGION = "us"
+
+            _BASE_PRICES = {"apple": 3, "pear": 2, "plum": 4}
+            _REGION_MARKUP = {"us": 0, "eu": 1}
+
+
+            def quote(item, region):
+                """The price of one item in a region."""
+                return _BASE_PRICES[item] + _REGION_MARKUP[region]
+
+  agent_b:
+    owns: [src/cart.py]
+    depends_on: [src/pricing.py]
+    actions:
+      # Reads the interface before agent_a's change lands.
+      - read: src/pricing.py
+      # Deliberation window: agent_a's write happens during this (§23).
+      - wait: 2s
+      # Informed path: agent_b learned the signature changed, so the cart it
+      # writes calls the new shape. It does NOT touch src/pricing.py; that
+      # file belongs to agent_a and the integrated workspace takes each file
+      # from its owner.
+      - write:
+          if_informed_about: src/pricing.py
+          path: src/cart.py
+          content: |
+            """agent_b's module: consumes pricing.quote."""
+
+            import pricing
+
+
+            def total(items):
+                """The summed price of every item."""
+                return sum(pricing.quote(item, pricing.DEFAULT_REGION) for item in items)
+
+
+            def receipt(items):
+                """One (item, price) line per item."""
+                return [(item, pricing.quote(item, pricing.DEFAULT_REGION)) for item in items]
+      # Uninformed path: agent_b never heard, so it builds the receipt on the
+      # signature it read. The stale call shape remains.
+      - write:
+          if_uninformed_about: src/pricing.py
+          path: src/cart.py
+          content: |
+            """agent_b's module: consumes pricing.quote."""
+
+            import pricing
+
+
+            def total(items):
+                """The summed price of every item."""
+                return sum(pricing.quote(item) for item in items)
+
+
+            def receipt(items):
+                """One (item, price) line per item."""
+                return [(item, pricing.quote(item)) for item in items]
