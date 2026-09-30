@@ -1,7 +1,29 @@
-from typing import Any
+from __future__ import annotations
+
+import inspect
+from typing import Any, NamedTuple
 
 from causalmesh.gateway.result import GatewayResult
+from causalmesh.sdk.errors import MissingResourceError, ToolNotFoundError
 from causalmesh.sdk.mesh import CausalMesh
+
+# What a model can get wrong by itself: naming a tool that is not registered, or
+# leaving out (or mangling) the argument the gate needs to decide on. These become
+# an observation the model can read and correct. ``UnknownAgentError`` is not
+# here on purpose: the agent id is configuration, so a misspelled one must raise
+# rather than hide inside a tool message that leaves every call failing.
+MODEL_ERRORS = (ToolNotFoundError, MissingResourceError)
+
+
+class Observation(NamedTuple):
+    """What a framework adapter hands back to a model after one tool call.
+
+    ``is_error`` is True for anything the model did not get an answer to: a
+    denial, a handler failure, or a call the adapter could not even attempt.
+    """
+
+    text: str
+    is_error: bool
 
 
 class BaseFrameworkAdapter:
@@ -47,6 +69,68 @@ class BaseFrameworkAdapter:
             tool=tool_name,
             arguments=arguments,
         )
+
+    def observe(
+        self,
+        tool_name: str,
+        arguments: dict[str, Any],
+        *,
+        agent_id: str | None = None,
+    ) -> Observation:
+        """Run one model-requested call through the gate and phrase the outcome.
+
+        The only place adapters turn a call into text, so a mistake by the model
+        (``MODEL_ERRORS``) is an ``Action failed:`` answer everywhere, and an
+        unknown agent (or any other error) raises everywhere.
+        """
+        try:
+            result = self.call_tool(tool_name, arguments, agent_id=agent_id)
+        except MODEL_ERRORS as exc:
+            return Observation(f"Action failed: {exc}", True)
+        return Observation(self.format_result(result), result.denied or result.failed)
+
+    async def aobserve(
+        self,
+        tool_name: str,
+        arguments: dict[str, Any],
+        *,
+        agent_id: str | None = None,
+    ) -> Observation:
+        """Async twin of ``observe``; it goes through ``acall_tool``."""
+        try:
+            result = await self.acall_tool(tool_name, arguments, agent_id=agent_id)
+        except MODEL_ERRORS as exc:
+            return Observation(f"Action failed: {exc}", True)
+        return Observation(self.format_result(result), result.denied or result.failed)
+
+    @staticmethod
+    def bind_arguments(
+        signature: inspect.Signature, args: tuple[Any, ...], kwargs: dict[str, Any]
+    ) -> dict[str, Any] | str:
+        """The keyword arguments a handler takes, or an ``Action failed:`` message.
+
+        Defaults are applied, so the gate sees what the handler will get.
+        ``**kwargs`` is flattened rather than nested under its own name.
+        """
+        try:
+            bound = signature.bind(*args, **kwargs)
+        except TypeError as exc:
+            return f"Action failed: Invalid arguments - {exc}"
+        bound.apply_defaults()
+        arguments: dict[str, Any] = {}
+        for name, value in bound.arguments.items():
+            kind = signature.parameters[name].kind
+            if kind is inspect.Parameter.VAR_KEYWORD:
+                arguments.update(value)
+            elif kind is inspect.Parameter.VAR_POSITIONAL:
+                if value:
+                    return (
+                        "Action failed: Invalid arguments - the gateway calls a handler "
+                        "by keyword, so extra positional arguments cannot be passed"
+                    )
+            else:
+                arguments[name] = value
+        return arguments
 
     @staticmethod
     def format_result(result: GatewayResult) -> str:

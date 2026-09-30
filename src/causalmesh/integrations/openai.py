@@ -1,8 +1,6 @@
 import json
 from typing import Any
 
-from causalmesh.sdk.errors import MissingResourceError, ToolNotFoundError
-
 from .base import BaseFrameworkAdapter
 from .schema import tool_to_json_schema
 
@@ -51,12 +49,9 @@ class OpenAIAdapter(BaseFrameworkAdapter):
             return self._tool_message(call_id, parsed)
         tool_name, arguments = parsed
 
-        try:
-            result = self.call_tool(tool_name, arguments, agent_id=agent_id)
-        except (ToolNotFoundError, MissingResourceError) as exc:
-            return self._tool_message(call_id, f"Action failed: {exc}")
-
-        return self._tool_message(call_id, self.format_result(result))
+        return self._tool_message(
+            call_id, self.observe(tool_name, arguments, agent_id=agent_id).text
+        )
 
     async def ahandle_tool_call(
         self, tool_call: dict[str, Any], *, agent_id: str | None = None
@@ -68,12 +63,8 @@ class OpenAIAdapter(BaseFrameworkAdapter):
             return self._tool_message(call_id, parsed)
         tool_name, arguments = parsed
 
-        try:
-            result = await self.acall_tool(tool_name, arguments, agent_id=agent_id)
-        except (ToolNotFoundError, MissingResourceError) as exc:
-            return self._tool_message(call_id, f"Action failed: {exc}")
-
-        return self._tool_message(call_id, self.format_result(result))
+        observation = await self.aobserve(tool_name, arguments, agent_id=agent_id)
+        return self._tool_message(call_id, observation.text)
 
     @staticmethod
     def _tool_message(call_id: str, content: str) -> dict[str, Any]:

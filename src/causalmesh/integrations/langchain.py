@@ -55,28 +55,16 @@ class LangChainAdapter(BaseFrameworkAdapter):
         original_sig = inspect.signature(tool.handler)
 
         def _dynamic_handler(*args: Any, **kwargs: Any) -> Any:
-            bound = original_sig.bind(*args, **kwargs)
-            bound.apply_defaults()
-
-            result = self.call_tool(
-                tool_name=tool.name,
-                arguments=bound.arguments,
-                agent_id=agent_id,
-            )
-
-            return self.format_result(result)
+            arguments = self.bind_arguments(original_sig, args, kwargs)
+            if isinstance(arguments, str):
+                return arguments
+            return self.observe(tool.name, arguments, agent_id=agent_id).text
 
         async def _async_dynamic_handler(*args: Any, **kwargs: Any) -> Any:
-            bound = original_sig.bind(*args, **kwargs)
-            bound.apply_defaults()
-
-            result = await self.acall_tool(
-                tool_name=tool.name,
-                arguments=bound.arguments,
-                agent_id=agent_id,
-            )
-
-            return self.format_result(result)
+            arguments = self.bind_arguments(original_sig, args, kwargs)
+            if isinstance(arguments, str):
+                return arguments
+            return (await self.aobserve(tool.name, arguments, agent_id=agent_id)).text
 
         # Trick LangChain into reading the original signature and docstring
         _dynamic_handler.__signature__ = original_sig  # type: ignore[attr-defined]
