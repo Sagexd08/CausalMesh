@@ -1,0 +1,17 @@
+# causalmesh.yaml - what agents in this repository may do.
+version: 1
+
+roles:
+  - agent_id: coding-agent
+    archetype: writer
+    owns: [src/, tests/]
+
+  - agent_id: dba-agent
+    archetype: writer
+    owns: [production/]
+
+policy:
+  arm: C3
+
+evidence:
+  sign: true

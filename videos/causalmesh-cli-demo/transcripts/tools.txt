@@ -1,0 +1,10 @@
+{
+    "tools": [
+        {
+            "name": "write_file",
+            "kind": "filesystem",
+            "mutating": true,
+            "description": "Write a file."
+        }
+    ]
+}

@@ -1,0 +1,64 @@
+[
+    {
+        "actor_public_key": "f775c374e8d845da74cc52f448da8f0a4cbff7cf3eb5df3821f125d51a7eee58",
+        "chain_hash": "7479f1ff8250769915c82fca6a5e3ac8f0fb774dfa16deb6d319499489432dac",
+        "event": {
+            "event_id": "sdk_coding-agent_000001",
+            "event_type": "WRITE",
+            "identity": {
+                "agent_id": "coding-agent",
+                "arm": "C3",
+                "experiment_id": "sdk-run",
+                "run_id": "sdk",
+                "task_id": "sdk-task"
+            },
+            "parent_id": null,
+            "paths": [
+                "src/app.py"
+            ],
+            "payload": {
+                "tool": "write_file",
+                "outcome": "executed"
+            },
+            "references": [],
+            "schema_version": 1,
+            "sequence": 0,
+            "timestamp_us": 1790744009881647
+        },
+        "previous_hash": "4cdd748cb4091631a3436a340d31e67dc9a6df610c135788208113afb7fdd822",
+        "signature": "9a31139961992bbcee7ea805256b297421b193d8806a2937018ce09fb843a643f21442a2d49fbabc80652d0b552ae12f8b981c8ab6ff5214623ab90285f41104"
+    },
+    {
+        "actor_public_key": "f775c374e8d845da74cc52f448da8f0a4cbff7cf3eb5df3821f125d51a7eee58",
+        "chain_hash": "a9bde54a34cd400641d62da39ed27cf7237935abaf760ce1dcd1c8c8991481dd",
+        "event": {
+            "event_id": "sdk_coding-agent_000002",
+            "event_type": "FAILURE",
+            "identity": {
+                "agent_id": "coding-agent",
+                "arm": "C3",
+                "experiment_id": "sdk-run",
+                "run_id": "sdk",
+                "task_id": "sdk-task"
+            },
+            "parent_id": null,
+            "paths": [
+                "production/schema.sql"
+            ],
+            "payload": {
+                "tool": "write_file",
+                "outcome": "denied",
+                "reason": "'production/schema.sql' is owned by 'dba-agent', not 'coding-agent'",
+                "holder_agent": "dba-agent",
+                "blocked_path": "production/schema.sql",
+                "rule": "ownership"
+            },
+            "references": [],
+            "schema_version": 1,
+            "sequence": 1,
+            "timestamp_us": 1790744010384759
+        },
+        "previous_hash": "7479f1ff8250769915c82fca6a5e3ac8f0fb774dfa16deb6d319499489432dac",
+        "signature": "602a39e70c40f6a3b261d51cdbde64127c39d7c8842d405f5dd0b5019c635ed56701dc5926e03020f232be24e60bd0ff6d2e103b65f97e2f6d8825c0b5433207"
+    }
+]
