@@ -8,12 +8,9 @@ hands tool calls to CausalMesh.
 no framework integration is needed — the developer's agent simply calls
 ``adapter.call_tool(...)`` directly.
 
-``OpenAIAdapter`` and ``LangChainAdapter`` are implemented elsewhere in this
-package (``openai.py``, ``langchain.py``).  Still not implemented:
+The framework adapters (OpenAI, Anthropic, LangChain, LangGraph, CrewAI) live
+in sibling modules.  Still not implemented:
 
-- Anthropic / Claude tool_use adapter
-- LangGraph node adapter
-- CrewAI task adapter
 - Human-in-the-loop approval from the SDK
 
 These are tracked in docs/backlog.md per the project convention.
