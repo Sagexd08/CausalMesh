@@ -20,7 +20,10 @@ from .core import (
     RelayStats,
 )
 from .delivery import (
+    BROADCAST,
+    DELIVERY_MODES,
     MUTATING_EVENT_TYPES,
+    PATH_SCOPED,
     BroadcastDelivery,
     PathScopedDelivery,
     policy_for_arm,
@@ -28,7 +31,10 @@ from .delivery import (
 from .store import ChainStore, StoreError
 
 __all__ = [
+    "BROADCAST",
+    "DELIVERY_MODES",
     "MUTATING_EVENT_TYPES",
+    "PATH_SCOPED",
     "BroadcastDelivery",
     "ChainStore",
     "DeliveryPolicy",

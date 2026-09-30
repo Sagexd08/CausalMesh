@@ -73,9 +73,14 @@ class RunConfig:
     git_commit: str = "unknown"
     contract_path: str | None = None
     checkpoint_handler: Any = None
+    delivery_mode: str | None = None
+    """Fan-out policy for the informed arms: None (the default) is whatever
+    the arm prescribes, broadcast; "path_scoped" installs `PathScopedDelivery`
+    with interests taken from the task's declared roles (spec section 86).
+    C0 is isolated whatever this says."""
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        record: dict[str, Any] = {
             "arm": self.arm,
             "base_time_us": self.base_time_us,
             "experiment_id": self.experiment_id,
@@ -88,6 +93,11 @@ class RunConfig:
             "tick_us": self.tick_us,
             "window": self.window,
         }
+        # Recorded only when set, so a run that never chose a delivery mode
+        # serialises exactly as it did before the option existed.
+        if self.delivery_mode is not None:
+            record["delivery_mode"] = self.delivery_mode
+        return record
 
 
 @dataclass
@@ -253,7 +263,13 @@ async def execute_task(
         run_id=config.run_id,
         keypairs=keypairs,
         store=store,
-        delivery=policy_for_arm(config.arm),
+        delivery=policy_for_arm(
+            config.arm,
+            mode=config.delivery_mode,
+            interests={
+                role.agent_id: frozenset(role.owns | role.depends_on) for role in task.roles
+            },
+        ),
         claims=claims,
         participants=agent_ids,
     )
