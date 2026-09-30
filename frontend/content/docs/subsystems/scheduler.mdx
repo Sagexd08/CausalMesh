@@ -22,6 +22,7 @@ smaller denominator and no record of the gap.
 PLANNED ─→ RUNNING ─→ COMPLETED
               │  ├───→ FAILED
               │  ├───→ TIMED_OUT
+              │  ├───→ HANDED_OFF ─→ RUNNING      (continues under another agent)
               │  └───→ ABANDONED
               └─→ (crash) ─→ ABANDONED ─→ RUNNING   (resume)
 ```
@@ -39,6 +40,14 @@ re-executing a FAILED run, which is. The two must stay distinguishable.
 
 `succeeded` is nullable and stays nullable: a harness crash leaves no
 verdict, and `None` must not become `False`.
+
+**TIMED_OUT is opt-in and cooperative.** With `--run-timeout SECONDS` a watchdog
+cancels a run that outlives its budget. The run seals the chain it has (it still
+verifies offline), is recorded `TIMED_OUT` with `succeeded=None` (outcome unknown, not
+failed), is never accepted and never retried, and its artifact is marked
+`reproducible: false`. Cancellation lands only where an agent awaits, so a run blocked
+in a synchronous call is not interrupted. **HANDED_OFF** exists in the machine, with a
+`HandoffPackage` record shape, but nothing in the loop assigns it yet.
 
 ## Randomization is derived, never sampled
 

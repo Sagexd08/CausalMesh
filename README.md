@@ -134,19 +134,20 @@ executable path.
 | Isolation, 11 tools, lifecycle hooks | ✅ leakage-tested |
 | Channels, relevance, information window | ✅ |
 | Script-driven agent | ✅ |
-| Task system + empirical §37 gate | ✅ 2 tasks |
+| Task system + empirical §37 gate | ✅ 4 authored tasks, one per §35 family; verdicts come from scripted mock agents |
 | Scheduler, state machine, run index | ✅ resume-tested |
 | Model adapters (OpenAI, Anthropic, local) | ✅ tested over real HTTP |
 | Policy plane (contract, gate, ledger), checkpoints, identity keys | ✅ unit and integration tested |
 | Developer SDK, tool gateway, `causalmesh serve` (FastAPI) | ✅ tested; Docker path re-verified 2026-09-30 |
-| Framework adapters: Generic, OpenAI function calling, LangChain | ✅ tested with a mock agent only; Anthropic, LangGraph, CrewAI not built |
+| Framework adapters: Generic, OpenAI function calling, Anthropic `tool_use`, LangChain, LangGraph, CrewAI | ✅ tested with scripted payloads and fakes; no hosted model has driven any of them, and CrewAI has not run against the real package |
 | Metrics (cost accounting, four contrasts), provenance, manifests, CLI | ✅ descriptive only |
-| Multi-rater kappa (`causalmesh agreement`), CooperBench loader | ✅ built and tested on synthetic fixtures only; no real rater data and no real CooperBench data exist in this repository |
+| Multi-rater kappa (`causalmesh agreement`), CooperBench loader | ✅ the loader imports all 652 real CooperBench pairs (the real §37 gate on 3 pairs: NOT SENSITIVE, mock agents); the kappa code is tested on synthetic fixtures only and no human has coded a run |
 | Statistics (inference), analytical module, reporting | ⬜ not built (`src/causalmesh/reporting` is empty; `analysis/` holds only `agreement.py`) |
 
 Not yet done, and stated plainly: **no hosted model has been run** (no key was
-available, and spending money is the operator's decision), no real CooperBench
-task or human rater has been used, and there is no inferential statistics or
+available, and spending money is the operator's decision), no human rater has
+coded a run, no real CooperBench task has been run with anything but a mock
+agent replaying gold patches, and there is no inferential statistics or
 reporting layer. See [`docs/backlog.md`](docs/backlog.md),
 which records every gap as a tracked item with its reason.
 
@@ -237,6 +238,25 @@ Only arm C3 refuses. On C0-C2 a call C3 would refuse runs and reports
 `result.would_refuse`. Pass `seed=` or declare `identity.keys` for a
 reproducible signed chain. `docs/backlog.md` lists what the SDK does not do yet.
 
+Adapters put the same gate in front of a framework's tool loop: OpenAI function
+calling, Anthropic `tool_use`, LangChain, LangGraph and CrewAI, all through
+`CausalMesh.execute`. They are tested with scripted payloads and fakes; no hosted
+model has driven any of them, and CrewAI has not run against the real package.
+
+```python
+from causalmesh.integrations import AnthropicAdapter
+
+adapter = AnthropicAdapter(mesh, agent_id="coding-agent")
+# pass adapter.get_tools() as `tools=` to the Messages API, then answer the
+# model's tool_use blocks:
+reply = adapter.handle_message(assistant_message)   # a user message, or None
+```
+
+`mesh.export("evidence/")` writes `run.json` and `keyring.json` so that
+`causalmesh verify --run evidence/` can check the session; `causalmesh serve --tools`
+loads your tool registrations into the HTTP server, and `--ssl-certfile`/`--ssl-keyfile`
+serve it over TLS (see `docs/security.md` for what each does and does not protect).
+
 For async agents, use `await mesh.execute_async(...)` to ensure non-blocking execution while maintaining policy enforcement boundaries. A denied async action is never awaited.
 
 See [`examples/phase1_basic_agent.py`](examples/phase1_basic_agent.py) and [`examples/phase1_async_agent.py`](examples/phase1_async_agent.py) for complete working examples.
@@ -245,9 +265,9 @@ See [`examples/phase1_basic_agent.py`](examples/phase1_basic_agent.py) and [`exa
 whose handler never runs, and evidence you can verify), follow
 [`examples/cli_demo/`](examples/cli_demo/README.md). It needs no API key and no
 model, and `python examples/cli_demo/run_demo.py` runs it unattended. It is a
-demonstration of a pre-alpha SDK: no TLS, evidence held in memory, and
-`causalmesh serve` cannot load tools yet, so the demo serves its tool from a short
-script.
+demonstration of a pre-alpha SDK. It was written before `causalmesh serve --tools`,
+TLS and `CausalMesh.export` existed, so it serves its tool from a short script and
+holds its evidence in memory.
 
 Run the suite with `pytest`. The slow integration tests execute real
 subprocesses; `pytest -m "not slow"` skips them.

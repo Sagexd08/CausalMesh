@@ -150,7 +150,11 @@ record, because two callers can both pass the check before either records.
 transaction that compares it to the limit (`Ledger.reserve`, `BEGIN
 IMMEDIATE`); the caller then `commit`s the hold when the action happened or
 `release`s it when it did not. The SDK does this for every `spend` and `budget`
-tool. `total` is still only what happened, and the gate counts recorded plus
+tool (`Tool(..., spend_on_error=True)` counts the amount as spent when a handler
+raises; by default it is released). A holder that dies between reserve and settle
+leaves its hold, which over-counts until `Ledger.release_all`; `Gate.check` called
+directly (`policy check`, the x402 adapter) asks a question and does not reserve.
+`total` is still only what happened, and the gate counts recorded plus
 held, so a plain `check` does not admit a call an in-flight one has already
 claimed the room for. That keeps totals measuring work done rather than
 questions asked — the distinction `may_write` and `record_denial` already draw

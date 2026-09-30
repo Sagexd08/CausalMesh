@@ -177,6 +177,11 @@ a row is only here if a test runs it.
 | A handler's exception text, an object's attributes and the list of known agents stay off the wire; logs never carry a credential | `tests/server/test_identity_and_hardening.py::TestResponses`, `::TestLogsNeverCarryACredential` |
 | An upstream redirect is not followed and every allowed chat call is recorded or not forwarded | `tests/server/test_identity_and_hardening.py::TestTheUpstreamIsNotFollowedElsewhere`, `::TestEveryAllowedChatCallIsRecordedOrNotForwarded` |
 | The image runs as non-root, declares a health check and cannot start unauthenticated | `tests/unit/test_docker_config.py` |
+| `serve` over TLS: a real HTTPS request verifies the certificate, plain HTTP to the TLS port is not served, a client that does not trust the certificate is refused, an incomplete, mismatched, non-PEM or wrongly unlocked certificate and key is a usage error that never echoes the passphrase, and `--require-tls` refuses a public interface without TLS | `tests/integration/test_serve_tls.py` |
+| `serve --tools` registers operator code's tools only when the operator names it, never from the contract or a request; bad specs stop startup; a duplicate tool name is refused | `tests/integration/test_serve_tools.py`, `tests/server/test_tools.py` |
+| A claim lease taken through the SDK blocks another agent's write, records one denial, and on C0 to C2 is reported as `would_refuse` with no denial | `tests/sdk/test_claims.py` |
+| A refused terminal checkpoint never approves on end of input, timeout, no terminal, garbage or escape sequences in agent-controlled names | `tests/unit/test_terminal_checkpoint.py`, `tests/adversarial/test_terminal_checkpoint_escape.py` |
+| 120 threads racing on a 50-call total run exactly 50 handlers, and four processes on one ledger file are granted exactly 50 holds | `tests/gateway/test_atomic_totals.py` |
 | An unhandled error on `/execute` returns a generic 500 with no exception text or traceback | `tests/server/test_errors.py::test_an_unhandled_error_is_a_generic_500_without_detail` (execute route only; other routes share the handler but are not separately tested) |
 
 Not protected:
@@ -189,21 +194,47 @@ Not protected:
   `audit_error`. An undeclared `causalmesh_agent` no longer reaches that
   point (it is refused with 400), so the remaining way for an event to go
   unrecorded is a relay failure on a known agent.
-- **Identity.** A bearer token is a shared secret over plain HTTP. A token bound
-  to an agent fixes which agent a request is (`--agent-token`); an unbound token
-  asserts one. Neither proves anything to a third party, and the server holds every
-  agent's signing key (see `docs/backlog.md`). Tokens can expire and be revoked or rotated without
-  a restart (`--tokens-file`, `docs/fragments/token-lifecycle.md`); that narrows the
-  window a leaked token is useful, it does not make it proof.
+- **Identity.** A bearer token is a shared secret, over plain HTTP unless TLS is
+  on. A token bound to an agent fixes which agent a request is (`--agent-token`); an
+  unbound token asserts one. Neither proves anything to a third party, and the server
+  holds every agent's signing key (see `docs/backlog.md`). Tokens can expire and be
+  revoked or rotated without a restart (`--tokens-file`, "Token lifecycle" in
+  `docs/backlog.md`); that narrows the window a leaked token is useful, it does not
+  make it proof. Chat and `/execute` events record `identity_source` and the operator's
+  `credential_id` label (never the token or a digest of it); a bad tokens-file reload
+  keeps the last good set, so a token meant to be revoked in a broken edit stays valid
+  until the file is fixed or the token expires.
 - **Resources through the SDK.** A tool that declares no resource is checked against
-  nothing, `mutating=False` skips the gate for every kind, and totals are
-  check-then-record (see `docs/backlog.md` for the full list).
+  nothing and `mutating=False` skips the gate for every kind. Declared totals are
+  reserved before the handler runs, so racing callers cannot overspend one allowance
+  (tested across threads and processes), but a holder that dies leaves its hold
+  (over-counts, fails closed) until `Ledger.release_all`, and callers that use
+  `Gate.check` directly, such as the x402 adapter, still check and then record (see
+  `docs/backlog.md` for the full list).
 - **Key custody in SDK sessions.** With `seed=`, anyone holding the seed can
   sign as any agent. Without it, keys are random per session and the chain is
   not reproducible.
-- **Transport.** `serve` speaks plain HTTP; TLS is the operator's proxy.
-  The bearer token is a single shared secret, compared in constant time, not
-  a per-agent identity.
+- **Transport.** `serve` speaks plain HTTP unless given `--ssl-certfile` and
+  `--ssl-keyfile`; on a non-loopback host without them it warns that tokens cross the
+  network in clear, and `--require-tls` refuses instead. There is no client-certificate
+  verification and the certificate is not reloaded without a restart. A key's
+  passphrase is read only from `CAUSALMESH_SSL_KEYFILE_PASSWORD`. Tested with a real
+  certificate and a real HTTPS request (`tests/integration/test_serve_tls.py`). A
+  reverse proxy is still a reasonable place to terminate TLS. The bearer token is a
+  single shared secret, compared in constant time, not a per-agent identity.
+- **`serve --tools` runs operator code.** It imports the named module or file at
+  startup and calls its function with the session, with the server's own privileges.
+  The spec is the operator's, typed on the command line; it is never read from the
+  contract (the `tools:` section names tools and imports nothing) or from a request.
+  Every tool it registers is still gated and recorded, but nothing sandboxes the code,
+  and anyone who can change the spec or the file can run code as the server.
+- **Chat-path timestamps.** `/v1/chat/completions` still signs the wall clock and puts
+  it in the event id, so chat events in a `serve` chain are not reproducible; the
+  gateway's calls sign a logical clock (see `docs/backlog.md`).
+- **An exported SDK session's keyring sits beside the run.** `verify` prefers the
+  `keyring.json` that `CausalMesh.export` writes beside `run.json`, which catches a chain
+  re-signed under a foreign key; whoever can replace both files together can forge
+  both, and with the file absent `verify` falls back to the embedded keys.
 - **The Docker image** binds `0.0.0.0` and therefore requires
   `CAUSALMESH_API_TOKEN` or an `--agent-token`; it is not a sandbox for the tools
   registered in it. It runs as a non-root user and declares a `HEALTHCHECK`.
