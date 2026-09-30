@@ -76,6 +76,7 @@ inside it is in the commit log, and what is deliberately absent is in
   `envelope.wall_time_us_by_event`. `/v1/chat/completions` still signs the wall clock.
 - `CausalMesh(claims=ClaimRegistry)`: exclusive leases apply to SDK sessions.
   `mesh.claim()`, `mesh.release()`, `mesh.denials()`, `mesh.claim_registry`. Off by default.
+  Both default `now_us` to the session's logical time, so a lease expires on the clock the gate reads.
   Same run id for lease and gate.
 - `TerminalCheckpointHandler`, a human-attached `CheckpointHandler` (timeout, bounded
   re-prompts, refuse on EOF/closed/no-tty, ASCII-escaped prompts, serialised prompts, own

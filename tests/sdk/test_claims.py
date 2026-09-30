@@ -335,3 +335,22 @@ class TestMisuseRaises:
         mesh = _mesh(tmp_path, registry)
         with pytest.raises(ClaimError):
             mesh.claim(agent_id="alice", path="src/a.py", duration_us=0, now_us=NOW)
+
+
+class TestTheDefaultClockIsTheSessionsLogicalClock:
+    def test_a_lease_taken_without_now_us_expires_on_the_clock_the_gate_reads(
+        self, tmp_path: Path, registry: ClaimRegistry
+    ) -> None:
+        """A wall-clock default would put the expiry decades past any logical
+        time, so the lease would never end and the holder would block forever."""
+        mesh = _mesh(tmp_path, registry)
+        tick = 1_000_000
+        mesh.claim(agent_id="alice", path="src/a.py", duration_us=2 * tick)
+
+        outcomes = [
+            mesh.execute(agent_id="bob", tool="write_file", arguments={"path": "src/a.py"})
+            for _ in range(4)
+        ]
+
+        assert outcomes[0].denied
+        assert outcomes[-1].executed

@@ -2,8 +2,8 @@
 
 `/v1/tools/{name}/execute` goes through `CausalMesh.execute`, so it inherits
 the logical timestamp. `/v1/chat/completions` does not go through the gateway
-and still stamps the wall clock; `docs/fragments/sdk-export-clock.md` records
-that, and the last test here pins it so the gap is executable.
+and still stamps the wall clock; `docs/backlog.md` ("The chat path still signs the wall clock")
+records that, and the last test here pins it so the gap is executable.
 """
 
 from __future__ import annotations
