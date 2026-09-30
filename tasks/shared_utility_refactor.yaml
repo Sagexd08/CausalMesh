@@ -1,0 +1,138 @@
+# Task: refactor a shared utility while another agent keeps using it.
+#
+# The coordination dependency (spec §35, family shared_utility_refactor):
+#   agent_a owns src/textutil.py and src/articles.py. It refactors
+#   slugify(text) into make_slug(text, *, sep="-"), REMOVES the old name,
+#   and migrates its own caller (articles.py).
+#   agent_b owns src/tags.py, a second and independently owned caller of the
+#   same utility, and is adding a tag_feed_path() feature on top of it.
+#
+# How the dependency exists BY CONSTRUCTION, and what that does and does not
+# mean:
+#   - Structurally: agent_b declares src/textutil.py as a dependency and
+#     agent_a writes it. Nothing is contested; ownership is disjoint.
+#   - In the fixture: the refactor removes the old name with no alias, so a
+#     caller that keeps the old call shape raises AttributeError and the
+#     integration test fails. A deprecated alias would make the dependency
+#     vanish, which is why none is left.
+#   - In the script: agent_b's write is CONDITIONAL on whether it was told
+#     about the refactor. That guard is the experimental manipulation, and
+#     it is authored, not discovered. The task shows that information CAN
+#     change the outcome when an agent acts on it; it says nothing about
+#     whether a real model would.
+#
+# How this differs from interface_consumer: the change is a rename plus a
+# new option rather than a new required argument, and the utility has two
+# callers owned by different agents. The refactorer migrates the caller it
+# owns; nobody but agent_b can migrate agent_b's. That split, one caller
+# updated and one left to a peer, is the shape this family names.
+#
+#   - informed   -> calls textutil.make_slug(label); tests pass
+#   - uninformed -> calls textutil.slugify(label), the shape it read; the
+#                   marker remains and the old name no longer exists
+
+task_id: shared_utility_refactor
+version: "1.0.0"
+family: shared_utility_refactor
+description: >
+  agent_a refactors a shared slug utility, renaming it and removing the old
+  name, while agent_b, a second caller, builds a feature on top of it.
+  agent_b uses the new call shape if it is told about the refactor; without
+  that it keeps the old one.
+
+fixture: shared_utility
+
+roles:
+  - agent_id: agent_a
+    owns: [src/textutil.py, src/articles.py]
+    description: Refactors the utility and migrates its own caller.
+  - agent_id: agent_b
+    owns: [src/tags.py]
+    depends_on: [src/textutil.py]
+    description: Adds a feed path to tags, built on the shared utility.
+
+success:
+  integration_test: [python, -m, pytest, -q, tests/]
+  # A stale caller still uses the old name of the utility.
+  divergence_file: src/tags.py
+  divergence_marker: "textutil.slugify("
+
+contested_paths: []
+
+scenario:
+  agent_a:
+    owns: [src/textutil.py, src/articles.py]
+    actions:
+      - read: src/textutil.py
+      - read: src/articles.py
+      - write:
+          path: src/textutil.py
+          content: |
+            """A shared utility with more than one caller. agent_a owns it."""
+
+            import re
+
+
+            def make_slug(text, *, sep="-"):
+                """Lowercase, separator-joined form of a piece of text."""
+                return re.sub(r"[^a-z0-9]+", sep, text.lower()).strip(sep)
+      # agent_a migrates the caller it owns. It cannot migrate agent_b's.
+      - write:
+          path: src/articles.py
+          content: |
+            """agent_a's own caller of the utility."""
+
+            import textutil
+
+
+            def permalink(title):
+                """The URL path of an article."""
+                return "/articles/" + textutil.make_slug(title)
+
+  agent_b:
+    owns: [src/tags.py]
+    depends_on: [src/textutil.py]
+    actions:
+      # Reads the utility before agent_a's refactor lands.
+      - read: src/textutil.py
+      # Deliberation window: agent_a's writes happen during this (§23).
+      - wait: 2s
+      # Informed path: agent_b learned the utility was refactored, so the
+      # module it writes uses the new name. It does NOT touch
+      # src/textutil.py; that file belongs to agent_a.
+      - write:
+          if_informed_about: src/textutil.py
+          path: src/tags.py
+          content: |
+            """agent_b's caller of the utility."""
+
+            import textutil
+
+
+            def tag_path(label):
+                """The URL path of a tag."""
+                return "/tags/" + textutil.make_slug(label)
+
+
+            def tag_feed_path(label):
+                """The URL path of a tag's feed."""
+                return tag_path(label) + "/feed"
+      # Uninformed path: agent_b never heard, so it builds the feature on the
+      # call shape it read. The stale name remains.
+      - write:
+          if_uninformed_about: src/textutil.py
+          path: src/tags.py
+          content: |
+            """agent_b's caller of the utility."""
+
+            import textutil
+
+
+            def tag_path(label):
+                """The URL path of a tag."""
+                return "/tags/" + textutil.slugify(label)
+
+
+            def tag_feed_path(label):
+                """The URL path of a tag's feed."""
+                return tag_path(label) + "/feed"
