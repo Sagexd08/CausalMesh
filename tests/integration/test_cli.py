@@ -774,3 +774,46 @@ class TestManifestAndAudit:
         assert entry["chains"]["runs"] == 1
         assert entry["chains"]["verified"] == 0
         assert any("failed verification" in f for f in entry["findings"])
+
+
+class TestManifestPrivacy:
+    """`manifest write` must not publish who ran it.
+
+    Independent of the pilot artifacts: the collection is built in `tmp_path`.
+    """
+
+    def test_the_written_manifest_names_neither_host_nor_user_by_default(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import getpass
+        import platform
+
+        monkeypatch.setattr(platform, "node", lambda: "sentinel-host-7f3a")
+        monkeypatch.setattr(getpass, "getuser", lambda: "sentinel-user-9c1e")
+        root = TestManifestAndAudit._checkout(tmp_path)
+        written = invoke("manifest", "write", "--id", "exp", "--root", str(root), "--json")
+        assert written.exit_code == 0, written.stdout
+        assert payload(written)["host_recorded"] is False
+        manifest = (root / "data" / "manifests" / "exp.manifest.json").read_text(encoding="utf-8")
+        assert "sentinel-host-7f3a" not in manifest
+        assert "sentinel-user-9c1e" not in manifest
+
+    def test_record_host_is_an_explicit_opt_in(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import getpass
+        import platform
+
+        monkeypatch.setattr(platform, "node", lambda: "sentinel-host-7f3a")
+        monkeypatch.setattr(getpass, "getuser", lambda: "sentinel-user-9c1e")
+        root = TestManifestAndAudit._checkout(tmp_path)
+        written = invoke(
+            "manifest", "write", "--id", "exp", "--root", str(root), "--record-host", "--json"
+        )
+        assert written.exit_code == 0, written.stdout
+        assert payload(written)["host_recorded"] is True
+        manifest = json.loads(
+            (root / "data" / "manifests" / "exp.manifest.json").read_text(encoding="utf-8")
+        )
+        assert manifest["environment"]["machine_id"] == "sentinel-host-7f3a"
+        assert manifest["environment"]["operator_id"] == "sentinel-user-9c1e"

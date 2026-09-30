@@ -152,6 +152,16 @@ def run_command(
             ),
         ),
     ] = True,
+    record_host: Annotated[
+        bool,
+        typer.Option(
+            "--record-host",
+            help=(
+                "Record the real hostname and OS username in each run's envelope. "
+                "Default: a keyed digest of each, or unknown."
+            ),
+        ),
+    ] = False,
     root_option: Annotated[Path | None, typer.Option("--root")] = None,
     as_json: Annotated[bool, typer.Option("--json")] = False,
 ) -> None:
@@ -173,7 +183,7 @@ def run_command(
         index_path=repo.index_path(name),
     )
 
-    captured = Environment.capture(repo.root)
+    captured = Environment.capture(repo.root, record_host=record_host)
     run_config = captured.to_run_config()
 
     if use_contract:
