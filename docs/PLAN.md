@@ -152,7 +152,7 @@ Manifests carrying SHA-256 hashes of every artifact, environment capture and a c
 
 Manifests are tracked in git while `data/raw/` is not, which is what keeps a published figure traceable to its run after the raw directory is gone.
 
-Three `RunConfig` fields — `git_commit`, `machine_id`, `operator_id` — existed and defaulted to `"unknown"` because nothing populated them, so every run produced before this was unattributable. `experiment run` now captures them. They are recorded in the artifact **envelope**, never in the signed chain: the chain is bit-reproducible, and a hostname or commit hash inside it would break that. Verified by executing the same collection twice under one seed and confirming all four head hashes match.
+Three `RunConfig` fields — `git_commit`, `machine_id`, `operator_id` — existed and defaulted to `"unknown"` because nothing populated them, so every run produced before this was unattributable. `experiment run` now captures them. They are recorded in the artifact **envelope**, never in the signed chain: the chain is bit-reproducible, and a hostname or commit hash inside it would break that. Verified by executing the same collection twice under one seed and confirming all four head hashes match. By default `machine_id` and `operator_id` are a keyed digest (`keyed:` plus 16 hex digits) or `unknown`, not the real hostname and username; `--record-host` records the real values (see `docs/fragments/manifest-privacy.md`).
 
 A manifest recorded from a dirty working tree reports itself as not attributable to a commit, rather than implying the tree matched the hash it names.
 
