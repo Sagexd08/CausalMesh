@@ -22,6 +22,7 @@ from typing import Annotated
 
 import typer
 
+from causalmesh.cli._context import find_root
 from causalmesh.cli._output import Exit, note, out_console
 
 
@@ -70,6 +71,16 @@ def quickstart_command(
     from causalmesh.policy.contract import CONTRACT_FILENAME
 
     root = (root_option or Path.cwd()).resolve()
+    if find_root(root) is None:
+        # The smoke run drives the experiment harness, which reads `tasks/`,
+        # `fixtures/` and `configs/` from a repository checkout. A pip-installed
+        # package ships the substrate only, so say that up front instead of
+        # writing a contract and then failing `doctor` three times over.
+        note("quickstart needs a CausalMesh repository checkout (tasks/, fixtures/, configs/).")
+        note("A pip-installed package has the substrate and the CLI, not the experiment harness.")
+        note("Here, try: causalmesh init && causalmesh policy validate && causalmesh policy show")
+        note("For the experiment harness: git clone https://github.com/Sagexd08/CausalMesh")
+        raise typer.Exit(Exit.FAILED)
     has_contract = (root / CONTRACT_FILENAME).is_file()
 
     if not has_contract or force_init:
