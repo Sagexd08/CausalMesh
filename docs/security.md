@@ -202,8 +202,14 @@ Not protected:
   The bearer token is a single shared secret, compared in constant time, not
   a per-agent identity.
 - **The Docker image** binds `0.0.0.0` and therefore requires
-  `CAUSALMESH_API_TOKEN`; it is not a sandbox for the tools registered in it.
-  It runs as root and declares no `HEALTHCHECK`.
+  `CAUSALMESH_API_TOKEN` or an `--agent-token`; it is not a sandbox for the tools
+  registered in it. It runs as a non-root user and declares a `HEALTHCHECK`.
+- **`causalmesh verify` and attribution.** The command builds its key ring from the
+  public keys embedded in the records it checks, so it proves a chain is internally
+  consistent, not that a key belongs to the actor it names: a chain signed with an
+  attacker's own key verifies (tested, 2026-09-30). `verify_chain` with a key ring the
+  operator holds does reject it, and `examples/cli_demo/verify_evidence.py` uses one
+  (see `docs/backlog.md`).
 
 ## Verification is offline by construction
 
