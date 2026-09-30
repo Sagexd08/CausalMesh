@@ -243,6 +243,7 @@ async def execute_task(
         keypairs["policy_gate"] = KeyPair.derive(config.master_seed, "policy_gate")
         if contract.checkpoints:
             keypairs["checkpoint"] = KeyPair.derive(config.master_seed, "checkpoint")
+    keypairs["integration_test"] = KeyPair.derive(config.master_seed, "integration_test")
     keypairs["acceptance"] = KeyPair.derive(config.master_seed, "acceptance")
     claims = (
         ClaimRegistry(workspace_root / f"{config.run_id}_claims.db") if config.arm == "C3" else None
@@ -423,6 +424,36 @@ async def execute_task(
                     ).to_dict()
                 )
 
+        # The harness's own integration-test run becomes a chain event so the
+        # acceptance decision has a real event to point at. The payload is
+        # reproducible by construction: the task's fixed command and the exit
+        # code (None when the test never ran, recorded as `ran: false` rather
+        # than as a confident 0). Output, duration and the workspace path are
+        # deliberately absent -- they differ from run to run.
+        integration_test_event_id = f"{config.run_id}_integration_test"
+        ingested = relay.ingest(
+            event_id=integration_test_event_id,
+            agent_id="integration_test",
+            event_type=EventType.INTEGRATION_TEST_RESULT,
+            identity=EventIdentity(
+                experiment_id=config.experiment_id,
+                task_id=task.task_id,
+                run_id=config.run_id,
+                agent_id="integration_test",
+                arm=config.arm,
+            ),
+            timestamp_us=post_run_time_us,
+            payload={
+                "command": list(task.success.integration_test),
+                "exit_code": exit_code,
+                "ran": exit_code is not None,
+            },
+        )
+        if not ingested.accepted:
+            raise RuntimeError(
+                f"integration test result could not be recorded on the chain: {ingested.reason}"
+            )
+
         decision = decide_acceptance(outcome)
         acceptance_identity = EventIdentity(
             experiment_id=config.experiment_id,
@@ -443,6 +474,21 @@ async def execute_task(
             raise RuntimeError(
                 f"acceptance decision could not be recorded on the chain: {ingested.reason}"
             )
+        # `decide_acceptance` reads `outcome`, which was built from this exit
+        # code, so the dependency is real. It is REQUIRED, not CAUSED: the
+        # decision has a second input (the divergence-marker check on the
+        # integrated workspace) that is not a chain event.
+        edges.append(
+            CausalEdge(
+                from_event_id=f"{config.run_id}_acceptance",
+                to_event_id=integration_test_event_id,
+                relationship=RelationshipType.REQUIRED,
+                note=(
+                    "acceptance requires the integration test result; "
+                    "the divergence check is its other input and is not a chain event"
+                ),
+            ).to_dict()
+        )
 
         result = RunResult(
             run_id=config.run_id,
