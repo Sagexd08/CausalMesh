@@ -1,0 +1,29 @@
+# What goes in the source distribution, beyond the package itself (which
+# setuptools includes on its own). The sdist must be enough to rebuild the wheel
+# and to run the suite; it must not carry the website, the videos, run data or
+# the experimental fixtures (AGENTS.md: fixtures are not project source).
+include LICENSE README.md CHANGELOG.md SECURITY.md CONTRIBUTING.md AGENTS.md
+include causalmesh.yaml
+include pyproject.toml
+include Makefile
+
+graft tests
+graft examples
+graft tasks
+graft scripts
+recursive-include docs *.md
+recursive-include docker Dockerfile
+include docker-compose.yml
+
+prune fixtures
+prune data
+prune videos
+prune frontend
+prune artifacts
+prune experiments
+prune configs
+prune node_modules
+prune .github
+exclude package.json package-lock.json vercel.json
+global-exclude __pycache__ *.py[cod] *.so .DS_Store *.key *.pem .env
+prune docs/superpowers

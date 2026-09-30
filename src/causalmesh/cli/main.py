@@ -11,8 +11,11 @@ one documented sequence rather than a reading exercise.
 
 from __future__ import annotations
 
+from typing import Annotated
+
 import typer
 
+from causalmesh import __version__
 from causalmesh.cli import (
     commands_audit,
     commands_experiment,
@@ -40,6 +43,28 @@ app = typer.Typer(
     add_completion=False,
     rich_markup_mode="rich",
 )
+
+
+def _print_version(value: bool) -> None:
+    if value:
+        typer.echo(f"causalmesh {__version__}")
+        raise typer.Exit()
+
+
+@app.callback()
+def _root(
+    version: Annotated[
+        bool,
+        typer.Option(
+            "--version",
+            callback=_print_version,
+            is_eager=True,
+            help="Show the installed version and exit.",
+        ),
+    ] = False,
+) -> None:
+    """Coordination you can prove: run agent-fleet experiments and verify the evidence."""
+
 
 app.command("doctor")(doctor_command)
 app.command(

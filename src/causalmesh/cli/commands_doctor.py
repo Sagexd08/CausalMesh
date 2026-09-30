@@ -68,7 +68,8 @@ def _root_check(root: Path | None) -> Check:
             "repository",
             "FAIL",
             "no CausalMesh checkout found",
-            "Run from inside the repository, or pass --root.",
+            "Run from inside the repository, or pass --root. A pip-installed package "
+            "has no experiment harness; the policy and SDK commands do not need one.",
         )
     return Check("repository", "PASS", str(root))
 
