@@ -28,6 +28,7 @@ event-emission logic by delegating to the relay directly.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 from causalmesh.events.schema import EventIdentity, EventType, utc_now_micros
@@ -157,6 +158,7 @@ class ToolGateway:
         *,
         paths: tuple[str, ...] | None = None,
         now_us: int | None = None,
+        annotations: Mapping[str, str] | None = None,
     ) -> GatewayResult:
         """Route one tool call through the boundary and return the result.
 
@@ -172,6 +174,13 @@ class ToolGateway:
                         When omitted, extracted from ``arguments`` if
                         a ``"path"`` key is present.
             now_us:     Timestamp override (for deterministic tests).
+            annotations: Extra string fields recorded on the call's event, for
+                        the transport to say how the call arrived (the HTTP
+                        server records ``identity_source``).  They are
+                        signed into the chain, so they must be reproducible:
+                        no clock, host or random value.  A key the gateway
+                        already writes (``tool``, ``outcome``, ...) is never
+                        overridden.
 
         Raises:
             ToolNotFoundError: When ``tool_name`` is not registered.
@@ -232,6 +241,7 @@ class ToolGateway:
             ts=ts,
             mutating=tool.mutating,
             shadow=shadow,
+            annotations=annotations,
         )
         audit_error = self._record_consumption(
             internal_result, resources, agent_id, ts, event_id, audit_error
@@ -257,6 +267,7 @@ class ToolGateway:
         arguments: dict[str, Any] | None = None,
         paths: tuple[str, ...] | None = None,
         now_us: int | None = None,
+        annotations: Mapping[str, str] | None = None,
     ) -> GatewayResult:
         """Route an async tool call through the policy boundary.
 
@@ -308,6 +319,7 @@ class ToolGateway:
             ts=ts,
             mutating=tool_obj.mutating,
             shadow=shadow,
+            annotations=annotations,
         )
         audit_error = self._record_consumption(
             internal_result, resources, agent_id, ts, event_id, audit_error
@@ -378,6 +390,7 @@ class ToolGateway:
         ts: int,
         mutating: bool,
         shadow: Verdict | None = None,
+        annotations: Mapping[str, str] | None = None,
     ) -> tuple[str | None, str | None]:
         """Emit one event to the relay for this result.
 
@@ -422,6 +435,9 @@ class ToolGateway:
                     payload["rule"] = result.decision.rule
             if resources:
                 payload["resources"] = [resource.to_dict() for resource in resources]
+
+        for key, value in (annotations or {}).items():
+            payload.setdefault(key, value)
 
         try:
             ingested = self._relay.ingest(

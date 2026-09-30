@@ -12,6 +12,12 @@ inside it is in the commit log, and what is deliberately absent is in
 
 ### Added
 
+- **A local CLI demo** (`examples/cli_demo/`): a contract, a gateway that serves one
+  tool, an allowed call, a denied call whose handler never runs, and evidence read back
+  and verified against the operator's key ring. No key or model needed;
+  `python examples/cli_demo/run_demo.py` runs it unattended and the suite runs it too.
+  Pre-alpha: no TLS, evidence held in memory, and `causalmesh serve` still cannot load
+  tools, so the demo serves its tool from a short script.
 - **Developer SDK and tool gateway.** `CausalMesh`, `Tool` and `ToolGateway`
   put the existing gate in front of an operator's own tools, sync and async.
   Tools are gated unless declared `mutating=False`; protected resources come
@@ -50,6 +56,12 @@ inside it is in the commit log, and what is deliberately absent is in
 
 ### Fixed
 
+- **`causalmesh policy validate` crashed on the SDK sections it is documented to
+  check.** Run with no path, it located the file with the strict core loader,
+  which rejects `agent:` and `tools:`, so the repository's own
+  `examples/causalmesh.yaml` produced a traceback; an invalid contract did too.
+  It now finds the file without parsing it and reports errors cleanly. It had no
+  tests.
 - **Ownership could be walked around by spelling.** `allowed/../forbidden/x`,
   `./forbidden/x`, `Forbidden/x`, `forbidden./x` and an absolute path inside the
   repository were all allowed where `forbidden/x` was refused. Paths are now decided

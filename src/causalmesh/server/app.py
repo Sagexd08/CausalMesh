@@ -11,7 +11,8 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from collections.abc import Mapping
+from collections.abc import AsyncIterator, Mapping
+from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -28,6 +29,7 @@ from .auth import Principal, make_auth_checker
 from .errors import register_error_handlers
 from .middleware import BodyLimitMiddleware
 from .models import ExecuteRequest, ExecuteResponse, ToolListResponse, ToolMeta
+from .observability import RequestIdMiddleware
 
 log = logging.getLogger(__name__)
 
@@ -78,6 +80,29 @@ def _forward(url: str, headers: dict[str, str], data: bytes) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise ValueError("upstream did not return a JSON object")
     return payload
+
+
+def _identity_source(principal: Principal) -> str:
+    """`token-bound` when a credential named the agent, else `asserted`."""
+    return "token-bound" if principal.agent_id else "asserted"
+
+
+def _not_ready_reasons(m: CausalMesh, *, shutting_down: bool) -> list[str]:
+    """Why this session cannot take a call, as short stable codes (empty = ready)."""
+    reasons: list[str] = []
+    if shutting_down:
+        reasons.append("shutting_down")
+    try:
+        if not m.agents:
+            reasons.append("no_agent_keys")
+        # The chain must be readable to be appended to.
+        _ = m._relay.head_hash
+        if m._gate is None:
+            reasons.append("no_gate")
+    except Exception:  # noqa: BLE001 - any failure here is "not ready", not a 500
+        log.exception("readiness check failed")
+        reasons.append("relay_unavailable")
+    return reasons
 
 
 def create_app(
@@ -139,6 +164,18 @@ def create_app(
         rate_limit_per_minute=rate_limit_per_minute,
     )
 
+    @asynccontextmanager
+    async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        yield
+        # Uvicorn has stopped accepting connections and drained (or timed out
+        # on) the requests in flight by now. The evidence is in memory, so say
+        # what is being discarded rather than let the operator assume a flush.
+        app.state.shutting_down = True
+        log.info(
+            "shutting down; %d recorded event(s) live in this process only and are discarded",
+            len(app.state.mesh.audit_events()),
+        )
+
     app = FastAPI(
         title="CausalMesh Gateway",
         version=__version__,
@@ -148,14 +185,19 @@ def create_app(
         docs_url="/docs" if auth_disabled else None,
         redoc_url="/redoc" if auth_disabled else None,
         openapi_url="/openapi.json" if auth_disabled else None,
+        lifespan=lifespan,
     )
     app.add_middleware(BodyLimitMiddleware, max_bytes=max_body_bytes)
+    # Added last, so outermost: the id is set before, and the header added
+    # after, everything else, including the body limit's own 413.
+    app.add_middleware(RequestIdMiddleware)
     register_error_handlers(app)
 
     # Store state on app state for access in routes
     app.state.mesh = mesh
     app.state.upstream_base_url = upstream_base_url
     app.state.upstream_api_key = upstream_api_key
+    app.state.shutting_down = False
 
     # `CausalMesh` is not thread-safe: the relay's chain head, the gate's
     # verdict list and the event counter are plain state, and a call reads
@@ -177,6 +219,23 @@ def create_app(
     @app.get("/health")
     async def health() -> dict[str, str]:
         return {"status": "ok"}
+
+    @app.get("/readyz")
+    async def readyz() -> JSONResponse:
+        """Whether this process can take a gated call right now.
+
+        `/health` says the process is up. This says it can do the job: the
+        session holds signing keys, the relay's chain is readable, and the
+        server is not shutting down. It needs no token and names no agent,
+        tool or count, so the answer reveals nothing to a caller who has not
+        authenticated.
+        """
+        reasons = _not_ready_reasons(app.state.mesh, shutting_down=app.state.shutting_down)
+        if reasons:
+            return JSONResponse(
+                status_code=503, content={"status": "not_ready", "reasons": reasons}
+            )
+        return JSONResponse(status_code=200, content={"status": "ready"})
 
     @app.get("/healthz")
     async def healthz() -> dict[str, Any]:
@@ -204,6 +263,10 @@ def create_app(
         except ToolNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
 
+        # How the agent was established, recorded on the event so a reader of
+        # the chain can tell a credential from a claim (as chat events do).
+        annotations = {"identity_source": _identity_source(principal)}
+
         try:
             async with exec_lock:
                 if inspect.iscoroutinefunction(tool.handler):
@@ -211,6 +274,7 @@ def create_app(
                         agent_id=body.agent_id,
                         tool=tool_name,
                         arguments=body.arguments,
+                        annotations=annotations,
                     )
                 else:
                     result = await run_in_threadpool(
@@ -219,6 +283,7 @@ def create_app(
                             agent_id=body.agent_id,
                             tool=tool_name,
                             arguments=body.arguments,
+                            annotations=annotations,
                         )
                     )
         except UnknownAgentError as exc:
@@ -368,7 +433,7 @@ def create_app(
                     "rule": rule,
                     # How the agent was established, so a reader of the chain
                     # can tell a claim from a credential.
-                    "identity_source": "token-bound" if principal.agent_id else "asserted",
+                    "identity_source": _identity_source(principal),
                 },
             )
 

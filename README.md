@@ -111,8 +111,8 @@ That last row is a real limitation, documented rather than hidden.
 ## Status
 
 **Substrate complete and exercised.** On 2026-09-30, `pytest --collect-only` found
-1733 tests, and a full `pytest` run (slow tests included) on one Windows 11,
-Python 3.12 machine gave 1692 passed, 0 failed and 41 skipped: 35 need pilot
+1751 tests, and a full `pytest` run (slow tests included) on one Windows 11,
+Python 3.12 machine gave 1710 passed, 0 failed and 41 skipped: 35 need pilot
 artifacts that are not in the checkout, 3 need `bash` and `jq`, 2 need symlink
 privilege, 1 needs `TYPESAFE_API_KEY`. That is one machine on one day, and
 there is no CI to corroborate it: the workflow was removed rather than paid
@@ -241,6 +241,14 @@ For async agents, use `await mesh.execute_async(...)` to ensure non-blocking exe
 
 See [`examples/phase1_basic_agent.py`](examples/phase1_basic_agent.py) and [`examples/phase1_async_agent.py`](examples/phase1_async_agent.py) for complete working examples.
 
+**To see the whole path locally** (contract, gateway, an allowed call, a denied call
+whose handler never runs, and evidence you can verify), follow
+[`examples/cli_demo/`](examples/cli_demo/README.md). It needs no API key and no
+model, and `python examples/cli_demo/run_demo.py` runs it unattended. It is a
+demonstration of a pre-alpha SDK: no TLS, evidence held in memory, and
+`causalmesh serve` cannot load tools yet, so the demo serves its tool from a short
+script.
+
 Run the suite with `pytest`. The slow integration tests execute real
 subprocesses; `pytest -m "not slow"` skips them.
 
@@ -269,6 +277,10 @@ causalmesh policy show                      # the contract, as the gate reads it
 causalmesh policy check --agent buyer \
     --kind spend --name evil.io --amount 2.40
 ```
+
+The `buyer` example refuses only once the `buyer` role in the starter contract is
+uncommented; the contract states exceptions, so an agent it does not name is
+unrestricted and the check answers `ALLOW`.
 
 `policy check` asks the gate whether an action would be allowed, without
 running an agent or spending anything, and exits `0` for allowed and `1` for
