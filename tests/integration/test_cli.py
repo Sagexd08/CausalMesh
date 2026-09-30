@@ -602,16 +602,18 @@ class TestAnalyze:
     def test_edges_on_an_artifact_older_than_the_feature_reports_none(self) -> None:
         """The pilot predates edge population; that is a fact, not an error.
 
-        `edges_for_run` treats a missing `edges` key as "none recorded"
-        rather than raising, so an artifact from before this feature shipped
-        still analyzes cleanly instead of failing.
+        A missing `edges` key reads as unknown, not as zero: the artifact
+        cannot say the run had no relationships, only that it never recorded
+        any. It still analyzes cleanly instead of failing.
         """
         result = invoke(
             "analyze", "--edges", "--id", "pilot_landing", "--root", str(REPO), "--json"
         )
         assert result.exit_code == 0, result.stdout
         report = payload(result)
-        assert report["total_edges"] == 0
+        assert report["total_edges"] is None
+        assert report["by_relationship"] is None
+        assert report["runs_edges_unknown"] == 24
         assert report["total_runs"] == 24
 
 
@@ -688,6 +690,24 @@ class TestAnalyzeEdgesEndToEnd:
             assert report["total_edges"] >= 1
             edge = report["runs"][0]["edges"][0]
             assert edge["relationship"] == "REQUIRED"
+
+            # The denial edge and the acceptance edge both resolve against the
+            # artifact's own chain: no endpoint is unknown or unresolved.
+            edges = report["runs"][0]["edges"]
+            assert len(edges) == report["total_edges"]
+            assert report["by_relationship"]["REQUIRED"] == len(edges)
+            for recorded in edges:
+                assert recorded["from_label"] not in ("unknown", "unresolved")
+                assert recorded["to_label"] not in ("unknown", "unresolved")
+            assert any(
+                e["from_label"].startswith("ACCEPTANCE_DECIDED")
+                and e["to_label"].startswith("INTEGRATION_TEST_RESULT")
+                for e in edges
+            )
+            assert any(
+                e["from_label"].startswith("FAILURE") and e["to_label"].startswith("POLICY_VERDICT")
+                for e in edges
+            )
         finally:
             self._cleanup(experiment_id)
 
