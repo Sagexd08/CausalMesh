@@ -156,8 +156,14 @@ def build(
     repository_root: Path,
     config: dict[str, Any] | None = None,
     now: datetime | None = None,
+    record_host: bool = False,
 ) -> Manifest:
-    """Hash every artifact in a collection and record what produced it."""
+    """Hash every artifact in a collection and record what produced it.
+
+    The manifest is tracked, so by default it carries no hostname or OS
+    username, only keyed digests of them (see `Environment`). `record_host`
+    records the real values and is for manifests that will not be committed.
+    """
     experiment_dir = Path(experiment_dir)
     if not experiment_dir.is_dir():
         raise ManifestError(f"{experiment_dir} is not a directory")
@@ -184,7 +190,7 @@ def build(
         artifacts=entries,
         config_freeze=freeze_hash(config or {}),
         created_at=stamp,
-        environment=Environment.capture(repository_root).to_dict(),
+        environment=Environment.capture(repository_root, record_host=record_host).to_dict(),
         experiment_id=experiment_dir.name,
     )
 
