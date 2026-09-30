@@ -314,6 +314,7 @@ class ExperimentRunner:
         artifact_path = self.environment.raw_root / record.run_id
 
         watchdog = _Watchdog(self.run_timeout_s, self.timeout_grace_s)
+        decisions_before = len(self._handler_decisions())
         try:
             result = await watchdog.run(
                 lambda: execute_task(
@@ -366,7 +367,12 @@ class ExperimentRunner:
         if result is None:
             raise RuntimeError("execute_task returned nothing and the watchdog did not fire")
 
-        self._write_artifact(artifact_path, self._artifact_for(result, record))
+        self._write_artifact(
+            artifact_path,
+            self._artifact_for(
+                result, record, checkpoint_decisions=self._handler_decisions()[decisions_before:]
+            ),
+        )
 
         state = RunState.COMPLETED
         self.index.finish(
@@ -470,25 +476,48 @@ class ExperimentRunner:
             **self.run_config,
         )
 
-    def _artifact_for(self, result: RunResult, record: RunRecord) -> dict[str, Any]:
+    def _handler_decisions(self) -> list[dict[str, Any]]:
+        """What an attached checkpoint handler has decided so far, if it keeps a log."""
+        log = getattr(self.run_config.get("checkpoint_handler"), "decisions", None)
+        return list(log()) if callable(log) else []
+
+    def _artifact_for(
+        self,
+        result: RunResult,
+        record: RunRecord,
+        *,
+        checkpoint_decisions: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
         """The full run artifact: everything the analysis will later read.
 
         The signed chain goes in whole. It is the evidence, and an artifact
         that summarised it would leave the verifier nothing to verify.
         """
-        return {
+        provenance = dict(self.run_config)
+        handler = provenance.pop("checkpoint_handler", None)
+        reproducible = "agent_kind" not in self.run_config
+        artifact: dict[str, Any] = {
             "arm": record.arm,
             "chain": result.records,
             "experiment_id": record.experiment_id,
             "plan_order": record.plan_order,
-            "provenance": dict(self.run_config),
-            "reproducible": "agent_kind" not in self.run_config,
+            "provenance": provenance,
             "repetition": record.repetition,
             "result": result.to_dict(),
             "run_id": record.run_id,
             "state": RunState.COMPLETED,
             "task_id": record.task_id,
         }
+        if handler is not None:
+            # The handler object is not data; its class is. A handler that
+            # says it is not deterministic (a person at a terminal) makes the
+            # run not reproducible from the seed, and its own log of what it
+            # was asked rides in the envelope, outside the signed chain.
+            provenance["checkpoint_handler"] = type(handler).__name__
+            reproducible = reproducible and getattr(handler, "deterministic", True) is not False
+            artifact["checkpoint_decisions"] = list(checkpoint_decisions or [])
+        artifact["reproducible"] = reproducible
+        return artifact
 
     def _write_artifact(self, directory: Path, payload: dict[str, Any]) -> None:
         """Write a run artifact, refusing to overwrite one (§31).

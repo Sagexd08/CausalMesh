@@ -372,6 +372,10 @@ def _parse_checkpoint(entry: Any, index: int) -> Checkpoint:
     where = f"policy.checkpoints[{index}]"
     if not isinstance(entry, dict):
         raise ContractError(f"{where} must be a mapping")
+    # YAML 1.1 reads an unquoted `on` as the boolean True, so `on: path`
+    # written the obvious way arrived here as {True: "path"} and failed with
+    # a TypeError instead of loading. `on` is the documented key; accept it.
+    entry = {"on" if key is True else key: value for key, value in entry.items()}
     _reject_unknown(entry, _CHECKPOINT_KEYS, where)
 
     on = entry.get("on")
@@ -422,7 +426,7 @@ def _reject_unknown(mapping: dict[str, Any], known: set[str], where: str) -> Non
     unknown = set(mapping) - known
     if unknown:
         raise ContractError(
-            f"unknown key(s) in {where}: {', '.join(sorted(unknown))}. "
+            f"unknown key(s) in {where}: {', '.join(sorted(map(str, unknown)))}. "
             f"Valid keys here: {', '.join(sorted(known))}"
         )
 
