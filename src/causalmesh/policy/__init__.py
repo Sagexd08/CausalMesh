@@ -26,8 +26,9 @@ from causalmesh.policy.checkpoints import (
 )
 from causalmesh.policy.contract import Checkpoint, Contract, ContractError, Role
 from causalmesh.policy.gate import Gate, Verdict
-from causalmesh.policy.ledger import Entry, Ledger
+from causalmesh.policy.ledger import Entry, Ledger, Reservation, ReserveOutcome
 from causalmesh.policy.resource import Resource, ResourceError, ResourceKind
+from causalmesh.policy.terminal_handler import TerminalCheckpointHandler
 
 __all__ = [
     "AutoDenyHandler",
@@ -39,11 +40,14 @@ __all__ = [
     "Entry",
     "Gate",
     "Ledger",
+    "Reservation",
+    "ReserveOutcome",
     "Resource",
     "ResourceError",
     "ResourceKind",
     "Role",
     "ScriptedHandler",
+    "TerminalCheckpointHandler",
     "Verdict",
     "evaluate_checkpoints",
 ]

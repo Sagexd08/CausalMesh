@@ -576,10 +576,13 @@ class TestSpend:
     ) -> None:
         mesh, _ = _mesh(tmp_path, ledger=ledger)
 
-        def broken(**_: Any) -> None:
+        def broken(*_args: Any, **_: Any) -> None:
             raise OSError("disk full")
 
+        # A spend is reserved, then committed; `record` is the path for a total
+        # nobody declared. A disk that fails the write fails both.
         monkeypatch.setattr(ledger, "record", broken)
+        monkeypatch.setattr(ledger, "commit", broken)
         result = mesh.execute(tool="pay", arguments={"to": "api.example.com", "usd": "0.05"})
         assert result.executed, "the outcome must stand"
         assert result.audit_error is not None and "disk full" in result.audit_error

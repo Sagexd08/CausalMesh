@@ -16,8 +16,8 @@ inside it is in the commit log, and what is deliberately absent is in
   tool, an allowed call, a denied call whose handler never runs, and evidence read back
   and verified against the operator's key ring. No key or model needed;
   `python examples/cli_demo/run_demo.py` runs it unattended and the suite runs it too.
-  Pre-alpha: no TLS, evidence held in memory, and `causalmesh serve` still cannot load
-  tools, so the demo serves its tool from a short script.
+  Pre-alpha. Written before `serve --tools`, TLS and `CausalMesh.export` existed, so the
+  demo still serves its tool from a short script and holds its evidence in memory.
 - **Developer SDK and tool gateway.** `CausalMesh`, `Tool` and `ToolGateway`
   put the existing gate in front of an operator's own tools, sync and async.
   Tools are gated unless declared `mutating=False`; protected resources come
@@ -28,6 +28,89 @@ inside it is in the commit log, and what is deliberately absent is in
 - **Framework adapters** for OpenAI function calling and LangChain
   (`langchain-core` optional), both routed through `CausalMesh.execute`.
   Tested with mocks only; no hosted model or real framework agent loop was run.
+- `AnthropicAdapter`: Anthropic Messages `tool_use` blocks in, `tool_result` blocks out
+  (with `is_error`), tool definitions with `input_schema`. No vendor SDK; accepts plain
+  dicts or SDK block objects. Sync and async (`handle_tool_use(s)`, `handle_message`, and
+  `a`-prefixed twins).
+- `LangGraphAdapter`: the LangChain adapter's tools plus `tool_node()`, a real
+  `langgraph.prebuilt.ToolNode`. Tested with a real `ToolNode` in a `StateGraph` and a
+  prebuilt agent driven by a scripted fake model.
+- `CrewAIAdapter`: `crewai.tools.BaseTool` subclasses that route through the gate, sync
+  (`_run`) and async (`_arun`). Tested against a fake `BaseTool` only; the real package
+  has not been run.
+- `BaseFrameworkAdapter.observe` / `aobserve` and `Observation`: the single place a
+  model-requested call becomes text, so every adapter classifies errors the same way.
+  `bind_arguments` for adapters that receive positional or keyword arguments.
+- `tests/integration/test_adapter_gate.py`: one set of safety properties (allowed call
+  goes through the gate and is recorded, denied call never reaches the handler, model
+  mistakes are answers, unknown agent raises before gate and handler, all on the async
+  path too) run through every adapter, plus a check that no adapter module calls a handler.
+  No hosted model has driven any adapter.
+- **`causalmesh serve --tools MODULE:FUNC | FILE.py:FUNC`** (repeatable): imports the
+  operator's code at startup and calls `FUNC(mesh)` to register tools, so `/v1/tools` is
+  no longer empty. It runs code with the server's privileges and is never derived from the
+  contract or a request. A bad spec stops startup with exit 2.
+- **TLS for `serve`:** `--ssl-certfile` and `--ssl-keyfile` (key passphrase only from
+  `CAUSALMESH_SSL_KEYFILE_PASSWORD`, checked before the socket opens), and `--require-tls`,
+  which refuses a non-loopback bind without them. Without TLS on a non-loopback host `serve`
+  warns that tokens cross the network in clear. No mutual TLS and no certificate reload.
+- `serve` operability: `X-Request-ID` on every response and log line, an access log with
+  no headers or bodies and every configured secret scrubbed, `/readyz`, `--log-level`,
+  `--timeout-keep-alive`, `--timeout-graceful-shutdown`; `--workers` above 1 is refused.
+- **Token expiry, revocation and rotation for `serve`** without a restart.
+  `--agent-token AGENT=TOKEN@EXPIRY`, `--api-token-expires`, and `--tokens-file`
+  (YAML or JSON, re-read on change or SIGHUP; `id`, `token`, `agent`, `expires`). A
+  credential is valid while `now < expires_at`; past it the request gets 401 "Token
+  expired". A bad reload keeps the last good set and logs no content; on POSIX a file
+  readable by group or other is refused. Chat and `/execute` events carry `credential_id`,
+  the operator's label (never the token or a digest of it), beside `identity_source`.
+  `/execute` events record `identity_source` too. The log redactor learns reloaded tokens.
+- **`CausalMesh.export(directory)`** writes `run.json` and `keyring.json` (public keys only)
+  so `causalmesh verify --run <directory>` verifies an SDK session. `verify` now prefers a
+  `keyring.json` beside `run.json` to the keys embedded in the records, fails a run whose
+  `keyring.json` is unreadable instead of falling back, and reports which source it used.
+  Opt-in `persist_to=<dir>` appends `chain.jsonl` as the session goes.
+- **A logical clock in the signed chain.** `ToolGateway` signs `base_us + n * tick_us`
+  (`clock_base_us`, `clock_tick_us`), so two sessions with one seed and one call sequence
+  share a head hash. The wall-clock time of each call is in the unsigned
+  `envelope.wall_time_us_by_event`. `/v1/chat/completions` still signs the wall clock.
+- `CausalMesh(claims=ClaimRegistry)`: exclusive leases apply to SDK sessions.
+  `mesh.claim()`, `mesh.release()`, `mesh.denials()`, `mesh.claim_registry`. Off by default.
+  Both default `now_us` to the session's logical time, so a lease expires on the clock the gate reads.
+  Same run id for lease and gate.
+- `TerminalCheckpointHandler`, a human-attached `CheckpointHandler` (timeout, bounded
+  re-prompts, refuse on EOF/closed/no-tty, ASCII-escaped prompts, serialised prompts, own
+  decision log); `CausalMesh(checkpoint_handler=...)`; `causalmesh experiment run
+  --checkpoint-prompt`. Run artifacts from a run with a handler record its class under
+  `provenance`, `reproducible: false` for a non-deterministic one, and `checkpoint_decisions`.
+- **Declared totals are reserved, then committed.** `Ledger.reserve` admits callers racing
+  on one allowance one at a time, across threads and processes (`BEGIN IMMEDIATE`), and
+  `ToolGateway` commits on success and releases on failure. `Tool(spend_on_error=True)`
+  counts the amount as spent when the handler raises. A holder that dies leaves its hold
+  (fails closed) until `Ledger.release_all`; the reservation exists only on the SDK path.
+- **Two more task families:** `interface_consumer` and `shared_utility_refactor`
+  (`tasks/*.yaml`, new fixtures), one per section 35 family. Real section 37 verdicts with
+  mock agents: both SENSITIVE. The verdicts rest on authored scripts and say nothing about
+  agent behaviour.
+- **Causal edges:** the integration test result is now a chain event
+  (`EventType.INTEGRATION_TEST_RESULT`, identity `integration_test`, payload
+  `{command, exit_code, ran}`, no clock), and a `REQUIRED` edge joins the acceptance
+  decision to it. `causalmesh analyze --edges` lists counts by relationship kind and each
+  edge with labelled endpoints.
+- Scheduler: opt-in whole-run watchdog (`--run-timeout`); runs that exceed it reach
+  `TIMED_OUT` with partial evidence preserved and a verifiable chain. Cooperative only: a run
+  blocked in a synchronous call is not interrupted.
+- Scheduler: `RunState.HANDED_OFF` and the `HandoffPackage` record shape, as prerequisites
+  for agent handoff on recovery. Not wired into the loop.
+- Selectable delivery per run. `policy_for_arm(arm, mode=..., interests=...)` and
+  `RunConfig.delivery_mode` choose broadcast or path-scoped delivery for the informed arms.
+  Unset behaves as before; C0 stays isolated whatever the mode. `PathScopedDelivery` now has
+  a production consumer (the scalability profile).
+- `tasks.scaled`, a deterministic generated task for N agents (`ScaledSpec`,
+  `generate_scaled_task`); a non-gated `scalability` profile (N in {4, 8, 16}) and
+  `causalmesh experiment scalability`, reporting delivered events and coordination bytes for
+  broadcast against path-scoped delivery; `metrics.scaling` (`growth_exponent` is `None`
+  when undefined). Scripted mock agents only.
 
 - **The policy plane.** A declared contract (`causalmesh.yaml`) read by a
   gate that allows or refuses, and a ledger that records what has been
@@ -56,6 +139,20 @@ inside it is in the commit log, and what is deliberately absent is in
 
 ### Fixed
 
+- `LangChainAdapter` tools raised `MissingResourceError` / `ToolNotFoundError` out of the
+  caller's loop on a model's bad call; they now return `Action failed: ...`, as the OpenAI
+  adapter already did. This is what lets the tools survive inside a LangGraph `ToolNode`.
+- `tool_to_json_schema` dropped every parameter when one annotation could not be resolved,
+  described `Optional[int]` and `X | None` as `string`, listed `*args` / `**kwargs` as
+  required-looking properties, and ignored `Literal` and list item types. `LangChainAdapter`
+  handlers with `**kwargs` nested the extras under the parameter name.
+- `on: path` (unquoted) under `policy.checkpoints` in `causalmesh.yaml` no longer raises a
+  `TypeError` while loading: YAML 1.1 reads an unquoted `on` as a boolean.
+- `causalmesh policy show`, `policy check` and `serve` rejected the SDK-only `agent:` and
+  `tools:` sections that `policy validate` and `CausalMesh.from_config` accepted. One schema
+  now, and an unknown top-level key is still an error everywhere.
+- `analyze` reported `total_edges: 0` for a run whose artifact predates edges, a confident
+  zero. It is `unknown` (`null` in JSON) now, with `runs_edges_unknown` beside the counts.
 - **`causalmesh policy validate` crashed on the SDK sections it is documented to
   check.** Run with no path, it located the file with the strict core loader,
   which rejects `agent:` and `tools:`, so the repository's own
@@ -160,6 +257,19 @@ inside it is in the commit log, and what is deliberately absent is in
 
 ### Changed
 
+- **Manifests no longer record a hostname or username by default.** `machine_id` and
+  `operator_id` are a keyed digest (`keyed:` plus 16 hex digits, keyed with a random secret
+  kept inside `.git`) or `unknown`. `causalmesh manifest write --record-host` and
+  `causalmesh experiment run --record-host` record the real values. A digest compares only
+  within one clone. Manifests already in history are untouched.
+- `causalmesh experiment plan --profile confirmatory --allow-gated` now plans 1920 runs
+  (120 repetitions x 4 arms x 4 tasks), where it planned 960 with two tasks. The gate on the
+  profile stays closed and nothing was executed.
+- Every run's chain gains one event (`INTEGRATION_TEST_RESULT`), so a `head_hash` stored
+  before this change no longer matches a re-run. Two runs of the same arm still agree, and
+  older `run.json` artifacts verify as before.
+- `profile("scalability")` in the run planner points to `causalmesh experiment scalability`.
+  No profile, run count or hash changed.
 - `/execute` and chat answer `502`, not `200`, when the upstream fails, and `400`
   for an unknown agent, with no list of the agents that do exist.
 - The website moved from `docs-site/` to `frontend/`. The directory held the

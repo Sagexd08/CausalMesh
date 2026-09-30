@@ -8,9 +8,11 @@ Tasks are **data, not code**. A task that could execute arbitrary Python
 would make "the same task" unverifiable across machines, and the
 configuration hash (§33) would no longer pin what actually ran.
 
-Status: describes Step 9 of `docs/PLAN.md`. One task exists
-(`schema_handler_widen`); the remaining families are tracked in
-`docs/backlog.md`.
+Status: describes Step 9 of `docs/PLAN.md`. Four authored tasks exist, one per
+§35 family: `schema_handler_widen` and `interface_consumer` and
+`shared_utility_refactor` (dependency shapes) and `concurrent_edit_collision`
+(contention), plus the synthetic CooperBench import and a generated N-agent task
+(below). What each shows, and what is not claimed, is in `docs/backlog.md`.
 
 ## What makes a task coordination-sensitive
 
@@ -74,6 +76,34 @@ This was discovered by running the task: judging agent_b's copy made C3
 fail, because enforcement correctly refused agent_b's write to a file
 agent_a owned, leaving agent_b's local view inconsistent. The claim
 semantics were right; the judging was wrong.
+
+## The two dependency tasks added later
+
+`interface_consumer` (`quote(item)` becomes `quote(item, region)` with no
+default; the consumer's stale call fails with `TypeError`) and
+`shared_utility_refactor` (`slugify` becomes `make_slug(text, *, sep)`, old name
+removed; the stale call fails with `AttributeError`, and the utility has two
+callers owned by different agents). Both are dependency-shaped: ownership is
+disjoint and nothing is contested, so C3 equals C2 on both. Their real §37 gate
+verdicts with the mock agents are SENSITIVE (C0 0/2, C2 2/2). The dependency
+exists by construction in three layers of unequal strength, and the stale-versus-
+informed branch in the script is **authored, not discovered**: the verdicts
+confirm the construction is wired correctly, they are not an estimate of how often
+real agents would break such an interface. See `docs/backlog.md` ("Remaining task
+families").
+
+**A hazard the gate shares:** the integration test runs `python -m pytest` with the
+`python` on `PATH`. If that interpreter has no pytest, the test fails in every arm
+and the gate reports NOT SENSITIVE, which looks like "the arms do not differ". Read
+`tests_passed` and `divergence_absent` separately before believing a NOT SENSITIVE.
+
+## Generated tasks for N agents
+
+`causalmesh.tasks.scaled` generates a task for N agents from `ScaledSpec`
+(agents, contention group size, files per agent). The task and its fixture are
+produced in memory and in a scratch directory; nothing is added to `tasks/` or
+`fixtures/`, so it is not part of any run plan. It exists for
+`causalmesh experiment scalability`.
 
 ## Measured results
 

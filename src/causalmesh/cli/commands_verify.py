@@ -63,16 +63,36 @@ def _key_ring_for(records: list[dict[str, Any]]):
     return PublicKeyRing(keys=keys)
 
 
-def _verify_records(
-    records: list[dict[str, Any]],
-    ring: Any,
-    *,
-    arm: str | None,
-    name: str,
-    prefix_detail: str = "",
-    prefix_ok: bool = True,
-) -> dict[str, Any]:
-    """Verify one chain. `ring` is the operator's, or None for the embedded one."""
+def _pinned_key_ring(run_dir: Path):
+    """The key ring in `keyring.json` beside `run.json`, when there is one.
+
+    Returns `(ring, None)`, `(None, None)` when the file is absent, or
+    `(None, reason)` when it is present but unusable. A present-but-broken
+    ring must fail the run: falling back to the keys embedded in the records
+    would let whoever damaged the file choose the weaker check.
+    """
+    from causalmesh.crypto import PublicKeyRing
+
+    path = run_dir / "keyring.json"
+    if not path.is_file():
+        return None, None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        return None, f"keyring.json is unreadable: {exc}"
+    if not isinstance(data, dict) or not all(
+        isinstance(k, str) and isinstance(v, str) for k, v in data.items()
+    ):
+        return None, "keyring.json must be an object of agent id to hex public key"
+    return PublicKeyRing.from_dict(data), None
+
+
+def _verify_one(run_dir: Path) -> dict[str, Any]:
+    """Verify the chain embedded in one run artifact.
+
+    Keys come from a `keyring.json` beside `run.json` when present, which is
+    independent of the records; otherwise from the records themselves.
+    """
     from causalmesh.verifier import verify_chain
 
     result = verify_chain(records, ring if ring is not None else _key_ring_for(records))
@@ -103,61 +123,26 @@ def _verify_one(run_dir: Path, ring: Any = None) -> dict[str, Any]:
             "run": run_dir.name,
             "valid": False,
         }
-    return _verify_records(records, ring, arm=artifact.get("arm"), name=run_dir.name)
 
-
-def _verify_evidence(path: Path, ring: Any, anchor_head: str | None) -> dict[str, Any]:
-    """Verify an SDK evidence file (JSONL), including a torn final line."""
-    from causalmesh.sdk.errors import EvidenceCorruptError
-    from causalmesh.sdk.evidence import scan_evidence
-
-    try:
-        scan = scan_evidence(path)
-    except EvidenceCorruptError as exc:
-        return {"detail": str(exc), "events": 0, "run": path.name, "valid": False}
-
-    detail_parts: list[str] = []
-    ok = True
-    if scan.torn_tail is not None:
-        ok = False
-        detail_parts.append(
-            f"the final line is incomplete ({len(scan.torn_tail)} bytes after "
-            f"{len(scan.records)} whole records): a write was interrupted or the file was "
-            "truncated. The whole records before it are checked below"
-        )
-    if not scan.records:
+    pinned, problem = _pinned_key_ring(run_dir)
+    if problem is not None:
         return {
-            "detail": "; ".join([*detail_parts, "no records in the evidence file"]),
-            "events": 0,
-            "run": path.name,
+            "arm": artifact.get("arm"),
+            "detail": problem,
+            "events": len(records),
+            "run": run_dir.name,
             "valid": False,
-            "torn_tail": scan.torn_tail is not None,
         }
-
-    if anchor_head is not None:
-        wanted = anchor_head.strip().lower()
-        known = [str(r.get("chain_hash")) for r in scan.records if isinstance(r, dict)]
-        if wanted not in known:
-            ok = False
-            detail_parts.append(
-                f"anchor head {wanted[:16]}... is not in the chain: the log was truncated "
-                "before that point or is not the log the anchor was taken from"
-            )
-
-    first = scan.records[0]
-    event = first.get("event") if isinstance(first, dict) else None
-    identity = event.get("identity") if isinstance(event, dict) else None
-    arm = identity.get("arm") if isinstance(identity, dict) else None
-    entry = _verify_records(
-        scan.records,
-        ring,
-        arm=arm if isinstance(arm, str) else None,
-        name=path.name,
-        prefix_detail="; ".join(detail_parts),
-        prefix_ok=ok,
-    )
-    entry["torn_tail"] = scan.torn_tail is not None
-    return entry
+    result = verify_chain(records, pinned if pinned is not None else _key_ring_for(records))
+    return {
+        "arm": artifact.get("arm"),
+        "keys": "keyring.json" if pinned is not None else "embedded",
+        "detail": "" if result.valid else "; ".join(str(f.detail) for f in result.failures[:3]),
+        "events": result.events,
+        "head_hash": result.head_hash,
+        "run": run_dir.name,
+        "valid": result.valid,
+    }
 
 
 def verify_command(
