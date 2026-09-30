@@ -82,6 +82,13 @@ class TaskFamily:
     )
 
 
+def _parse_in_design(value: Any, task_id: str) -> bool:
+    """A strict boolean: a string like "false" is truthy and would admit the task."""
+    if not isinstance(value, bool):
+        raise TaskError(f"{task_id}: in_design must be true or false, got {value!r}")
+    return value
+
+
 @dataclass(frozen=True, slots=True)
 class AgentRole:
     """One agent's assignment within a task (§35).
@@ -145,6 +152,17 @@ class TaskDefinition:
     scenario: dict[str, Any]
     success: SuccessCriteria = field(default_factory=SuccessCriteria)
     contested_paths: frozenset[str] = frozenset()
+    in_design: bool = True
+    """Whether experiment profiles may schedule this task.
+
+    True for every task that predates the flag, so their `content_hash` and
+    every profile's run count are unchanged. A task authored later can set it
+    False to be listed, validated and gate-checked without silently changing
+    the size of a collection that already has a meaning: `pilot` was
+    calibrated on the tasks that existed when it was first run. Admitting the
+    task is then an explicit edit (flip the flag and bump `version`), which
+    changes the task's hash and so is visible in the plan.
+    """
 
     def __post_init__(self) -> None:
         if not self.task_id or not self.task_id.replace("_", "").replace("-", "").isalnum():
@@ -189,7 +207,7 @@ class TaskDefinition:
         raise TaskError(f"{self.task_id}: no role for agent {agent_id!r}")
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        data: dict[str, Any] = {
             "contested_paths": sorted(self.contested_paths),
             "description": self.description,
             "family": self.family,
@@ -200,6 +218,11 @@ class TaskDefinition:
             "task_id": self.task_id,
             "version": self.version,
         }
+        if not self.in_design:
+            # Only when False, so a task that never mentions the flag hashes
+            # exactly as it did before the flag existed.
+            data["in_design"] = False
+        return data
 
     def content_hash(self) -> str:
         """A stable digest of everything that defines this task.
@@ -255,6 +278,7 @@ class TaskDefinition:
             scenario=data["scenario"],
             success=success,
             contested_paths=frozenset(data.get("contested_paths", ())),
+            in_design=_parse_in_design(data.get("in_design", True), data["task_id"]),
         )
 
     @classmethod

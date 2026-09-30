@@ -66,6 +66,10 @@ def _build_plan(repo: Repo, *, experiment_id: str, profile_name: str, seed: str,
     # design (backlog section 54). Never plan one implicitly.
     tasks = [task for task in tasks if task.family != TaskFamily.COOPERBENCH_IMPORT]
 
+    # A task that declares `in_design: false` is listed and validated but does
+    # not change the size of a collection until someone admits it explicitly.
+    tasks = [task for task in tasks if task.in_design]
+
     if not tasks:
         fail("no tasks found", hint=f"Expected task YAML in {repo.tasks_dir}.")
         raise typer.Exit(Exit.ERROR)

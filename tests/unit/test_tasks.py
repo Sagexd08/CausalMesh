@@ -388,3 +388,28 @@ class TestWorkspaceDivergence:
         (a.root / "only_a.py").write_text("x\n", encoding="utf-8")
         b = Workspace.create(base=tmp_path, run_id="r", agent_id="b")
         assert diverged_files(workspace_digest(a), workspace_digest(b)) == ("only_a.py",)
+
+
+class TestInDesignFlag:
+    """`in_design` keeps a task out of experiment profiles without hiding it."""
+
+    def test_a_task_that_never_mentions_it_is_in_the_design(self) -> None:
+        assert TaskDefinition.from_dict(minimal_task()).in_design is True
+
+    def test_the_default_leaves_the_hash_untouched(self) -> None:
+        # A task authored before the flag existed must hash exactly as it
+        # did, or every recorded run would silently stop matching its task.
+        task = TaskDefinition.from_dict(minimal_task())
+        assert "in_design" not in task.to_dict()
+        explicit = TaskDefinition.from_dict(minimal_task(in_design=True))
+        assert explicit.content_hash() == task.content_hash()
+
+    def test_holding_a_task_out_changes_its_hash(self) -> None:
+        held = TaskDefinition.from_dict(minimal_task(in_design=False))
+        assert held.in_design is False
+        assert held.to_dict()["in_design"] is False
+        assert held.content_hash() != TaskDefinition.from_dict(minimal_task()).content_hash()
+
+    def test_a_string_is_refused_rather_than_read_as_truthy(self) -> None:
+        with pytest.raises(TaskError, match="in_design"):
+            TaskDefinition.from_dict(minimal_task(in_design="false"))
