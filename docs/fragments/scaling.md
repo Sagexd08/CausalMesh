@@ -123,7 +123,7 @@ How to read it, and what not to conclude:
   (metadata, window 8) caps bytes per turn, so broadcast bytes grow about 1.9
   and path-scoped bytes about 1.0 under localized contention. At N = 16 the C2
   broadcast run delivered 484 events an agent never saw (the window cut them);
-  the path-scoped run delivered none it did not use.
+  the localized path-scoped run left none unseen (dense left 29).
 - All 24 chains verified offline. The scripted task succeeded in all 24 runs, so
   under this task path-scoped agents were told what they needed. That is a
   statement about a scripted task where interests were declared to match the
@@ -183,9 +183,10 @@ Replace the "Scaling beyond 4 agents (§86)" section with:
 >   by `PathScopedDelivery`; the profile's task emits none from agents, so the
 >   cost of scoping those is unmeasured.
 > - the growth statement is over delivery and channel bytes, not tokens billed,
->   latency, or task quality; C3 (claims) is generated-task-compatible but
->   deliberately not in the default profile, since the contested paths make its
->   enforcement fail the task by design.
+>   latency, or task quality; C3 (claims) is not in the default profile
+>   (one ad hoc C3 run at N = 8, path-scoped, failed the integration test: the
+>   shared registries are contested, so the exclusive leases refuse the
+>   non-owner writers. One run, not a result.)
 > - the C1 transcript `Room` appends a message for every delivery, so N-1
 >   copies of each event enter the room under broadcast. That inflates C1 bytes
 >   beyond what one transcript per event would cost; it predates this change and
