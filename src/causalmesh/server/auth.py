@@ -15,6 +15,11 @@ the kind of token:
   The agent is asserted, and the token vouches for the caller, not for the
   claim.
 
+Which credentials exist, when they expire and how they change while the
+server runs (`--tokens-file`) is `credentials.py`. A request is refused 401
+when its token is unknown or past its expiry; the chain records the operator's
+label for the credential (`credential_id`), never the token or a digest of it.
+
 Both are bearer secrets over whatever transport the operator provides; TLS is
 theirs. Neither proves anything to a third party who did not see the request:
 the server holds every agent's signing key, so a signature in the chain
@@ -25,7 +30,6 @@ tying that record to an agent.
 from __future__ import annotations
 
 import hashlib
-import hmac
 import logging
 import threading
 import time
@@ -36,6 +40,8 @@ from typing import Any, NoReturn
 
 from fastapi import HTTPException, Request, Security
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+
+from .credentials import CredentialStore
 
 log = logging.getLogger(__name__)
 
@@ -50,10 +56,14 @@ class Principal:
 
     `agent_id` is set only for a token bound to an agent. `None` means the
     token is not bound, so any agent named in the request is merely asserted.
+    `label` says which configured credential it was, without revealing it.
     """
 
     agent_id: str | None = None
     key: str = ""
+    # The operator's label for the credential, recorded in the chain as
+    # `credential_id`. Empty when authentication is off (unknown, not "none").
+    label: str = ""
 
 
 class SlidingWindowLimiter:
@@ -119,6 +129,7 @@ def make_auth_checker(
     agent_tokens: Mapping[str, str] | None = None,
     *,
     rate_limit_per_minute: int | None = None,
+    store: CredentialStore | None = None,
 ) -> Callable[..., Any]:
     """Returns a FastAPI dependency that checks bearer tokens and yields a `Principal`.
 
@@ -127,37 +138,37 @@ def make_auth_checker(
     (misconfiguration guard).
     Otherwise only the given tokens are valid.
 
+    `store` replaces the two token arguments with a `CredentialStore`, which is
+    how labels, expiry and a reloadable tokens file reach the checker.
+
     A blank token is refused at construction: it would let an empty
     `Authorization: Bearer` header through, which is authentication off in
     everything but name. `serve` already treats a blank `--api-token` as no
     token; this closes the same hole for a caller of the factory.
     """
-    bound = validate_tokens(tokens, agent_tokens)
-    disabled = tokens is None and not bound
+    if store is None:
+        store = CredentialStore.from_config(tokens, agent_tokens)
+    credentials = store
     limiter = SlidingWindowLimiter(rate_limit_per_minute) if rate_limit_per_minute else None
 
     async def check(
         request: Request,
-        credentials: HTTPAuthorizationCredentials | None = Security(bearer),  # noqa: B008
+        credentials_header: HTTPAuthorizationCredentials | None = Security(bearer),  # noqa: B008
     ) -> Principal:
-        if disabled:
+        if not credentials.enabled:
             # Dev mode: no auth required.
             return Principal()
-        if credentials is None or credentials.scheme.lower() != "bearer":
+        if credentials_header is None or credentials_header.scheme.lower() != "bearer":
             _refuse(request, "Authentication required")
-        presented = credentials.credentials.encode("utf-8")
+        presented = credentials_header.credentials.encode("utf-8")
 
         # Every candidate is compared, in constant time, so the response time
         # does not reveal how much of a guessed token matched.
-        matched_unbound = False
-        for token in tokens or ():
-            matched_unbound |= hmac.compare_digest(presented, token.encode("utf-8"))
-        matched_agent: str | None = None
-        for token, agent in bound.items():
-            if hmac.compare_digest(presented, token.encode("utf-8")):
-                matched_agent = agent
-        if not matched_unbound and matched_agent is None:
+        matched, expired = credentials.lookup(presented)
+        if matched is None:
             _refuse(request, "Invalid token")
+        if expired:
+            _refuse(request, "Token expired", credential=matched.label)
 
         key = hashlib.sha256(presented).hexdigest()[:16]
         if limiter is not None:
@@ -168,19 +179,24 @@ def make_auth_checker(
                     detail="Rate limit exceeded",
                     headers={"Retry-After": str(int(wait) + 1)},
                 )
-        return Principal(agent_id=matched_agent, key=key)
+        return Principal(agent_id=matched.agent_id, key=key, label=matched.label)
 
     return check
 
 
-def _refuse(request: Request, detail: str) -> NoReturn:
-    """Refuse a request as 401, logging that it happened and never the credential."""
+def _refuse(request: Request, detail: str, *, credential: str | None = None) -> NoReturn:
+    """Refuse a request as 401, logging that it happened and never the credential.
+
+    `credential` is the operator's label for a token that was recognised but is
+    no longer valid; it names which one, and is not a secret.
+    """
     client = request.client.host if request.client else "unknown"
     log.warning(
-        "authentication refused: %s %s from %s (%s)",
+        "authentication refused: %s %s from %s (%s%s)",
         request.method,
         request.url.path,
         client,
         detail,
+        f", credential {credential!r}" if credential else "",
     )
     raise HTTPException(status_code=401, detail=detail, headers={"WWW-Authenticate": "Bearer"})
