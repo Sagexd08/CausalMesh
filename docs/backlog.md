@@ -47,9 +47,13 @@ happened, which is a different property from being able to repeat it.
 
 ### CooperBench import (§54)
 
-**Status: loader built and proven end-to-end on one synthetic worked
-example, including a real §37 gate run. The real 30-task / 652-pair
-CooperBench dataset has not been imported.**
+**Status: the loader has been run over the real CooperBench dataset. All 30
+tasks, 199 features and 652 feature pairs import with 0 failures. The real
+§37 gate was run on 3 pairs and returned NOT SENSITIVE for all 3, by the
+same winner-take-all merge mechanism the synthetic example showed. Nothing
+about any agent's behaviour is claimed: every run used deterministic mock
+agents replaying the dataset's own gold patches.** (Earlier status: proven on
+one synthetic worked example only, because no network was available then.)
 
 **Why it was deferred until now:** the task system (§35–38) had to exist
 and be proven on a task whose coordination structure is known by
@@ -101,50 +105,57 @@ with no marker validates as a task with no divergence check, not a task
 with an invented one. This is a genuine limitation of the import, not
 patched over.
 
-**The one worked example.** No real CooperBench data is vendored in this
-repository and this sandbox has no network access to clone it, so the
-loader is proven against a small, clearly-labeled SYNTHETIC sample built by
-hand at `tests/fixtures/cooperbench_sample/` — one fake repo, two tiny
-features, real `git diff` output against that fake repo (not hand-typed
-diff text). The full pipeline was run end to end from that sample: loader
--> `tasks/cb_tinyrepo_task1.yaml` (checked in) -> `fixtures/cb_tinyrepo_task1/`
-(checked in) -> `validate_structure` (passes) -> `check_sensitivity`, the
-real §37 gate, executed for real rather than asserted.
+**The synthetic worked example (first proof, kept).** When the loader was first built no real CooperBench data was vendored and the sandbox had no network, so it was proven against a small, clearly-labelled SYNTHETIC sample at `tests/fixtures/cooperbench_sample/` (one fake repo, two tiny features, real `git diff` output against that fake repo). The full pipeline ran end to end from it: loader -> `tasks/cb_tinyrepo_task1.yaml` (checked in) -> `fixtures/cb_tinyrepo_task1/` (checked in) -> `validate_structure` (passes) -> `check_sensitivity`, the real §37 gate, executed for real. Its verdict was **NOT SENSITIVE**, C0 0/1 and C2 0/1, because both features add a different key to the same dict in `src/greeter.py` and `tasks/runner.py::_integrate_workspaces` resolves a contested path to a single last writer from the signed chain rather than merging both features' changes. `tests/integration/test_cooperbench_import.py::TestQualityGate` pins it. The loader description above (`feature1` and `feature2`) is that synthetic layout; the real layout differs, below.
 
-**The real §37 verdict for this worked example: NOT SENSITIVE** — C0 0/1,
-C2 0/1. Both arms fail identically. This is a real, reportable property of
-this specific synthetic example, not a defect in the gate or the loader:
-both synthetic features add a different key to the same dict in
-`src/greeter.py`, and this platform's contested-path merge
-(`tasks/runner.py::_integrate_workspaces`) resolves a contested path to a
-single last-writer from the signed chain rather than merging both
-features' changes, so whichever agent wrote last, the other's key is lost
-regardless of what either agent was told. A same-region, non-overlapping-
-key edit like this is exactly the shape the information-only C0-vs-C2
-contrast cannot rescue with this platform's winner-take-all merge — it
-would need finer-grained content merging (e.g. actually merging the two
-patches, or a real `git merge`) to succeed, which this platform does not
-attempt for any task, imported or authored. Reported honestly rather than
-tuned toward a "sensitive" result: the task asked for this explicitly, and
-"a refusal is data" applies here as much as anywhere else in this project.
-`tests/integration/test_cooperbench_import.py::TestQualityGate` pins this
-verdict as the expected, current behaviour.
+**Run against the real dataset (recorded 2026-09-30; evidence in `docs/evidence/cooperbench-real-import.json` and `cooperbench-real-gate.json`, counts and statuses only, no repository contents).**
 
-**What this does not claim.** Nothing here says anything about any real
-CooperBench task's coordination sensitivity, coordination structure, or
-whether a real repository's patches would produce a different verdict —
-there is no real CooperBench data behind this entry's numbers, only the
-one synthetic worked example described above.
+- `git clone --depth 1 https://github.com/cooperbench/CooperBench` succeeded from the implementer's environment (commit `63b9d44d9f39a02fccf5bf0052db48a917a011fd`, 14 MB), so the earlier "no network" limitation did not apply there.
+- The loader's assumed layout was checked against the real `dataset/` tree. The shape `dataset/<repo>_task/task<id>/feature<N>/{feature.md,feature.patch,tests.patch}` is right, and all 199 feature directories have all three files. Four things the synthetic sample hid were wrong or missing, each fixed with tests:
+  1. **A task is not two features.** 29 of the 30 tasks have 3 to 12 features (one has 2); the unit of work is a pair, 652 in all. The old loader read `feature1` and `feature2` and ignored the rest, so it could reach 30 of 652 pairs (4.6%) and would have said nothing about the other 622. `import_task(features=(i, j))`, `feature_numbers`, `feature_pairs` and `import_dataset(pairs="all")` now cover every pair.
+  2. **The base repository is not in the dataset.** Each task's `setup.sh` and `Dockerfile` name an upstream clone URL and a pinned `BASE_COMMIT`; nothing is vendored and nothing is a checkout. `cooperbench_base.parse_base_spec` reads those two facts (text only, `setup.sh` is never executed; one task builds its URL from variables, which it resolves and refuses if any stays unresolved). `base_files_for_paths` fetches only the files a pair's patches touch with a blobless shallow fetch of the one commit (44 MB for the 30 tasks in total), and `checkout_base_repo` writes a full tree when a run needs one. Network is needed the first time; a cache directory makes re-reads offline (tested).
+  3. **Latent bugs, not hit by this data but real.** `touched_paths` read a removed line such as `-- a comment` (rendered `--- a comment`) as a file header; it now consumes hunks by their declared line counts, with a `---`/`+++`/`@@` look-ahead so a miscounted patch cannot swallow the next file. Text was read and written with universal-newline translation, which rewrites CRLF files; it now moves bytes. `git apply`'s throwaway repo no longer commits (one fewer hidden dependency on `user.name`). `touched_paths` agrees with `git apply --numstat` on all 199 `feature.patch` files.
+  4. **The dataset's own `run_tests.sh` cannot be the integration test.** It is container-era: it installs dependencies from the network and takes patch paths as arguments. `ImportOptions(hidden_tests="pytest")` generates a harness instead (see the gate run).
+- `import_dataset_report` imports every pair and records each failure with a stage (`base_repo`, `import`, `definition`, `unexpected`) and a reason, instead of raising on the first one or dropping it. `scripts/cooperbench_real.py import` runs it and writes the summary.
 
-**What it would still take:** a real CooperBench checkout (clone
-`github.com/cooperbench/CooperBench`, supply each task's pre-patch base
-repo state as `base_files`) and a §37 run per imported task — the
-loader itself needs no further work to accept one; see
-`causalmesh.tasks.cooperbench`'s module docstring, "Pointing this at a
-real dataset," for the exact call shape. Batch import across all 30 tasks
-/ 652 feature pairs is `import_dataset` iterating the dataset root, already
-implemented and unit-tested against the synthetic sample, but not run
-against real data.
+| Import result | |
+|---|---|
+| tasks attempted / with at least one imported pair | 30 / 30 |
+| features | 199 |
+| pairs attempted / imported / failed | 652 / 652 / 0 |
+| pairs with at least one contested path (same file edited by both features) | 652 of 652 |
+| contested paths per pair | 1 path: 512 pairs, 2: 128, 3: 12 |
+| pairs whose gold patches conflict under `git merge` (CooperBench's own `gold_conflict_report.json`) | 499 |
+| pairs whose gold patches `git merge` cleanly | 153 |
+| pairs that `validate_structure` (§36) passes, fixture check skipped | 652 of 652 |
+
+Every pair's `feature.patch` applied cleanly to the real base files, so there is no import failure to explain. Zero failures is a real result and not a filter: nothing was skipped and the report lists every pair. The 153 clean-merge pairs are worth reading next to the gate result: this platform calls them contested too, because it contests by file, not by hunk.
+
+**The real §37 gate, on 3 pairs.** Pair `(feature1, feature2)` of three tasks, fixed before any verdict was seen and chosen because they are pure-Python repositories whose tests run with almost no dependencies: click `task2800`, jinja `task1621`, dirty-equals `task43`. Each fixture is the whole upstream tree at the pinned commit (not committed, not vendored). The hidden-test harness is this loader's own, so it was validated before its verdicts were used, against CooperBench's two stated properties: for all three tasks every feature's tests FAIL on the untouched base and PASS with `combined.patch` applied. The fidelity of the materialised write actions was also checked byte for byte against `git apply` on the full checkout (9 actions, 0 differences; a one-off check, not committed).
+
+| Task | Contested path | Gate verdict, as produced |
+|---|---|---|
+| click `task2800` f1,f2 | `src/click/core.py` | NOT SENSITIVE, C0 0/1, C2 0/1 |
+| jinja `task1621` f1,f2 | `src/jinja2/loaders.py` | NOT SENSITIVE, C0 0/1, C2 0/1 |
+| dirty-equals `task43` f1,f2 | `dirty_equals/__init__.py`, `dirty_equals/_other.py` | NOT SENSITIVE, C0 0/1, C2 0/1 |
+
+Diagnostic, not the verdict: in each arm's integrated workspace one feature's tests pass and the other's fail, identically under C0 and C2 (click: feature1 passes, feature2 fails; jinja and dirty-equals: feature1 fails, feature2 passes). That is the synthetic sample's mechanism: `_integrate_workspaces` resolves a contested path to a single last writer's whole file, so two features that both edit one file cannot both survive, whatever either agent was told. No verdict was tuned. Reproduce with `python scripts/cooperbench_real.py import|gate` (see the script; the gate needs `pytest`, `markupsafe` and `pytz` importable by `python`). Tests added: `tests/unit/test_cooperbench_real_layout.py` and `tests/integration/test_cooperbench_hidden_tests.py`; the earlier CooperBench tests pass unchanged.
+
+**What this does not claim.**
+
+- Nothing about agent behaviour. The mock agents replay gold patches.
+- Nothing about the 649 pairs the gate was not run on. "Not sensitive" for 3 pairs is not a claim about CooperBench. The mechanism suggests any pair where both features edit one file is affected the same way, but that was not run.
+- Not CooperBench's evaluation. CooperBench tests each agent's real patch, or the `git merge` of two, against per-feature tests; this platform integrates by file ownership and last writer. The generated harness also runs the Python test files each `tests.patch` touches, not the file list in the task's own `run_tests.sh`, so a pass here is not CooperBench's pass.
+- Not a statement that the platform is wrong to be winner-take-all; only that it cannot express a same-file, different-hunk feature pair, which is the commonest shape here (512 of 652 pairs share exactly one file).
+- The hidden tests are not hidden. `hidden_tests="pytest"` writes the `tests.patch` files into the fixture at `.cooperbench/`, so any future non-mock agent would see them. Fine for mock agents, not for real ones.
+- Divergence still has no fabricated marker: an imported task validates as a task with no divergence check unless a caller supplies a real marker by hand.
+
+**What it would still take.**
+
+- The gate on the other Python pairs. It costs a full checkout and a working test environment per task; `dspy`, `llama_index` and `datasets` need heavy dependencies that were not installed. 24 of 30 tasks are Python; Go (3), JavaScript (2) and Rust (1) have no harness (import works for them, the gate does not).
+- A content-level merge for contested paths (a real 3-way merge of the two features' patches); otherwise 499 of 652 pairs cannot succeed and the other 153 cannot be told apart from them. That is a platform decision (it changes what "success" means for every task), not a loader change.
+- Move hidden tests out of the workspace before any real agent runs.
+- Pair selection for a real experiment (`subsets/lite.json` has 100 pairs); none was made.
+- One suite failure was seen on Linux while this was built and is not from this change: `tests/unit/test_path_budget.py::test_a_run_that_cannot_fit_is_refused_before_anything_is_created` (`File name too long`). Not investigated here.
 
 ### Multi-rater kappa coding (§53)
 
@@ -201,17 +212,43 @@ coding at all.
 
 ### Scaling beyond 4 agents (§86)
 
-**Status:** not built. `PathScopedDelivery` exists in `relay/delivery.py`
-for it, and is not used by the four primary arms.
+**Status: partly built (2026-09-30).** Delivery is selectable per run, the N-agent task is generated, and `causalmesh experiment scalability` measures delivered events and coordination bytes at N = 4, 8 and 16 for broadcast against path-scoped delivery. All of it runs on scripted mock agents, so it measures what the channel carries, not how agents coordinate.
 
-**Why:** broadcast fan-out grows quadratically with agent count, so the
-scalability profile needs an interest-scoped delivery policy to stay
-tractable. The policy is written; the profile, the tasks and the analysis
-are not.
+**Why it matters:** broadcast fan-out grows quadratically with agent count, so a scalability profile needs an interest-scoped delivery policy to stay tractable. `PathScopedDelivery` was written for that and, until now, had no caller.
 
-**Note on §92 (no dead code):** `PathScopedDelivery` is exercised by unit
-tests but has no production consumer in this slice. It is a genuine
-exception to the no-dead-code rule, recorded here rather than hidden.
+**What was built.**
+
+- `policy_for_arm(arm, *, mode=None, interests=None)` in `relay/delivery.py`. `mode` is `"broadcast"` or `"path_scoped"`; unset is broadcast, so every existing caller is unchanged, and C0 is `NullDelivery` whatever the mode. `path_scoped` without an interest map raises instead of falling back to broadcast.
+- `RunConfig.delivery_mode` (default `None`), added to `RunConfig.to_dict()` only when set, so an unset run serialises exactly as before. `execute_task` builds interests from the task's roles (`owns | depends_on`).
+- `tasks/scaled.py`: `ScaledSpec(n_agents, group_size=4, own_files=2)` and `generate_scaled_task`, a deterministic generated task. Each agent owns a directory; agents are grouped and each group contests one shared registry file; family `concurrent_edit_collision`; it passes `validate_structure`. The fixture is written to a scratch directory per run, so nothing is added to `tasks/` or `fixtures/` and no existing plan, hash or run count changes.
+- `experiments/scalability.py`: `scalability` (N in {4, 8, 16} x broadcast/path-scoped x C1/C2 x localized/dense contention = 24 runs) and `scalability_smoke` (4 runs). Kept out of `PROFILES` on purpose: `plan_experiment` multiplies tasks by arms by repetitions, and a profile of a different shape there would either change existing run counts or make `Profile` mean two things.
+- `metrics/scaling.py` (`growth_exponent`, a log-log slope that is `None` when undefined and never 0; `summarize_scaling`) and `tasks/scalability.py` (`run_scalability`; `measure_run`, which verifies every chain offline; an ASCII `render_scalability`).
+- `causalmesh experiment scalability [--profile scalability|scalability_smoke] [--seed S] [--json]`. It runs in a temp directory and writes nothing to the repository.
+
+The four primary arms, `PROFILES`, `PROFILE_NAMES`, every profile's `run_count`, the 1920-run design, `plan_experiment` and the scheduler did not change.
+
+**Note on §92 (no dead code): exception retired, with a qualification.** `PathScopedDelivery` now has a production consumer: `execute_task` installs it through `policy_for_arm` when a run is configured with `delivery_mode="path_scoped"`, and `causalmesh experiment scalability` reaches that. It is still not used by C0 to C3 as run by `causalmesh experiment run`, whose delivery stays broadcast, so the policy is consumed by the scalability profile and not by the primary design.
+
+**What one run measured.** One run of the 24-run profile, on one Windows 11 machine (about 35 s), recorded by the implementer; it was not re-run on the machine that folded this note in. Deterministic for a given seed. Each agent produces 6 events, and these are properties of one generated scripted task:
+
+- Broadcast delivered exactly 6 N (N-1) events: 72, 336 and 1440 at N = 4, 8 and 16. The fitted exponent over N = 4..16 is 2.16 (above 2 because N(N-1) is not a pure power; it tends to 2).
+- With localized contention (each shared path contested by 4 agents however large N is), path-scoped delivery was exactly 6 N: 24, 48 and 96, exponent 1.00; at N = 16 that is 96 of 1440 events (6.7%). This follows from the topology the generator was told to build, which assumes each agent's neighbourhood stays small as N grows.
+- With dense contention (every agent contests one path), path-scoped delivery removed a constant third (the events on private files) and the growth order stayed 2.16. Scoping only helps as far as interests are actually narrow.
+- Bytes are not a clean power law. C1 (transcript) replays a shared room, so its bytes grew faster than events (exponent about 3.3 under broadcast). C2 (metadata, window 8) caps bytes per turn: about 1.9 under broadcast and about 1.0 path-scoped under localized contention. At N = 16 the C2 broadcast runs delivered 460 (dense) and 484 (localized) events an agent never saw, because the window cut them; path-scoped left none unseen under localized contention and 29 under dense.
+- All 24 chains verified offline, and the scripted task succeeded in all 24 runs. That is a statement about a scripted task whose interests were declared to match the work, not about interest maps in general: a wrong map would silently starve an agent, and nothing here measures how often maps are wrong.
+- Three agent counts are a coarse fit and two could not show a rate, so the points are printed next to the exponents. The mock agents have no randomness, so one run per cell is complete and a repeat gives the same head hash.
+
+**What is not built:**
+
+- The profile is not part of `causalmesh experiment run` or the scheduler: it is measured, not planned, randomized, indexed or resumed, and it writes no run artifacts under `data/raw`. Reason: it has no repetitions or tasks to randomize, and adding it to `PROFILES` changes what a profile means.
+- Interests are declared by the harness and match the scripted work exactly. How wrong an interest map has to be before an agent is starved, and how agents should declare interests in practice, is unmeasured.
+- One topology family only (contention groups of a fixed size, or one dense group). No chains, rings, hub-and-spoke or interest overlap between groups.
+- Only N up to 16 was run (the generator accepts up to 99). Beyond 16 the exponent is extrapolation.
+- Path-less events (list, test, intent, acceptance) are delivered to everyone by `PathScopedDelivery`; the profile's task emits none from agents, so the cost of scoping those is unmeasured.
+- The growth statement is over delivered events and channel bytes, not tokens billed, latency or task quality. C3 (claims) is not in the default profile: one ad hoc C3 run at N = 8, path-scoped, failed the integration test because the shared registries are contested and the exclusive leases refuse the non-owner writers. One run, not a result.
+- The C1 transcript `Room` appends a message for every delivery, so N-1 copies of each event enter the room under broadcast. That inflates C1 bytes beyond what one transcript per event would cost. It predates this change and is not corrected here.
+
+**A counter not to read as a delivery count.** `MetadataChannel` re-counts its carried-over backlog into `events_available` on every turn, so summing that field across turns exceeds what the relay delivered (this profile found a 1440-event run reporting 3826). The profile counts what agents drained instead. The channel counter is left as it is because existing analysis reads it.
 
 ### The 1920-run confirmatory execution
 
@@ -295,7 +332,9 @@ carried, and AGENTS.md gates adding one without a reason that survives "what doe
 cost a person installing the package." An operator's own payment code is the thing that
 calls `decide_payment`, pays when it allows, and records the spend to `Ledger`
 afterward — the module stops exactly where this project's own boundary is: the
-financial audit layer, not a payment SDK.
+financial audit layer, not a payment SDK. That check-then-pay is racy for a caller
+that pays outside the gateway: the reservation that makes SDK totals atomic is not
+taken on this path (see "Totals are reserved, then committed").
 
 **What it would still take:** a signer, for whichever scheme and network an operator
 actually needs to pay on, wired in as an operator's own dependency rather than this
@@ -374,9 +413,9 @@ approval would silently skip the safeguard the contract declared.
 `ScriptedHandler` supplies a deterministic sequence of answers, which is what
 keeps a checkpointed run reproducible (§84) the same way a scripted mock
 agent does — a real human-attached handler (reading a terminal prompt, an
-approval queue, anything with actual I/O) is left to whoever wires one in;
-none is built here, because that is an operator integration, not a contract
-mechanic.
+approval queue, anything with actual I/O) was left to whoever wires one in
+when this was first written; a terminal one has since been built (see the end
+of this entry).
 
 **On the chain.** A matched checkpoint decision is signed and recorded as
 `EventType.CHECKPOINT_DECIDED`, under a dedicated `checkpoint` identity —
@@ -385,11 +424,7 @@ its own `acceptance` identity, because a checkpoint decision is not itself
 one of the gate's ordinary rule verdicts even though it reaches the chain
 through the same `gate.verdicts` list.
 
-**What this does not do.** No real human-attached `CheckpointHandler` ships
-here — only the mechanism and the two reference implementations
-(auto-deny, scripted). Nothing in the CLI surfaces a pending checkpoint or
-prompts an operator; wiring a terminal-facing handler into `causalmesh
-experiment run` is separate, follow-on work.
+**What this did not do, and now does in part (2026-09-30).** This entry originally said no human-attached `CheckpointHandler` shipped and nothing in the CLI prompted an operator. `TerminalCheckpointHandler` and `causalmesh experiment run --checkpoint-prompt` now exist, and the SDK forwards a handler (`CausalMesh(checkpoint_handler=...)`). The gaps that remain (approved checkpoints are not on the chain, the prompt blocks the calling thread, the handler is consulted on every arm, real terminals were not driven) are listed under "SDK claims and a human checkpoint handler" below.
 
 ## Items discovered during the build
 
@@ -424,36 +459,73 @@ stronger L1 without any change to L2 or L3.
 
 ### Timeout as a distinct run state (Step 10)
 
-**Status:** `RunState.TIMED_OUT` exists in the state machine and is legal
-from RUNNING; the loop never assigns it.
+**Status: built, cooperative only (2026-09-30).** `ExperimentRunner(run_timeout_s=...)` runs each run under a whole-run watchdog (`_Watchdog` in `src/causalmesh/scheduler/loop.py`). When the budget lapses the run's task is cancelled, the agent loop in `execute_task` catches the cancellation, seals the chain it has (verdicts, then an acceptance decision, all at the fixed post-run simulated time) and returns a `RunResult` with `interrupted=True`. The scheduler records the run `TIMED_OUT`. It is opt-in: the default is no budget, so an unconfigured collection behaves and reproduces exactly as before. `causalmesh experiment run --run-timeout SECONDS` sets it; `--run-timeout 0` and negative values are refused rather than timing out every run.
 
-**Why:** command-level timeouts are handled inside the tool layer (§22),
-where a hung command becomes a `CommandResult` with `timed_out=True`. A
-whole-run timeout is a different mechanism — it needs a watchdog that can
-interrupt an in-flight run — and this slice does not have one.
+This replaces the earlier position that `RunState.TIMED_OUT` existed in the state machine but nothing assigned it. The state was added first so that adding it would not mean changing a persisted schema; it is now reachable from a real run.
 
-**Why the state exists anyway:** the transition table is the specification
-of what a run may do. Adding the state later would mean changing a
-persisted schema. It is reachable in the machine and tested there
-(`test_a_failed_run_is_never_retried` covers its retry semantics), so it is
-not dead code — but no run has yet reached it, and this file says so rather
-than letting the state's presence imply a capability.
+What a timed-out run leaves behind:
+
+- **Partial evidence, kept.** The artifact carries the partial chain whole, and it verifies offline like any other. Partial workspace digests are kept too.
+- **Outcome unknown, not failed.** The index records `succeeded=None`, and the artifact withdraws `result.outcome` (so every reader that looks for `outcome.succeeded` sees unknown) and keeps the half-finished workspace's score under `result.partial_outcome`. Counting a timeout as a task failure would claim a measurement nobody made.
+- **Never accepted, and the chain says so.** The signed `ACCEPTANCE_DECIDED` event is `REJECT` with `run_interrupted_before_completion` in its evidence, via `decide_acceptance(outcome, interrupted=True)`. The default rule is unchanged.
+- **Never retried.** `TIMED_OUT` stays terminal and non-retryable; `test_a_timed_out_run_is_never_retried` runs it through a real resume.
+- **No wall-clock value in the signed chain.** Budget, elapsed time and grace are in `envelope.watchdog` on the artifact, outside the signature, and a test asserts every event timestamp sits inside the simulated clock's range. The artifact is marked `reproducible: false`, because where the cut lands depends on timing in general (with a mock agent that hangs at a fixed turn it is deterministic, and a test compares two timed-out runs' chains).
+
+**What this does not do:**
+
+- **Cooperative cancellation only.** Cancellation lands where an agent `await`s. A run wedged in a blocking call (a synchronous `subprocess.run`, a C extension, a model client with no async timeout) blocks the event loop itself, so the watchdog cannot fire at all. The integration check after the agents (`_run_integration_test`, up to 300 s, synchronous) is in the same position. Closing this needs the run to execute off the loop (a worker thread cannot be killed either, so realistically a subprocess per run), which also belongs with the per-run resource isolation "Parallel run execution" already needs.
+- **A run that swallows cancellation is abandoned, not killed.** After the grace period (`timeout_grace_s`, default 30 s) the scheduler records `TIMED_OUT` with no chain (the artifact says `evidence: none: ...` and carries no `chain` key, so it reads as "no evidence" and not as "an empty run") and moves on. The orphaned task keeps running in the process. Tested with a deliberately stubborn agent.
+- **The harness's own cancellation is still recorded as FAILED.** See "`_execute_one` catches `BaseException`" below.
+- **One budget for every run.** No per-task or per-arm budgets, and the budget is not in the plan hash, so a resume may use a different one. That is deliberate for now (a timeout is an operational limit, not a factor) but it means two collections of the same plan are not guaranteed the same set of runs reaching `COMPLETED`.
+- **Command-level timeouts are unchanged.** They still live in the tool layer (§22) and still surface as `CommandResult.timed_out`.
 
 ### Remaining task families (Step 9)
 
-**Status:** two tasks exist — `schema_handler_widen` (schema/handler) and
-`concurrent_edit_collision` (contested path). Two families from §35 remain
-unbuilt: `interface_consumer` and `shared_utility_refactor`.
+**Status: built and gated (2026-09-30). All four §35 families now have an authored task.** `interface_consumer` and `shared_utility_refactor` exist as `tasks/*.yaml` plus new fixtures (`fixtures/interface_consumer/`, `fixtures/shared_utility/`); no existing fixture was touched. With `schema_handler_widen` and `concurrent_edit_collision` that is four authored tasks, one per family, plus the synthetic CooperBench import.
 
-**Why:** §37 requires each task to *empirically demonstrate* its
-coordination dependency, which costs a C0-versus-C2 validation run per
-task. Building four tasks before validating one would have risked four
-tasks with the same defect.
+**Why this waited:** §37 requires each task to *empirically demonstrate* its coordination dependency, which costs a C0-versus-C2 validation run per task. Building four tasks before validating one would have risked four tasks with the same defect. `concurrent_edit_collision` came first (Phase 0) and its real C3 run records a denial with actor, path and holder; building it exposed that the denial log had never been reachable from the gate at all, see below.
 
-**Resolved (Phase 0):** `concurrent_edit_collision` now exists and a real
-C3 run records a denial with actor, path and holder. Building it exposed
-that the denial log had never been reachable from the gate at all — see
-below.
+**What each new task builds.** Both are dependency-shaped, like `schema_handler_widen` and unlike `concurrent_edit_collision`: ownership is disjoint, `contested_paths` is empty, and one agent's write can invalidate the other's work.
+
+| Task | agent_a (owns) | agent_b (owns, depends on) | Stale shape | Fails as |
+|---|---|---|---|---|
+| `interface_consumer` | `src/pricing.py`: `quote(item)` becomes `quote(item, region)`, no default | `src/cart.py`, depends on `pricing.py`, adds `receipt()` | `pricing.quote(item)` | `TypeError` at call time |
+| `shared_utility_refactor` | `src/textutil.py` and `src/articles.py`: `slugify` becomes `make_slug(text, *, sep)`, old name removed, own caller migrated | `src/tags.py`, depends on `textutil.py`, adds `tag_feed_path()` | `textutil.slugify(` | `AttributeError` at call time |
+
+They differ in more than naming: `interface_consumer` changes an arity; `shared_utility_refactor` renames and adds an option, and the utility has two callers owned by different agents, so the refactorer migrates the one it owns and can do nothing about the other.
+
+**How the dependency exists by construction.** Three layers, not equally strong:
+
+- *Structure:* agent_b declares the provider as a dependency and agent_a writes it. `validate_structure` accepts both tasks with zero errors and zero warnings.
+- *Fixture:* the change is breaking, with no default argument and no alias, so a caller on the old shape fails the integration test.
+- *Script:* agent_b's write is guarded by `if_informed_about` / `if_uninformed_about`, so what it writes depends on whether the channel told it about the provider's change. **This guard is authored, not discovered**; it is the mechanism `schema_handler_widen` uses.
+
+**Real §37 verdicts** (`check_sensitivity`, the real C0-versus-C2 gate, mock agents, `repetitions=2`, recorded by the implementer): both tasks **SENSITIVE**, C0 0/2 and C2 2/2, with 2 divergences in C0 and 0 in C2. The tests pin the `repetitions=1` counts (C0 0/1, C2 1/1, divergences 1 and 0), as the existing tasks' gate tests do.
+
+**All four arms, one run each, same seed:**
+
+| Task | C0 | C1 | C2 | C3 | Coordination bytes (C0 / C1 / C2 / C3) | C3 denials |
+|---|---|---|---|---|---|---|
+| `interface_consumer` | fail | succeed | succeed | succeed | 0 / 372 / 199 / 199 | 0 |
+| `shared_utility_refactor` | fail | succeed | succeed | succeed | 0 / 691 / 425 / 425 | 0 |
+
+C0 fails on both criteria (tests fail and the marker remains) for the intended reason: the failing output in C0 is the `TypeError` or `AttributeError` above, read from the integrated workspace rather than inferred. C2 and C3 spend identical coordination bytes, as they must. C3 holds a lease on every owned path and refuses nothing, because nobody writes outside their ownership; enforcement has nothing to do on either task, the same result `schema_handler_widen` gives and the opposite of `concurrent_edit_collision`.
+
+**What carries the verdict.** To check the SENSITIVE verdict is not only the guard, the provider was rebuilt backward-compatibly (a default argument for `quote`; `slugify = make_slug` left behind as an alias) and the uninformed consumer run again in C0. Its stale call shape then works and the integration tests **pass**, yet the run still fails, because §38 also requires the divergence marker to be absent and the marker is a string match on the stale call shape. So the verdict is carried jointly by the breaking change and by the marker; the marker alone would call a harmless stale call a failure. That is a property of the §38 rule as implemented, not something these tasks introduced, and it is pinned in `tests/integration/test_task_families.py::TestTheDependencyIsTheBreakingChange`.
+
+**A side effect on the confirmatory plan.** `experiment plan --profile confirmatory --allow-gated` plans every authored task in `tasks/`, so it now returns 1920 runs (120 repetitions x 4 arms x 4 tasks), matching the design the spec names, where it returned 960 with two tasks. `tests/integration/test_cli.py::TestPlan::test_the_gate_opens_when_asked_explicitly` was updated from 960 to 1920. The gate on the confirmatory profile stays closed and nothing was executed. Only the plan grew, and all four tasks' C0-versus-C2 contrast comes from authored scripts.
+
+**A false NOT SENSITIVE the first gate run produced, and why it is recorded** (see also "The section 37 gate cannot tell a missing test runner from no effect" below). The first run returned NOT SENSITIVE, C0 0/2 and C2 0/2, for both tasks. The cause was the environment: the harness runs `python -m pytest` with the `python` on `PATH`, and in that shell it had no pytest, so the integration test exited non-zero in every arm. Divergence counts still separated the arms (2 versus 0), but success did not. With the venv first on `PATH` the same code returned SENSITIVE. Nothing in the task definitions changed between the two runs.
+
+**What this does not claim.**
+
+- **Nothing about agent behaviour.** Every run used a deterministic mock agent whose branch is chosen by the script. SENSITIVE says the authored construction separates C0 from C2 when an agent acts on the information it gets, not that a real model would act on it, or would have made the stale call in the first place.
+- **The verdicts are close to tautological by design.** The scripts write the stale shape when uninformed and the current shape when informed, and the marker detects exactly that. The gate confirms the construction is wired correctly (the informed channel reaches agent_b, the stale branch really breaks the test, the integration and marker checks agree). It is not an independent estimate of how often real agents would break such an interface.
+- **No realism claim for the fixtures.** Both are a few dozen lines written for the task, not drawn from real repositories.
+- **No size claim.** One scripted pair per family, single seed, at most two repetitions. The mock is deterministic, so repetitions add no variance; they only confirm the result reproduces.
+- **Enforcement is not shown to help or hurt here.** C3 equals C2 on both, for lack of any contested path. The only task that exercises the gate's refusal path remains `concurrent_edit_collision`.
+
+**What it would still take:** a dependency-shaped family where the stale shape is not a literal in the script, for example a real model writing the consumer after an observed interface change, so that informed and uninformed behaviour is measured rather than authored; a gate that reports a missing test runner as "could not run" instead of as a failed arm; and a divergence rule that does not depend on a string marker alone.
 
 ### Enforcement was unmeasurable, not merely unmeasured (Phase 0)
 
@@ -598,41 +670,48 @@ tracks `outcome.succeeded` exactly and verifies offline with no special-casing.
 
 **What this does not change:** `HUMAN_REVIEW` is declared in `AcceptanceVerdict` but
 unreachable — the rule here is total over `ACCEPT`/`REJECT`, the same way
-`RunState.TIMED_OUT` is declared before anything assigns it. **What it would still
+`RunState.HANDED_OFF` is declared before anything assigns it. **What it would still
 take:** wiring the Jev adapter in as a `Choice` call among the three verdicts, which
 needs a decision that is genuinely uncertain given current state — this rule isn't
 one, by design (see "Adapter built, not wired" below).
 
 ### Agent handoff package on recovery
 
-**Status:** not built, and currently has no design target: the scheduler
-(`scheduler/states.py`, `scheduler/loop.py`) runs exactly one agent per run, with no
-transition for "hand off to a different agent mid-run." `recover` as a decision type —
-retry the same agent, switch agents, or escalate — presupposes that transition exists.
+**Status: prerequisites built (2026-09-30); nothing uses them.** The two things this entry said had to exist first now do, and nothing else does. The scheduler still runs exactly one agent per run and never assigns the new state.
 
-**Why deferred:** multi-agent recovery is a bigger change than an adapter or a doc
-addition — it means a new run state, a new chain event class, and a decision about
-what a second agent inherits (task, repository state, diff so far, test results, prior
-decisions) so it starts from where the first agent left off rather than cold. Building
-the handoff format before the state machine that would use it exists would be
-designing against a system that does not yet have the shape the design assumes.
+- **A scheduler state.** `RunState.HANDED_OFF` ("run continues under a different agent"), additive in `scheduler/states.py`. Legal transitions: `RUNNING -> HANDED_OFF`, and out of it to `RUNNING` (the continuation) or `ABANDONED`. It is not terminal and not retryable (a cold re-run would discard the work being handed over). `RunIndex` (`storage/index.py`) gains `hand_off()` and `continue_handed_off()` so the state is writeable through the same transition-checked path as the rest, and `abandon_running()` now also sweeps `HANDED_OFF` at startup (a run waiting for a continuation that only a live process could start is stranded in a single-process loop), recording the state it actually found in the transition log.
+- **A record shape.** `HandoffPackage` in `scheduler/handoff.py`: run and task identity (`task_hash` pins the task's content), `from_agent` and `to_agent`, a single `repository_digest`, the `diff` so far, `test_results`, `prior_decisions` (by chain event id), frozen, with `to_dict`/`from_dict` and canonical `to_json`/`digest`. `diff` and `test_results` are `None` when not computed and `()` when computed and empty; `to_agent` is `None` until a recovery decision picks one; a test result's `exit_code` and `passed` can be unknown. No timestamp, host or absolute path can enter it (paths are validated repository-relative), so the same handoff serialises to the same bytes and could later be committed to by hash without touching a bit-reproducible chain.
 
-**What it would take:** first, a scheduler state for "run continues under a different
-agent" (an addition to `RunState`/`TRANSITIONS` in `scheduler/states.py`); then a
-handoff record shape; then, once that exists, `recover` becomes the concrete decision
-point the Jev adapter above was built for.
+**Persisted-schema implications.** None that need a migration. `runs.state` and `transitions.to_state` are free `TEXT` with no `CHECK`, `counts()` iterates `RunState.ALL` so the new state shows up as a zero, and a database written before the state existed reads unchanged (tested). The direction that does not work is the reverse: an older build reading a database that contains `handed_off` rejects the row in `check_transition` (unknown state). That cannot happen yet, since nothing assigns the state, and it is the reason the addition should ship before the code that assigns it. `tui/monitor.py` knows the state (styled, counted as in-flight).
+
+**What it would still take** (none of this is built):
+
+- A **producer**: something that builds a `HandoffPackage` from a live run. The repository digest and diff need a defined baseline (the fixture at run start), and the workspace digests `execute_task` already computes are the raw material, but the single `repository_digest` is not computed anywhere, so its definition (which files, how ordered) is still open. Test results have two candidate sources (the agent's own `TEST` events and the harness's integration check), and which one a handoff carries is undecided.
+- A **chain event** for the handoff (a new `EventType`, which is a schema change to `events/` and `docs/protocol.md`), signed by an identity that is neither agent's nor `policy_gate`'s, committing to the package by `digest()`. Until then a handoff would be an unsigned fact about a signed chain.
+- A **consumer**: a second agent that is actually given the package, which is the multi-agent orchestration this entry has always been waiting on.
+- The **`recover` decision** (retry the same agent, switch agents, escalate) that would assign the state, which is where the Jev adapter becomes useful.
+- A decision on what `attempts` means across a handoff. `continue_handed_off()` leaves it alone (a continuation is not another attempt), a choice nothing has yet tested against a real use.
 
 ### Causal edges over the chain
 
-**Status: population started.** Store and query surface built and tested
-(`src/causalmesh/edges/`, `tests/unit/test_edges.py`, 25 tests). `execute_task`
-(`tasks/runner.py`) now populates one real relationship: a `REQUIRED` `CausalEdge`
-from a denied write's `FAILURE` event back to the `POLICY_VERDICT` event that refused
-it, recorded on `RunResult.edges` (and therefore in the run artifact, alongside
-`chain`) whenever a contract is installed and refuses at least one call.
-`tests/integration/test_task_execution.py::TestCausalEdgesForDenials` proves it end to
-end: every denied write in the scenario gets exactly one edge, pointing at a real
-verdict event that is itself a refusal.
+**Status: two relationships populated, and a CLI reader built (2026-09-30).** Store and query surface built and tested (`src/causalmesh/edges/`, `tests/unit/test_edges.py`, 25 tests). `execute_task` (`tasks/runner.py`) populates, on `RunResult.edges` (and therefore in the run artifact, alongside `chain`):
+
+- a `REQUIRED` `CausalEdge` from a denied write's `FAILURE` event back to the `POLICY_VERDICT` event that refused it, whenever a contract is installed and refuses at least one call. `tests/integration/test_task_execution.py::TestCausalEdgesForDenials` proves it end to end: every denied write in the scenario gets exactly one edge, pointing at a real verdict event that is itself a refusal.
+- a `REQUIRED` edge from the `ACCEPTANCE_DECIDED` event to an `INTEGRATION_TEST_RESULT` event, one per run, appended after the denial edges (below).
+
+`causalmesh analyze --edges` reads the edges back out of run artifacts. `EdgeIndex` stays in-process; the CLI reads artifacts, not an index.
+
+**The integration test result is now a chain event.** `execute_task` already ran the task's integration test (`_run_integration_test`, the harness measuring the result, outside the agents' tool boundary) and fed its exit code to `evaluate_outcome`. It now also records it as `EventType.INTEGRATION_TEST_RESULT` under a dedicated `integration_test` identity (key derived from the master seed, like `acceptance` and `policy_gate`), immediately before `ACCEPTANCE_DECIDED`. It is a new type rather than a reuse of `EventType.TEST`: `TEST` is an agent running tests in its own workspace, and the two must stay distinguishable on the chain.
+
+**Why this does not compromise reproducibility.** The timestamp is `post_run_time_us` (`base_time_us + max_turns * tick_us`), the same deterministic instant the verdict and acceptance events use; no wall clock. The payload is exactly `{command, exit_code, ran}`: the task's fixed command and the exit code. Stdout, stderr, duration and the integrated workspace path are deliberately absent, because `pytest -q` prints elapsed time and the workspace lives under a temp directory. A test that never ran (timeout or `OSError`) is `exit_code: null, ran: false`, not a 0. The exit code was already inside the chain as `integration_test_exit_code=N` in the acceptance evidence, so this adds no new source of variation, only a second place the same value is signed. `TestDeterminism::test_two_runs_of_the_same_arm_agree` still passes, and `TestAcceptanceEdge` pins the exact payload key set, that two runs produce identical `chain_hash` and `signature` for the new event, that a chain holding it verifies offline after a round trip through a JSONL file against a key ring rebuilt from the seed, and that editing the recorded exit code breaks verification.
+
+**What the acceptance edge claims.** `acceptance -> integration test`, `REQUIRED`, not `CAUSED`, on purpose: `decide_acceptance` is a function of `outcome.succeeded`, which is `tests_passed AND divergence_absent`, and the divergence-marker check reads the integrated workspace and is not a chain event. The test result is a necessary input, not the sole cause, and the edge's `note` says so. Both endpoints exist on the chain (`TestAcceptanceEdge::test_every_edge_endpoint_is_a_real_chain_event`).
+
+**Side effect to know about.** Every run's chain gains one event, so `head_hash` values recorded before this change no longer match a re-run. Two runs of the same arm agree with each other, which is what the determinism test checks; a stored pre-change hash is a statement about the old chain. `run.json` artifacts from before this change verify as they always did.
+
+**`causalmesh analyze --edges`.** It follows the existing command's conventions: `--json` is the machine path, tables carry a label (per-edge rows `[PILOT]`, counts by kind `[DERIVED]`), and the JSON payload carries `"label": "PILOT"`, descriptive only. It shows counts by relationship kind (every kind listed, so a real zero reads differently from a missing kind), and per edge both event ids with a label resolved against the artifact's own `chain` (for example `FAILURE by agent_b, denied`, `ACCEPTANCE_DECIDED by acceptance, ACCEPT`, `INTEGRATION_TEST_RESULT by integration_test, exit code 0`). An id the chain does not contain reads `unresolved`; an artifact with no chain reads `unknown`. Labels are ASCII (non-ASCII payload text is backslash-escaped) and Rich escapes them so a `[tag]` in a payload is not read as markup.
+
+**A shipped behaviour changed, and why.** For a run whose artifact has no `result.edges` key the answer is `unknown`, not 0. `edges_for_run` used to read a missing key as an empty tuple, which the old CLI then summed into `total_edges: 0`, the confident zero AGENTS.md forbids. `RunEdges.recorded` now separates "recorded none" from "predates edges"; `total_edges` and `by_relationship` are `null` when nothing counted was recorded and otherwise count only the runs that recorded, with `runs_edges_unknown` beside them. Per-run JSON has `edges: null`, not `[]`, for an older run.
 
 **`Event.parent_id` was considered and rejected as the population source.**
 `ToolExecutor` sets `parent_id` to `last_observed_event_id` — the last peer event an
@@ -668,19 +747,14 @@ rather than silently returning zero edges. This is the same defect class as
 "Enforcement was unmeasurable, not merely unmeasured" below: a filter that looks
 plausible and matches nothing is worse than one that errors.
 
-**What it would take (remaining):**
+**What it would still take:**
 
-- *More population sources.* Only the denial-to-verdict relationship is populated.
-  The acceptance decision (`ACCEPTANCE_DECIDED`, see "Explicit acceptance decision
-  object" below) has no edge back to the evidence it was decided from, because there
-  is no chain event yet representing "the integration test that decided this run" —
-  `evaluate_outcome` runs directly on the integrated workspace, outside the chain.
-  Fabricating an edge to a synthetic id would misrepresent evidence; the honest fix
-  needs that test result to become a real chain event first, which this pass did not
-  attempt.
-- *A query-facing surface.* `EdgeIndex` (in-process) exists; a `causalmesh`-CLI-facing
-  view (e.g. `causalmesh analyze --edges`, following the existing command's `--json`
-  and PILOT/DERIVED labeling conventions) does not.
+- *More population sources.* Two relationships are populated. `Event.parent_id` is still rejected as a source (above). `Event.references` is still unused by any production call site. `CAUSED`, `RECOVERED` and `SUPERSEDED` have no writer at all: `RECOVERED` needs the handoff record from "Agent handoff package on recovery", and `SUPERSEDED` needs a call site that knows one event replaces another, which no current one does. The divergence check is the acceptance decision's other input; it could become a chain event the same way the test did, which would let the edge become two edges, but it is a workspace inspection with no natural exit code and that was not attempted.
+- *The positional denial pairing is untouched.* It still raises if the verdict and denied-event counts disagree.
+- *The analyze surface reads artifacts, not `EdgeStore`.* Edges recorded by a caller through `EdgeStore` rather than by `execute_task` are not visible to it.
+- *Label resolution is by id, for the four event types it knows how to describe.* Any other event type gets `TYPE by actor` with no detail, which is accurate but terse.
+- *No `--edges` filter by kind or run.* The table lists everything; `--json` plus `jq` is the filter today.
+- *Platform runs.* Checked on Linux only; per `scripts/check.py`, Windows and macOS each need their own run.
 
 ## Standalone adoption (built 2026-09-24)
 
@@ -810,36 +884,111 @@ mutation-checked: reverting the fix makes a test there fail.
   broke chain reproducibility. It now defaults to the constant `"sdk"`, and
   callers pass their own when they keep several chains.
 
-**What does not ship:**
+**What did not ship at first, and what has since been built (2026-09-30):**
 
-- **Framework adapters (updated 2026-09-29).** `GenericAdapter`,
-  `OpenAIAdapter` (function calling, no vendor SDK — `schema.py` derives
-  JSON Schema from the handler's own signature) and `LangChainAdapter`
-  (`langchain-core` required, isolated behind an `ImportError` guard so
-  importing `causalmesh.integrations` without it still works) are
-  implemented and tested (`tests/integration/test_openai_adapter.py`,
-  `tests/integration/test_langchain_adapter.py`). Every adapter routes
-  exclusively through `BaseFrameworkAdapter.call_tool`/`acall_tool` —
-  `CausalMesh.execute`/`execute_async` — so there is one authorization path
-  regardless of which framework calls in; none of the three constructs a
-  second gate or calls a tool's handler directly. Anthropic `tool_use`,
-  LangGraph and CrewAI adapters are still not implemented.
-- **Human-in-the-loop approval from the SDK.** Checkpoints exist in the
-  gate, but the SDK installs no checkpoint handler, so a matched checkpoint
-  refuses by default.
-- **Claims.** The SDK builds its gate with `registry=None`. Exclusive
-  leases (§74) do not apply to SDK sessions.
-- **Persistence.** The chain lives in an in-memory `ChainStore`, and
-  `CausalMesh` exposes no export. A session's evidence is gone when the
-  process exits unless the caller reads `audit_events()`.
-- **Wall-clock timestamps in the signed chain.** When `execute()` is called
-  without `now_us`, the event is stamped with `utc_now_micros()`, and that
-  timestamp is signed. `serve` does the same. The chain is reproducible
-  only when the caller supplies `now_us`. Putting a logical clock in the
-  chain and the wall clock in the envelope is unstarted work.
+- **Framework adapters: Generic, OpenAI, LangChain, Anthropic, LangGraph, CrewAI built; no hosted model has driven any.** `GenericAdapter`, `OpenAIAdapter` (function calling, no vendor SDK; `schema.py` derives JSON Schema from the handler's own signature) and `LangChainAdapter` came first; `AnthropicAdapter`, `LangGraphAdapter` and `CrewAIAdapter` followed. Every adapter routes exclusively through `BaseFrameworkAdapter.observe`/`aobserve`, which call `CausalMesh.execute`/`execute_async`, so there is one authorization path whichever framework calls in; none constructs a second gate or calls a tool's handler directly. See "Framework adapters: Anthropic, LangGraph, CrewAI" below for what is built and what was never run.
+- **Human-in-the-loop approval from the SDK: built.** `CausalMesh(checkpoint_handler=...)` forwards a handler to the gate, and `TerminalCheckpointHandler` is a human-attached one. Without a handler a matched checkpoint still refuses by default. Gaps are listed under "SDK claims and a human checkpoint handler" below.
+- **Claims: built, opt-in.** `CausalMesh(claims=ClaimRegistry(...))` and explicit `mesh.claim()`; the default is still off (`registry=None`), and there is no acquire-on-first-call. See the same entry.
+- **Persistence: built for the SDK session, not for `serve`.** `CausalMesh.export(directory)` writes `run.json` and `keyring.json` for `causalmesh verify --run`, and `persist_to=` appends the chain as it goes. See "SDK export and verification" below.
+- **Wall-clock timestamps in the signed chain: fixed for the gateway, not for the chat path.** The gateway signs a per-session logical clock and keeps the wall clock in the unsigned envelope, so the SDK and `serve`'s `/v1/tools/{name}/execute` are reproducible. `/v1/chat/completions` still signs the wall clock. See "A logical clock in the signed chain" below and "The chat path still signs the wall clock".
 - **Reads are not gated.** `mutating=False` tools go around the gate, as
   §20 defines for the experiment. An operator who wants reads checked has
   to declare those tools mutating.
+
+### Framework adapters: Anthropic, LangGraph, CrewAI (2026-09-30)
+
+**Built.** `AnthropicAdapter` (Anthropic Messages `tool_use` blocks in, `tool_result` blocks out with `is_error`, tool definitions with `input_schema`; no vendor SDK, accepts plain dicts or SDK block objects; `handle_tool_use(s)`, `handle_message` and `a`-prefixed twins), `LangGraphAdapter` (the LangChain adapter's tools plus `tool_node()`, a real `langgraph.prebuilt.ToolNode`) and `CrewAIAdapter` (`crewai.tools.BaseTool` subclasses that route through the gate, sync `_run` and async `_arun`), each with a sync and an async path, exported from `causalmesh.integrations`, with the import guard pattern of `LangChainAdapter` (importing the package works without any framework; constructing an adapter without its framework raises `ImportError` naming it). All route through `BaseFrameworkAdapter.observe`/`aobserve` and the `Observation` it returns, the single place a model-requested call becomes text, so every adapter classifies errors the same way; `bind_arguments` serves adapters that receive positional or keyword arguments. Model mistakes come back as `Action failed:` answers; an unknown agent raises `UnknownAgentError` before the gate or the handler, on the sync and async paths, through every adapter.
+
+Pinned by `tests/integration/test_adapter_gate.py` (one set of safety properties run through every adapter: an allowed call goes through the gate and is recorded, a denied call never reaches the handler, model mistakes are answers, an unknown agent raises before gate and handler, all on the async path too, plus a check that no adapter module calls a handler), `test_anthropic_adapter.py`, `test_langgraph_adapter.py`, `test_crewai_adapter.py` and `tests/unit/test_adapter_helpers.py`. The gate property was mutation-checked: making the Anthropic, CrewAI, LangChain (async) and OpenAI (async) paths call the handler directly, and making the shared helper swallow every exception, each fail tests.
+
+**Fixed on the way.** `LangChainAdapter` tools raised `MissingResourceError`/`ToolNotFoundError` out of the caller's loop on a model's bad call; they now return `Action failed: ...`, as the OpenAI adapter already did, which is what lets them survive inside a LangGraph `ToolNode` (it re-raises by default). `tool_to_json_schema` dropped every parameter when one annotation could not be resolved, described `Optional[int]` and `X | None` as `string`, listed `*args`/`**kwargs` as required-looking properties and ignored `Literal` and list item types; it now unwraps `Optional`, emits `enum` for `Literal` and `items` for `list[int]`-style hints, skips var parameters and falls back to a string per parameter instead of losing them. `LangChainAdapter` handlers with `**kwargs` nested the extras under the parameter name instead of passing them as keywords.
+
+**What remains.**
+
+- **The CrewAI adapter has never run against real `crewai`.** The tests use a fake `BaseTool` (pydantic model, `name`/`description`/`args_schema`, abstract `_run`, optional `_arun`, `run`/`arun`). Two real-package tests exist and are skipped when `crewai` is missing. Expect to adjust on first run: newer crewai versions rewrite `description` and validate arguments in a wrapper the fake does not have. Reason: crewai is heavy, and installing it was out of scope.
+- **No hosted model has driven any adapter.** The Anthropic block shapes come from the public documentation, not from a live response; LangChain and LangGraph were run with scripted fake chat models. Reason: no keys, no spending in tests. What a real model does with these tools, including how often it emits arguments the schema rejects, is unmeasured.
+- **LangGraph and LangChain are verified at one version each** (`langgraph` 1.1.6, `langgraph-prebuilt` 1.0.9, `langchain-core` 1.2.26, `langchain` 1.2.15, on the implementer's machine). Nothing was run at the `langchain-core>=1.3.3` floor the existing `langchain` extra declares (that machine had 1.2.26).
+- **`pyproject.toml` has no `langgraph` or `crewai` extra.** Proposed, not added: `langgraph = ["langgraph>=1.1.6", "langchain-core>=1.3.3"]` (floors are the installed versions that were verified, not the lowest that would work; older releases were not tried) and `crewai = ["crewai"]` (no floor verified; add one after the two skipped real-package tests have run). The tests for both skip with a reason when the package is missing, so the gate does not run them unless the package is installed; adding `langgraph` to `dev` would change that. Anthropic and OpenAI need no dependency.
+- **Tools are not filtered per agent.** Every registered tool is offered to every agent; the gate refuses at call time. Reason: `Tool` carries no per-agent visibility, and inventing one is a policy change.
+- **The JSON Schema is shallow.** Scalars, `Optional`, `Literal`, `dict` and `list`/`tuple`/`set` of a scalar. Pydantic models, several-type unions and nested structures are described as `string`, and the handler receives what the model sent. Reason: the schema is deliberately stdlib-only.
+- **A catch-all `ToolNode(handle_tool_errors=True)` swallows `UnknownAgentError`** into a tool message. The adapter cannot prevent it, since the node is the caller's; documented in `docs/adapters.md`.
+- **Arguments a handler cannot bind** are answered before the gate by the LangChain, LangGraph and CrewAI adapters, but the OpenAI and Anthropic adapters pass them on, so the gate allows the call and the handler's `TypeError` is recorded as a failure. Both are safe (the handler does not run); they differ in what is on the chain.
+- **Anthropic streaming and `server_tool_use` results** are not handled: only complete `tool_use` blocks are answered, and server-side tool blocks are skipped.
+- **Handlers with `*args`** cannot be called through any adapter (the gateway calls `handler(**arguments)`); extra positionals are refused with `Action failed:`.
+
+### SDK export and verification: built for the SDK session, not for `serve`
+
+**Status: built (2026-09-30).** This closes the "Persistence" item under "Developer SDK" and the entry "An SDK session cannot be verified from the CLI".
+
+- `CausalMesh.export(directory)` writes `run.json` (the signed `chain`, `arm`, `run_id`, `head_hash`, plus an unsigned `envelope`) and `keyring.json` (public keys only; a test checks that no seed or private key appears in either file). `causalmesh verify --run <directory>` reads it with no change to its input format.
+- `causalmesh verify` now prefers a `keyring.json` beside `run.json` to the public keys embedded in the records; with the file absent the old behaviour is unchanged. A `keyring.json` that is present but unreadable or malformed **fails** the run instead of falling back, because the fallback is the weaker check. The result reports which source was used (`keys`: `keyring.json` or `embedded`).
+- Tests run the real verifier through the CLI: a clean export verifies; a changed event and a dropped event fail; a chain re-signed under a foreign seed (a second session making the same calls) **fails against the keyring**. The same forged chain with `keyring.json` deleted still **passes**, and a test pins that as the known limit rather than hiding it. Reverting the CLI change makes the foreign-key tests fail.
+- `export` refuses to write over an existing `run.json` (raw evidence is written once, as the scheduler does) and over a `keyring.json` with different keys.
+- Opt-in `persist_to=<dir>`: the relay appends `chain.jsonl` as it goes (flushed per event, the existing `ChainStore`) and `keyring.json` is written at construction. It refuses a directory that already holds a chain. `CausalMesh.close()` closes the file.
+
+**What remains.**
+
+- **The keyring is only as good as its channel.** `keyring.json` sits beside the run it vouches for, so whoever can replace `run.json` and `keyring.json` together can forge both. It protects against a chain re-signed by someone who does not control the keyring, which is the auditor who is handed the ring separately or pins `key_ring_fingerprint`. Nothing pins the fingerprint automatically, and `verify` has no `--keyring` option to supply a ring from elsewhere. Not built. This is the narrowed form of "`causalmesh verify` trusts the keys inside the artifact" below.
+- **A crash leaves `chain.jsonl` and `keyring.json`, not `run.json`.** `verify --run` reads only `run.json`, so a persisted-but-never-exported session cannot be verified by the CLI. There is no `recover` or export-from-chain command.
+- `export` is a snapshot of the in-memory relay, and its envelope's per-event wall times are in memory only: a session reopened from `chain.jsonl` has none (they are `unknown`, absent from the map, not zero).
+- `serve` has no export endpoint or shutdown hook that calls `export`; its evidence is still gone when the process stops.
+- No `--keyring` or fingerprint check exists for experiment runs (`--id`, `--all`); those still use embedded keys unless a `keyring.json` was placed beside a run by hand.
+
+### A logical clock in the signed chain: built for the gateway, not the chat path
+
+**Status: built for `ToolGateway`, so for the SDK and for `serve`'s `/execute` (2026-09-30).** This closes the "Wall-clock timestamps in the signed chain" item under "Developer SDK".
+
+- `ToolGateway` stamps each call with a per-session `LogicalClock`: `base_us + n * tick_us`, constant defaults (`0` and `1_000_000`), overridable as `clock_base_us`/`clock_tick_us` on `CausalMesh`, `from_config` and `ToolGateway`. That one value is the signed `timestamp_us`, the time the gate is asked about and the ledger row's `timestamp_us`, so a verdict, a ledger row and an event describe one moment and carry the same number.
+- The wall-clock time of each call is kept in `ToolGateway.wall_times()` (event id to microseconds) and written to `run.json`'s unsigned `envelope.wall_time_us_by_event`, with the export time and the clock parameters. It never reaches the chain.
+- Two sessions with the same seed and the same call sequence have the same head hash (tested for the SDK, for the async path and for two `serve` apps driven over `/v1/tools/{name}/execute`). A different sequence gives a different head.
+- A caller-supplied `now_us` is still signed as given, and the clock moves past it so later calls never go backwards behind it.
+
+**What it changes, stated rather than hidden.**
+
+- **Time in a session is call count.** A lease or window of N seconds lasts N calls at the default tick, however long they take. That suits replay and is wrong for anything meant to measure real elapsed time. Nothing in the SDK measures real elapsed time today: the ledger's totals are over the run and ignore the timestamp (it is used for ordering).
+- **Leases must be granted on this clock.** `CausalMesh.now_us` is the moment to acquire at. A test wires a `ClaimRegistry` into a `ToolGateway` by hand and pins both halves: a lease granted at `now_us` blocks and then expires after the stated number of calls, and a lease granted on the wall clock is never seen to expire (the gate's clock never reaches it). See "`mesh.claim()` defaults to the wall clock" below for the gap this leaves.
+- Timestamps are not dates. An auditor reading `timestamp_us: 0` must not read 1970; the envelope's `clock.kind` says `logical`.
+- The clock is thread-safe, but a timestamp is issued before the call runs, so concurrent callers can be signed out of chain order. The verifier checks no timestamp ordering, and `serve` serialises executions under a lock.
+- The harness (`tasks/runner.py`, the scheduler) has its own clock and was not touched.
+
+### SDK claims and a human checkpoint handler (2026-09-30)
+
+**Status: built, opt-in.** This closes the "Claims" and "Human-in-the-loop approval" items under "Developer SDK" and replaces the last paragraph of "Checkpoints and identity" ("What this does not do").
+
+**Claims.** `CausalMesh(claims=ClaimRegistry(...))` (and `from_config(..., claims=...)`) hands the registry to `ContractGate.build`. That is the whole of enforcement: `Gate._rule_claim` already asked `registry.may_write` and `ContractGate.check` already called `record_denial` on a `claim` refusal; there is no second gate and no claim logic in the SDK. The lease run id and the gate run id are both `mesh.run_id` (`"sdk"` by default), so a lease protects exactly what the gate consults. Leases are taken explicitly: `mesh.claim(agent_id=, path=, duration_us=, now_us=)` returns the registry's `ClaimOutcome` as data (granted, or refused with the `holder`), `mesh.release(claim_id=, ...)` likewise, `mesh.denials()` reads the registry's denials for this run, and `mesh.claim_registry` exposes the registry. `path` may also be a `Resource`; the lease key is `Resource.path(path).identity` (for example `path:src/a.py`), so `src\a.py`, `./src/../src/a.py` and `src/a.py` are one lease.
+
+**Default off, and shadow on C0 to C2.** With `claims=None` the gate is built with `registry=None` and behaviour is identical to before. `ContractGate.build` keeps the registry for its own refusal recording only when enforcing, but passes it to the policy gate always, so on C0-C2 the claim rule runs as a shadow check: a contested call executes and the result carries `would_refuse`, `shadow_rule="claim"` and `shadow_reason`, and the signed event records `would_refuse`. No denial row is written on an unenforced arm, because nothing was blocked (a contested `mesh.claim()` is an exception on any arm: `ClaimRegistry.acquire` writes its own denial, as it always has).
+
+**A choice stated: no acquire-on-first-mutating-call.** Considered and not built, for three reasons. (1) A contested implicit acquire would write a denial in `acquire` and the gate would write another for the same blocked attempt, doubling the enforcement count, the class of defect `record_denial`'s docstring records. (2) An implicit lease is never released unless something says when, so the first agent to touch a path would lock it out until expiry without anyone having decided that. (3) It needs the resolved paths before the gate runs, which means reaching into `ToolGateway.execute`, a file other work was editing. A lease is a statement an agent or operator makes; making it explicit keeps it that. If wanted, the safe form is an explicit `auto_claim_us=` on `CausalMesh` that acquires in `ToolGateway.execute` before the gate and skips `record_denial` for a refusal its own acquire already wrote.
+
+**Human checkpoint handler.** `TerminalCheckpointHandler` (`src/causalmesh/policy/terminal_handler.py`, exported from `causalmesh.policy`) satisfies the existing `CheckpointHandler` protocol, so the gate is unchanged. It refuses on every failure and approves only on an explicit `y`/`yes`: injectable `input_stream`/`output_stream` (defaults `sys.stdin`, `sys.stderr`, so `--json` stdout is not mixed with prompts); `require_tty=True` refuses without asking when input is not a terminal; end of input, a closed or raising stream, an unwritable output and a timeout (`timeout_s`, default 120, per checkpoint) all refuse, with the read on a daemon thread so the caller waits with a deadline; a line typed after its question timed out is discarded, never taken as the answer to the next question; unintelligible answers are re-asked `max_attempts` (default 3) times, then refused; output is printable ASCII, with control characters, ANSI escapes, newlines and non-ASCII in agent-controlled names shown as `\xNN`/`\uNNNN`, backslashes doubled and long values truncated with their length stated; a lock serialises prompts across threads; and `decisions()` is its own log (agent, resource, checkpoint, approved, reason, outcome of `answered|eof|timeout|no_tty|no_output|invalid`, `now_us` as passed to the gate), outside the signed chain.
+
+`CausalMesh(checkpoint_handler=...)` and `from_config(checkpoint_handler=...)` forward a handler to `ContractGate.build`. `causalmesh experiment run --checkpoint-prompt` installs the handler only when a contract was found, the contract declares `policy.checkpoints` and stdin is an interactive terminal; otherwise it says so on stderr and `AutoDenyHandler` stays. The scheduler keeps a handler object out of the run artifact's `provenance` (it is not data; its class name is recorded instead), sets `reproducible: false` when the handler declares `deterministic = False`, and adds a `checkpoint_decisions` list (the handler's log for that run) to the artifact envelope. A run without a handler serialises exactly as before.
+
+**A defect found on the way.** `policy.checkpoints: [{on: path, ...}]` written in a YAML file did not load: YAML 1.1 reads an unquoted `on` as the boolean `True`, so the entry arrived as `{True: "path"}` and the parser raised a `TypeError` (from sorting the unknown key names) instead of a `ContractError`. No test loaded a checkpoint from YAML. `_parse_checkpoint` now reads the `True` key as `on`, and `_reject_unknown` no longer assumes string keys. Pinned in `tests/sdk/test_checkpoints.py`.
+
+**What the chain records (unchanged, stated).** The runner (`tasks/runner.py`) writes `CHECKPOINT_DECIDED` only for checkpoint verdicts that refused, under the `checkpoint` identity, whose key is derived only when `contract.checkpoints` is non-empty. The SDK records a refused checkpoint as the call's `FAILURE` event, with `rule: "checkpoint"` and the handler's reason in the payload, and no `CHECKPOINT_DECIDED` event. Approved checkpoints leave no chain record in either path; a test pins that so a change is deliberate.
+
+**Tested.** `tests/sdk/test_claims.py` (off by default; two agents on one path; C0-C2 report `would_refuse` with no denial; lease and gate share the run id; outcomes as data; misuse raises; mutation-checked: `registry=None` in `_build_runtime` fails 13 of them), `tests/sdk/test_checkpoints.py`, `tests/unit/test_terminal_checkpoint.py` (timeout and the stale-line rule mutation-checked), `tests/adversarial/test_terminal_checkpoint_escape.py` (ANSI, CR, forged lines, backspace, bidi override, emoji, NUL, huge names) and `tests/integration/test_checkpoint_prompt.py` (the CLI flag only acts on an interactive stdin; a real smoke collection with the handler writes a serialisable artifact, `reproducible: false`, per-run decisions that sum to the handler's log, and `CHECKPOINT_DECIDED` on the C3 chain). The contended-path tests use scripted calls and the checkpoint tests use scripted answers; nothing here says anything about agent behaviour.
+
+**Not built, recorded with reasons:**
+
+- **Approved checkpoints are not on the chain, in either path.** A person's yes is the thing an auditor would most want to see signed, and it is the one decision not recorded. Recording it means a `checkpoint` key in the SDK relay (derived only when checkpoints are declared, as the runner does), a reservation of that agent id so `execute(agent_id="checkpoint")` cannot forge the identity (`mesh.agents` would otherwise list it as a callable agent), and a decision on whether the runner records approvals too. The reason text must stay free of clock and host to be reproducible, which the terminal handler's is. Not cheap enough to do beside a change to `ToolGateway`, so not done. Runner and SDK therefore still differ here.
+- **`checkpoint_decisions` is an envelope, not evidence.** The handler's own log is outside the signature, so it can be edited after the fact. The signed record of a refusal is the chain's; of an approval, there is none.
+- **Checkpoints are consulted on every arm.** `Gate.check` runs checkpoints whether or not it enforces, so `--checkpoint-prompt` asks a person on C0-C2 too, where a "no" only becomes `would_refuse`. The CLI says so when it installs the handler. A scripted or arm-aware handler is the way around it; the handler does not know the arm.
+- **The prompt blocks the calling thread.** The protocol is synchronous. From `execute_async` it blocks the event loop until the person answers or `timeout_s` passes, and concurrent agents wait in line behind the lock. The timeout is per checkpoint and counted from when the question is shown.
+- **A daemon reader thread can be left blocked on stdin** after a timeout. It reads at most one line and that line is discarded. CPython can print a "could not acquire lock ... at interpreter shutdown" message if the process exits while a daemon thread is inside a blocking stdin read; not observed in the tests, which use injected streams.
+- **Real terminals were not driven.** `require_tty`, Windows consoles and a live TTY were tested only with injected streams. The output is ASCII on purpose so cp1252 cannot raise; that has not been run on Windows.
+- **A run that uses the handler is not reproducible from the seed.** It says so (`reproducible: false`); the answers are a person's.
+- **Claim expiry uses the caller's clock, and the default is the wall clock.** See the next entry. Leases are not in the signed chain (the registry is outside it), so this does not touch chain reproducibility. The default claim id is `<run_id>_<agent_id>_<n>` from a per-session counter: two sessions sharing a registry and a run id can collide (`ClaimError`); give them different run ids or pass `claim_id=`.
+
+### `mesh.claim()` defaults to the wall clock, and the gate reads a logical one
+
+**Status: open. Found while folding the implementer notes by reading the code; not fixed.** The SDK claims work and the logical-clock work landed separately and each note is right about its own half. `mesh.claim()` and `mesh.release()` default `now_us` to `utc_now_micros()` (`sdk/mesh.py`), while `ToolGateway` asks the gate about a per-session logical clock that starts at `clock_base_us` (0). The registry's liveness test is only `now_us < expires_at_us`, so a lease granted with the default `now_us` expires at roughly the wall clock plus its duration, a moment the logical clock never reaches: it blocks every other agent for the life of the session and never expires as the gate sees it. That fails closed, but it is not what `duration_us` says. `tests/sdk/test_clock.py::test_a_lease_granted_on_the_wall_clock_never_expires_in_logical_time` pins the hazard with a registry wired in by hand; every `mesh.claim()` call in `tests/sdk/test_claims.py` passes an explicit `now_us`, so no test exercises the default. **What it would take:** defaulting `now_us` to `mesh.now_us` in `claim()` and `release()` (and deciding how a caller who passes wall-clock `now_us` to `execute()` is told); until then, pass `now_us=mesh.now_us`.
+
+### The chat path still signs the wall clock
+
+**Status: open, pinned by a test.** `/v1/chat/completions` does not go through `ToolGateway`: it calls `m._gate.policy.check` and `m._relay.ingest` itself with `time.time_ns()`, and puts that value in the event id too (`serve-<agent>-<now_us>-<n>`), so chat events in a `serve` chain are not reproducible and two `serve` sessions making the same chat calls do not share a head hash. `tests/server/test_logical_clock.py` pins this so it stays visible. **What it would take:** moving that path onto the gateway's clock and a sequence-only event id. It was left alone because `server/` was under separate edit.
 
 ## CI was removed (2026-09-30)
 
@@ -884,32 +1033,56 @@ What was fixed is in `CHANGELOG.md` (async unknown-agent bypass, chat-completion
 agent and body handling, upstream scheme and host, `create_app` fail-open,
 OpenAI adapter error translation). These are the gaps that remain, and why.
 
-### Identity on the HTTP surface: bound tokens built, proof not
+### Identity on the HTTP surface: bound tokens and their lifecycle built, proof not
 
-**Status: partly built (2026-09-30).** A bearer token authenticates the client.
-`--agent-token AGENT=TOKEN` (or `create_app(agent_tokens=...)`) binds a token to
-one agent: the server takes the agent from the token and refuses a request that
-names another (403). An unbound `--api-token` is still the operator's, and still
-asserts; chat events record `identity_source` (`token-bound` or `asserted`) so
-the chain can tell a credential from a claim.
+**Status: partly built (2026-09-30).** A bearer token authenticates the client. `--agent-token AGENT=TOKEN` (or `create_app(agent_tokens=...)`) binds a token to one agent: the server takes the agent from the token and refuses a request that names another (403). An unbound `--api-token` is still the operator's, and still asserts. Chat and `/execute` events record `identity_source` (`token-bound` or `asserted`), and a call made directly through the SDK carries none (`tests/server/test_identity_source_on_tools.py`), so the chain can tell a credential from a claim. A token is compared in constant time. Expiry, revocation and rotation are built; see the next entry.
 
-**What remains.** Tokens are shared secrets over plain HTTP, so they prove nothing
-to anyone who did not see the request, and the server holds every agent's signing
-key, so a signature attests that the server recorded an event, not that the agent
-did. `/execute` events do not yet record `identity_source`. A token is compared
-in constant time, but there is no rotation, expiry or revocation. **What it would
-take:** per-agent signing keys held by the agents (so a signature is theirs), or
-mutual TLS; either is a protocol decision this project has not made.
+**What remains.** Tokens are shared secrets. They travel over plain HTTP unless the operator turns on TLS or puts a proxy in front (see "HTTP hardening"), and even over TLS they prove nothing to anyone who did not see the request. The server holds every agent's signing key, so a signature attests that the server recorded an event, not that the agent did. **What it would take:** per-agent signing keys held by the agents (so a signature is theirs), or mutual TLS; either is a protocol decision this project has not made.
 
-### `causalmesh serve` registers no tools
+### Token lifecycle: expiry, revocation, rotation built; proof still not
 
-**Status:** by construction. The command builds a `CausalMesh` and never calls
-`register_tool`, so `/v1/tools` is empty and `/v1/tools/{name}/execute`
-answers 404 for every name, in the Docker image too. Tools reach the server
-only when it is embedded from Python (`create_app(mesh=...)`). The command's
-actual function today is gating `/v1/chat/completions`. **What it would take:**
-a declared way to load tools, which is an operator-code question (importing
-arbitrary callables from a config file) that this project has not answered.
+**Status: built (2026-09-30).** A token can expire, be revoked and be rotated without restarting `serve`, and the chain says which credential acted.
+
+- **Expiry.** `--agent-token AGENT=TOKEN@EXPIRY` (ISO 8601 such as `2026-12-31T00:00:00Z`, or unix seconds), `--api-token-expires`, or `expires:` in the tokens file. A credential is valid while `now < expires_at`: at the expiry instant it is already refused. Past it, the request gets 401 "Token expired". Expiry is judged on every request, so nothing outlives it, including a set kept after a failed reload. Times without a zone are UTC. The clock is injectable (`create_app(clock=...)`).
+- **Tokens file.** `--tokens-file PATH` (also `CAUSALMESH_TOKENS_FILE`), YAML or JSON: `tokens:` is a list of `{id, token, agent?, expires?}`. It is re-read when its mtime, size or inode changes (one `stat` per request), and on SIGHUP on POSIX. Deleting an entry makes that token fail on the next request; adding one takes effect on the next. Flag tokens stay valid beside the file.
+- **Rotation.** Several entries may name one agent. Add the new token, move the clients, delete the old entry: both are valid in between. More than two live tokens for one agent logs a warning.
+- **A bad reload keeps the last good set.** Malformed YAML, a missing or unreadable file, a bad entry, a duplicate label or token, an agent with no key in this session, or a permissive mode all leave the credentials as they were, and log one warning per distinct failure that carries no file content and no token. Failing closed would lock every client out over a typo; failing open is never acceptable, and keeping the old set is neither. Its cost: a token the operator meant to revoke in that same broken edit stays valid until the file is fixed or the token expires. To revoke everything on purpose write `tokens: []`. A bad file at start-up is an error: there is no good set to keep.
+- **Permissions.** On POSIX a tokens file with any group or other bit set is refused, at start-up and on reload, with the `chmod 600` to run. On Windows mode bits mean nothing, so nothing is checked; restrict the file with an ACL.
+- **Record.** Chat and `/execute` events carry `credential_id` beside `identity_source`: the operator's label for the credential (`id:` in the file; `agent-token:AGENT` and `api-token` for plain flags). It is signed and reproducible, because it comes from configuration and not from the secret, a clock or a random id, and it is never the token or a digest of it (a digest of a guessable token could be tested offline). Labels are limited to `[A-Za-z0-9._:-]`, 64 characters, and a label that contains its own token is refused. With authentication off the field is absent, not `none`.
+- **Logs.** No token is logged. Reload and refusal messages name labels, counts and line numbers. The log redactor (`RedactingFormatter`) accepts a callable, and `serve` hands it the credential store, so a token added by a reload is scrubbed from the next line and a revoked one stays scrubbed.
+
+Code: `server/credentials.py` (`Credential`, `CredentialStore`, `parse_expiry`, `split_token_expiry`, the file parser), `server/auth.py`, `server/app.py`, `server/observability.py`, `cli/commands_serve.py`. Tests: `tests/server/test_token_lifecycle.py` and `tests/integration/test_serve_tokens.py` cover the expiry boundary (valid one millisecond before, refused at the instant), revocation, addition and rotation overlap, SIGHUP, a bad reload keeping the last good set (parametrised over thirteen malformed and invalid files, each asserting nothing leaked to the log), permissive modes, the constant-time compare (every credential compared, expired ones too, no early exit), no secret in logs, errors or the chain, and `credential_id` on chat, `/execute` and denied calls. Mutation-checked: an early `break` in the compare loop, `>` for `>=` at the expiry, and a reload that swallows a parse error each fail the suite.
+
+**What remains.**
+
+- Tokens are still shared secrets, and the server still holds every agent's signing key. Expiry and revocation shrink the window in which a leaked token is useful; they do not make a token prove anything to someone who did not see the request. Per-agent signing keys held by the agents, or mutual TLS, are still undecided protocol questions.
+- Revocation is per process and needs the file to be reachable. There is no admin endpoint and no shared revocation list, so several processes must all read the same file.
+- A detected edit within the timestamp granularity relies on a byte compare for two seconds after each read. A file changed in place, to the same size, with the old mtime restored, more than two seconds after it was read, is not seen until SIGHUP (POSIX) or the next change. There is no SIGHUP equivalent on Windows.
+- SIGHUP reloads only when `--tokens-file` is set; otherwise the default action (terminate) is untouched. With a file set, a terminal hang-up reloads instead of stopping the process.
+- A keep-last-good set is silent to clients. There is no metric or health signal that the file is currently unreadable, only the log warning; `/health` and `/readyz` are unauthenticated and deliberately say nothing about it.
+- A token containing `@` followed by something that looks like a date cannot be given as `--agent-token` (it would be read as an expiry). Put it in the file.
+- The rate-limit table is keyed on a digest of each token that authenticated and is never pruned, so a long-lived process that rotates many tokens grows it a little per rotation.
+- The redactor works by value, so a token shorter than four characters is not scrubbed (as before); `serve` warns under 16.
+
+### `causalmesh serve --tools`: operator code loaded at startup (built, with limits)
+
+**Status: built (2026-09-30).** This replaces "`causalmesh serve` registers no tools", which stood until now: the command built a `CausalMesh` and never called `register_tool`, so `/v1/tools` was empty and `/v1/tools/{name}/execute` answered 404 for every name, in the Docker image too. `--tools MODULE:FUNC` or `--tools FILE.py:FUNC` (repeatable) now imports the named code and calls `FUNC(mesh)` once, before the first request; `FUNC` registers tools with `mesh.register_tool(Tool(...))` (`src/causalmesh/server/tools.py`). The split is on the last colon, so a Windows drive letter stays in the path.
+
+**What it does, stated plainly.** `--tools` imports and runs code with the server's own privileges. That is the whole feature, and it is why the answer to the old question (importing arbitrary callables from a config file) was not to read the contract:
+
+- The spec is the operator's, typed on the command line or set in the service definition. It is never taken from the contract, a request, a header or anything a client sends. The `tools:` section of `causalmesh.yaml` names tools; it does not name code, and nothing reads it as an import (`tests/integration/test_serve_tools.py::TestToolsAreNeverDerivedFromTheContractOrARequest`).
+- Every tool it registers is still called through the gateway: the contract gate decides and the evidence is recorded. Loading a tool grants nothing.
+- Anyone who can change the spec or the file it points at can run code as the server, exactly as anyone who can edit the service's command line can. Treat it like any other code you deploy.
+
+A bad spec is a usage error that stops startup with the reason and exit 2: a malformed spec, a module or file that cannot be imported, a missing or non-callable function, an `async` function, a function that does not accept one argument, a function that raises, a function that registers nothing, and a tool name registered twice (two files of the same name do not shadow each other).
+
+**Limits, stated rather than hidden:**
+
+- Tools are registered at startup only. There is no reload and no way to add or remove one while the server runs; changing the set is a restart.
+- The module form needs the module on `PYTHONPATH`, not merely in the current directory; use the file form for a file.
+- Nothing sandboxes the code or the tools it registers. The Docker image is not a sandbox either (`docs/security.md`).
+- Executions stay serial under one lock (see "HTTP hardening"), so a slow registered tool holds up every other call.
+- Covered by `tests/integration/test_serve_tools.py` (a real server process driven over HTTP) and `tests/server/test_tools.py`. No real agent or model has called these tools.
 
 ### Non-path resources through the SDK: built, with these limits
 
@@ -918,24 +1091,48 @@ amount_arg=...)` hands the gate every kind the policy layer supports, with URL h
 extraction, strict argument types and a per-call amount. Paths are decided on the
 canonical file (`..`, `./`, case, a trailing dot or space, an absolute spelling
 inside the contract's directory). A declared total needs a ledger
-(`CausalMesh(ledger=...)`): consumption is recorded after a successful call, and a
-total with no ledger is refused, since nothing could enforce it.
+(`CausalMesh(ledger=...)`), and a total with no ledger is refused, since nothing
+could enforce it. The total is reserved before the handler runs and settled after it
+(see the next entry); it used to be checked and then recorded, and was racy.
 
 **Limits, stated rather than hidden:**
 
 - A tool that declares no resource is checked against nothing and runs (the
   contract states exceptions), and `mutating=False` skips the gate for every kind,
   so a read-only tool that reaches a network is not held to an allowlist.
-- Totals are check-then-record: two callers can both pass the check before either
-  records. Executions through `serve` are serial, so it does not arise there.
-- A handler that raises is not recorded as spent, which under-counts if it failed
-  after the money left. Only the handler knows.
+- Totals are reserved, not checked-then-recorded, and a raising handler's amount is
+  released unless the tool says otherwise; both limits this list used to carry are
+  replaced by the next entry, which states what remains.
 - A budget name nobody declared is unlimited: absent means unrestricted, so a
   misspelt name is too. Keep the name in the tool, not in the model's arguments.
 - Case is folded for ownership, so on a case-sensitive filesystem `Docs/` and
   `docs/` share an owner (fail closed). Symlinks are invisible to a lexical check.
 - An absolute path outside the contract's directory is not this contract's to
   decide, and is not refused.
+
+### Totals are reserved, then committed: built, with these limits
+
+**Status: built (2026-09-30).** This replaces two limits that "Non-path resources through the SDK" listed: that totals were check-then-record, and that a raising handler was never counted. A declared total (`usd_total`, `tokens`, ...) is now **reserved** before the handler runs and settled after it.
+
+**What was built.**
+
+- `Ledger.reserve` sums recorded consumption plus live holds, compares the result with the limit and inserts the hold in one `BEGIN IMMEDIATE` transaction, so callers racing on one allowance are admitted one at a time against the true remainder, across threads and across processes. A refusal is returned as data (`ReserveOutcome`, with the `spent` and `held` the transaction saw). `commit` turns a hold into an entry and `release` drops it; each is a single transaction. The holds live in a `reservation` table created on open, so an existing ledger file needs no migration. `Ledger.total` is unchanged (recorded consumption only); `held` and `release_all` are new.
+- `Gate.check(..., holds=[])` takes the reservation inside the budget rule and appends it to `holds`. A refusal anywhere in the same check, and any refusal of a later resource in the same call, releases what that call had taken, so a refused call holds nothing. Without `holds`, `check` is still a read-only question, but it now counts live holds as well as recorded spend.
+- `ToolGateway` reserves through the gate, then commits when the handler returns, releases when it raises, and releases on an interrupt or cancellation (which propagates). `GatewayResult`, `Ledger.record` and the ledger's `entries` are unchanged. The gateway also serialises event emission (the id counter and the relay), which the first concurrent callers showed was not safe; the handler and the reservation run concurrently. `serve` still executes serially.
+- **A raising handler is released by default, and a tool can say otherwise.** `Tool(..., spend_on_error=True)` counts the amount as spent when the handler raises, for a tool that cannot tell whether the money left. The default under-counts (a failure before the money moved is not charged); the opt-in over-counts (a failure that never spent is). Neither is right for every tool, which is why it is the tool's declaration and not the gateway's guess. The result is still a failure either way.
+
+**Tested (`tests/gateway/test_atomic_totals.py`; numbers recorded by the implementer).** 120 threads against a 50-call total: exactly 50 run, 70 are refused on `budget`, the handler runs 50 times, the recorded total is exactly 5.00 and no hold is left. A watcher thread asserts recorded plus held never exceeds the cap mid-race. Four spawned processes on one ledger file are granted exactly 50 holds between them. Reverting the reservation in the gate (back to check-then-record) lets all 120 run and fails the race tests; changing `BEGIN IMMEDIATE` to a deferred `BEGIN` fails them too.
+
+**Limits that remain, stated rather than hidden:**
+
+- A holder that dies between reserve and settle leaves its hold behind. That over-counts, which fails closed, until an operator runs `Ledger.release_all` (safe only when nothing in the run is executing). There is no expiry, because any timeout shorter than the slowest handler would release money that is still in flight. No CLI command exposes `release_all` yet.
+- A hold whose `commit` fails (a ledger that cannot be written) stays counted and is reported on `result.audit_error`; the call's outcome stands.
+- The reservation exists only on the SDK path. Callers that use `Gate.check` directly (`causalmesh policy check`, the x402 adapter, `serve`'s upstream check) still ask a question and record afterwards; they see in-flight holds but do not take one. The x402 adapter's check-then-pay is therefore still racy for a caller that pays outside the gateway.
+- Interrupt and cancellation release the hold even if the money had already left; `spend_on_error` covers exceptions only.
+- The unenforced arms (C0 to C2) take the hold whatever the total, so they record what they spend; the refusal they would have made is reported as before.
+- Concurrency stops at the ledger and the emit lock: `ContractGate.verdicts` is a shared list, so the "would have refused" report on a result can name a concurrent call's verdict under C0 to C2. Enforced arms do not read it.
+- A reservation is taken per resource, in call order. A call that declares the same destination twice reserves twice, as it records twice.
+- Serial `serve` bounds throughput at one call at a time; nothing here changes that, since the gateway's handler concurrency is only reachable to a library caller.
 
 ### HTTP hardening: what is built, what is not
 
@@ -949,9 +1146,14 @@ exception text and the list of known agents no longer reach clients; upstream
 redirects are refused so the upstream key cannot be sent to another host; an
 allowed chat call that could not be recorded is not forwarded.
 
+**Also built (2026-09-30), replacing "TLS is not built":**
+
+- **TLS.** `--ssl-certfile` and `--ssl-keyfile` (or `CAUSALMESH_SSL_CERTFILE` and `CAUSALMESH_SSL_KEYFILE`) serve HTTPS. Both or neither; both must exist, be readable and load together, which is checked before the socket opens (`server/tls.py`), so a mismatched key, a non-PEM file or a wrong passphrase is a usage error rather than a late uvicorn traceback. An encrypted key's passphrase is read only from `CAUSALMESH_SSL_KEYFILE_PASSWORD`, never from an argument (the process table, shell history and `docker inspect` would show it), it never prompts on a terminal, and the log redactor scrubs it. On a non-loopback host without TLS `serve` warns that bearer tokens cross the network in clear; `--require-tls` (or `CAUSALMESH_REQUIRE_TLS`) turns that warning into a refusal. Tested with a real certificate and a real HTTPS request, including that plain HTTP to the TLS port is not served and that a client which does not trust the certificate is refused (`tests/integration/test_serve_tls.py`).
+- **Operability.** A request id on every response (`X-Request-ID`) and in every log line, an access log of method, path, status and duration (never the query string, headers or body) with every configured secret scrubbed by value, `/readyz` beside `/health` (503 when the session cannot take a gated call or the server is shutting down; unauthenticated and it names no agent, tool or count), `--log-level`, `--timeout-keep-alive`, `--timeout-graceful-shutdown`, and `--workers` greater than 1 refused with the reason (each worker would hold its own chain and rate limits). The request id is random and is never written to the signed chain.
+
 **Not built:**
 
-- TLS. `serve` speaks plain HTTP; the operator's proxy provides TLS.
+- TLS is opt-in: `serve` speaks plain HTTP unless given a certificate and key, and a non-loopback bind without them only warns unless `--require-tls` is set. There is no client-certificate verification (mutual TLS), no reload or rotation of the certificate without a restart, no TLS version or cipher setting beyond uvicorn's defaults, and no certificate issuance. The operator's proxy remains a fine place to terminate TLS.
 - The rate limit is per process, opt-in, and counts only authenticated requests. A
   throttle on failed logins is deliberately absent: keyed on an address it lets one
   attacker lock out real users behind the same NAT. Use a long random token
@@ -1014,11 +1216,24 @@ commits (`git filter-repo`) can, and that changes every later commit hash and
 invalidates every clone and fork. That is a separate decision for the repository
 owner and has not been made or attempted.
 
-**The default that caused it.** `Environment.capture` records `platform.node()` and
-the OS username, and `.gitignore` keeps `data/manifests/**` tracked, so anyone who
-runs `manifest write` and commits publishes their own. Hashing or omitting both by
-default, with an opt-in to record them, is not built: where a run happened is what
-the field is for.
+**The default that caused it: changed (2026-09-30).** `Environment.capture(root)` no longer records `platform.node()` or the OS username. By default `machine_id` and `operator_id` are each one of:
+
+- `keyed:` plus 16 hex digits, the first 64 bits of an HMAC-SHA-256 over the value, keyed with a random 256-bit secret. The hostname and the username are derived under separate labels, so neither can be matched to the other.
+- `unknown`, when no key can be kept (not a git checkout, the git directory is unwritable, the key file is malformed) or the value itself is absent. It is never a bare unsalted hash: a hostname or username comes from a small space and could be enumerated against one.
+
+The secret is generated on first use at `<git-common-dir>/causalmesh/identity.key` (mode 0600, created with `O_EXCL`). It is inside `.git`, so it is never tracked or pushed, and every worktree of one clone shares it. No dependency was added. `Environment.capture(root, record_host=True)`, `causalmesh manifest write --record-host` and `causalmesh experiment run --record-host` record the real values; `manifest write` prints a note when it is used and its `--json` output carries `host_recorded`. `experiment run` was in scope too: it calls the same capture and copies both fields into each run's envelope.
+
+Consumers checked: `provenance/manifest.py` (passes the flag through), `cli/commands_audit.py` (prints only the git commit, and echoes `manifest.environment` into the audit report, so it shows the digest or `unknown`), `cli/commands_experiment.py`, `tasks/runner.py` and `agents/base.py` (carry the two strings through untouched), `verify` and `doctor` (read neither field). Existing manifests are unchanged: `manifest.check` hashes the listed artifacts, not the manifest, and the tracked manifest already reads `unknown`. `causalmesh audit` could not be run against the pilot collection in the worktree this was built in, because `data/raw/` is untracked and absent there. Tests: `tests/unit/test_provenance.py::TestIdentityPrivacy` (sentinel host and user absent by default and present with the opt-in; the real hostname and username of the machine running the suite absent from a default manifest; the key stays in `.git` with mode 0600; no key or a corrupt key gives `unknown`) and `tests/integration/test_cli.py::TestManifestPrivacy` (the same through the CLI).
+
+**What remains.**
+
+- **History is untouched.** The original hostname and username are still in `54cd3f4`, `743a69e` and `9d258f6`. This change stops new publication and does nothing about those; rewriting them is still the repository owner's decision.
+- **A digest compares only within one clone.** The same machine cloned twice has two keys and so two digests, and a fresh clone cannot reproduce an earlier digest. "Different digest" means "different machine or different clone", never "different person", and a digest is not evidence that two manifests came from one machine unless they came from one clone. Where that is not enough, there is no answer short of recording the real value.
+- **Old manifests written with the real values stay as they are.** Nothing rewrites or scans for them. Anyone who used `--record-host` and committed the result has published the values again; the flag is a choice, not a safeguard.
+- **`platform` and `python_version` are still recorded in the clear** ("Windows 11 (AMD64)", "3.13.5"). They describe a class of machine, not a person, and are what makes a run's conditions checkable, but a rare configuration narrows who could have written a manifest.
+- **The fallback is uneven.** A checkout without a usable `.git` gets `unknown` for both, so two such manifests cannot be told apart at all.
+- **The key is not rotated and not backed up.** Deleting it changes every later digest; nothing warns that earlier manifests no longer match.
+- **No test scans the tracked tree.** The suite checks what is written, not what is committed; a manifest produced with `--record-host` and committed is not caught.
 
 
 ## Developer demo (2026-09-30)
@@ -1041,39 +1256,50 @@ makes four of its six tests fail. The command had no tests before.
 
 ### The CLI reads two contract schemas
 
-**Status:** open, by choice. `policy show`, `policy check` and `serve` load the core
-schema and refuse a contract with `agent:` or `tools:` (a clean error, exit 2);
-`policy validate` and `CausalMesh.from_config` accept both. The same file is
-therefore valid to one command and rejected by another. It is not changed here
-because the strict core schema is what catches a misspelled key, and widening it is a
-contract-schema decision. **What it would take:** either accept and ignore the two
-keys in the core schema, or load through `load_sdk_config` in those commands. The demo
-contract leaves the two sections out.
+**Status: fixed (commit `08088a7`).** `policy show`, `policy check` and `serve` used to load the strict core schema and refuse a contract with `agent:` or `tools:` (a clean error, exit 2) while `policy validate` and `CausalMesh.from_config` accepted both, so one file was valid to one command and rejected by another. The core schema now names and validates the two SDK sections (one implementation, `parse_sdk_sections`), and an unknown top-level key is still an error everywhere, so the typo guard that was the reason for leaving it is kept. Pinned by `tests/integration/test_contract_schema_unified.py` (a contract with SDK sections is accepted by the CLI and the library loaders, the gate builds the same contract with or without them, a misspelt top-level key is rejected, a bad SDK section is rejected by the core loader). The demo contract still leaves the two sections out, which is now a choice and not a workaround.
 
 ### `causalmesh verify` trusts the keys inside the artifact
 
-**Status:** open, found and tested 2026-09-30. `verify` builds its key ring from the
-`actor_public_key` in the records it is checking (`cli/commands_verify.py`,
-`_key_ring_for`). That proves the chain is internally consistent and each signature
-matches the embedded key. It does not prove the key belongs to the named actor, which is
-what `verify_chain`'s own docstring and `docs/security.md` say a verifier must not rely
-on. Test: a chain produced by a second `CausalMesh` with an attacker's seed verifies as
-valid against the ring `verify` builds, and is rejected against the operator's ring.
-**What it would take:** `verify` reading an operator-supplied `PublicKeyRing`, or
-saying plainly in its output that attribution was not checked. Not exploited or changed
-here.
+**Status: narrowed, not closed (found and tested 2026-09-30; narrowed 2026-09-30).** With no `keyring.json` beside `run.json`, `verify` still builds its key ring from the `actor_public_key` in the records it is checking (`cli/commands_verify.py`, `_key_ring_for`). That proves the chain is internally consistent and each signature matches the embedded key. It does not prove the key belongs to the named actor, which is what `verify_chain`'s own docstring and `docs/security.md` say a verifier must not rely on. Test: a chain produced by a second `CausalMesh` with an attacker's seed verifies as valid against the ring `verify` builds, and is rejected against the operator's ring.
+
+What changed: `verify` now prefers a `keyring.json` beside `run.json` (which `CausalMesh.export` writes), reports which source it used (`keys`: `keyring.json` or `embedded`), and fails a run whose `keyring.json` is present but unreadable rather than falling back. A chain re-signed under a foreign seed fails against the keyring, and the same forged chain with the keyring deleted still passes (pinned as the known limit). What is still not built: an operator-supplied ring from somewhere other than beside the run (`verify` has no `--keyring` option), automatic pinning of `key_ring_fingerprint`, and any of this for experiment runs unless a `keyring.json` is placed by hand. The keyring is only as trustworthy as the channel it arrives by; see "SDK export and verification". Not exploited.
 
 ### An SDK session cannot be verified from the CLI
 
-**Status:** by construction. `CausalMesh.audit_events()` returns the records; nothing
-exports them (persistence is not built) and `causalmesh verify --run` reads experiment
-artifacts (`run.json`), not SDK sessions. Verifying an SDK session takes the public
-`verify_chain` and a key ring the operator builds, as `examples/cli_demo/verify_evidence.py`
-does with `KeyPair.derive(seed, agent)` over `CausalMesh.agents`. **What it would take:**
-an export on `CausalMesh` plus a CLI reader for it, which is the persistence item above.
+**Status: fixed for an exported session (2026-09-30).** `CausalMesh.export(directory)` writes `run.json` and `keyring.json`, and `causalmesh verify --run <directory>` verifies them, with no change to `verify`'s input format (see "SDK export and verification"). Verifying with a key ring the operator builds, as `examples/cli_demo/verify_evidence.py` does with `KeyPair.derive(seed, agent)` over `CausalMesh.agents`, is still available and is the stronger check. **What remains:** a session that was never exported (a crash) leaves `chain.jsonl` and `keyring.json` but no `run.json`, which `verify --run` cannot read, and `serve` exports nothing.
 
 ### The README's `policy check --agent buyer` example answered ALLOW
 
 **Status:** fixed 2026-09-30 in the README. The starter contract comments out the
 `buyer` role, and an agent the contract does not name is unrestricted, so the example
 only refuses once that role is uncommented. The README now says so.
+
+## Found while folding the implementer notes (2026-09-30)
+
+Each of these was reported by the implementer who hit it, or found by reading the code when two notes were put side by side. None is fixed here; each says why.
+
+### Runner leases are taken under raw paths, so `ContractGate`'s claim rule never fires on them
+
+**Status: open. Verified by an implementer, not fixed, because fixing it changes what contract-gated C3 runs measure.** `tasks/runner.py` acquires each agent's `task.role_for(agent).owns` entries as written (`src/a.py`), while `ContractGate` asks `may_write` with `Resource.path(...).identity` (`path:src/a.py`). A registry holding `src/a.py` answers `granted=True` to `may_write(path="path:src/a.py")` for a second agent and `False` for `may_write(path="src/a.py")`. So in a contract-gated experiment run (a `causalmesh.yaml` was found, which is the default) the `claim` rule never fires on those leases, while ownership and the other rules still do; the narrow `ClaimGate` the arms install without a contract keys on the raw path and does fire. The SDK does not have this problem, because `mesh.claim()` leases on the identity. Read against the code when this was folded: `runner.py` passes `path=path` to `claims.acquire`, and `Gate._rule_claim` passes `resource.identity`.
+
+**Why it is recorded and not fixed:** the two arms' enforcement contrast (C2 against C3) is what the experiment measures, and a contract-gated C3 run currently enforces through ownership alone. Changing the key changes what those runs measure, so it is a decision for whoever owns the experiment arms: acquire on `identity`, or make the registry normalise kind-prefixed and bare paths to one key. Until then, do not read a contract-gated C3 run's denials as evidence about leases.
+
+### The section 37 gate cannot tell a missing test runner from no effect
+
+**Status: open, hazard.** The harness runs each task's integration test as `python -m pytest -q tests/` (`integration_test` in `tasks/*.yaml`, run by `_run_integration_test` with the scrubbed environment) using whatever `python` is on `PATH`. If that interpreter has no pytest, the test exits non-zero in every arm, `check_sensitivity` sees C0 0/n and C2 0/n, and reports NOT SENSITIVE. It happened when `interface_consumer` and `shared_utility_refactor` were first gated: with the virtual environment first on `PATH` the same code returned SENSITIVE, with nothing in the task definitions changed. A missing test runner is indistinguishable from "the arms do not differ" unless someone reads `tests_passed` and `divergence_absent` separately (the divergence counts still separated the arms, 2 versus 0). The existing tasks share the hazard. The same scrubbed-environment mechanism produced the earlier `APPDATA` defect on Windows (`docs/tasks.md`). **What it would take:** the gate reporting "could not run" (a `None` exit code or a preflight that imports pytest) instead of a failed arm.
+
+### `_execute_one` catches `BaseException`
+
+**Status: open, pre-existing, recorded from the timeout work.** `ExperimentRunner._execute_one` (`scheduler/loop.py`) catches `BaseException`, so a cancelled collection (Ctrl-C reaches it as `CancelledError`) records the in-flight run `FAILED` ("harness raised"), with a traceback, rather than leaving it `RUNNING` for the next startup to abandon and resume. `FAILED` is terminal and never retried, so an operator's interrupt can turn a run that would have been resumed into a permanent failure in the denominator. Not changed because it alters behaviour with no timeout configured. **What it would take:** letting cancellation and `KeyboardInterrupt` propagate out of that handler after recording nothing, and a test that a cancelled collection resumes the run.
+
+### The watchdog is cooperative only
+
+Recorded in full under "Timeout as a distinct run state": cancellation lands where an agent `await`s, so a run wedged in a blocking call (including the synchronous integration check) blocks the event loop and the watchdog cannot fire, and a run that swallows cancellation is abandoned after `timeout_grace_s`, not killed. Listed here as well so a reader looking for limits of the run-timeout feature finds it.
+
+### One intermittent failure seen once
+
+**Status: not reproduced, not explained.** `tests/reproducibility/test_collection_determinism.py::test_two_collections_produce_identical_chains` failed once under `pytest -n 2` alongside other suites while the scaling work was being tested, and passed on every rerun, alone and in the same combination. Noted rather than explained. Relevant because it is a determinism test: if it recurs, treat it as a finding about the chain, not as flakiness.
+
+### Ad-hoc scripts can import the wrong checkout
+
+**Status: open, environmental.** With an editable install, `python -c "import causalmesh"` from a git worktree can resolve to the main checkout's `src` (this happened during the scaling work). `pytest` is unaffected because `pyproject.toml` sets `pythonpath = src`; ad-hoc scripts need `PYTHONPATH=src`.

@@ -58,6 +58,16 @@ This separation is what makes C0's isolation checkable. It is a property of
 *which object was installed*, not of a conditional buried in the ingestion
 path that could be reached by accident.
 
+The informed arms can be run with path-scoped delivery instead of broadcast
+(`policy_for_arm(arm, mode="path_scoped", interests=...)`, or
+`RunConfig.delivery_mode`). This is used by the scalability profile
+(`causalmesh experiment scalability`) only; the four primary arms are
+broadcast. C0 is `NullDelivery` in every mode. Path-scoped delivery hands an
+agent exactly the events whose paths intersect its declared interests, and every
+path-less event to everyone; asking for it without an interest map raises
+rather than falling back to broadcast. What that measured, and the limits, are in
+`docs/backlog.md` ("Scaling beyond 4 agents").
+
 `policy_for_arm` raises on an unknown arm rather than defaulting. A silent
 default could hand C0 a broadcast policy and destroy the isolation the whole
 experiment rests on.

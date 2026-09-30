@@ -15,10 +15,11 @@ a deliberate scope decision, not a forgotten to-do.
 | Statistics layer | Every inferential claim |
 | Reporting | Generated figures, tables and the written report |
 | `causalmesh report` | Generated figures and tables; the rest of the CLI is built |
-| CooperBench import (real dataset) | Tasks whose structure is not known by construction; loader is built and proven on one synthetic worked example (see `docs/backlog.md`) |
-| Scaling beyond 4 agents | The scalability profile |
-| Anthropic `tool_use`, LangGraph and CrewAI adapters | The SDK ships Generic, OpenAI function-calling and LangChain adapters, tested with mocks only |
-| SDK claims, persistence and export | SDK sessions have no claim registry and keep their chain in memory |
+| CooperBench gate on more than 3 pairs | The loader imports all 30 tasks and 652 real pairs with no failures; the real §37 gate ran on 3 pairs only (see `docs/backlog.md`) |
+| Scaling beyond 4 agents (beyond N = 16, other topologies, real interest maps) | Partly built: delivery is selectable and `causalmesh experiment scalability` measures N = 4, 8 and 16 on scripted mock agents; it is not part of `experiment run` |
+| A run against a real hosted model through any framework adapter | Adapters for OpenAI, Anthropic `tool_use`, LangChain, LangGraph and CrewAI exist and are tested with scripted payloads and fakes; CrewAI has never run against the real package |
+| A content-level merge for contested paths | The real CooperBench import works (652 pairs) but the real §37 gate on 3 pairs is NOT SENSITIVE, because a contested path resolves to one last writer |
+| Approved checkpoints on the signed chain, per-agent signing keys, a keyring supplied from outside the run | A person's yes leaves no chain record; the server holds every agent's key; `verify` trusts a `keyring.json` beside the run it checks |
 
 ## Built but not executed
 
@@ -81,14 +82,15 @@ settings remove the randomness that can be removed and record the rest.
 
 ## Known dead code
 
-`PathScopedDelivery` exists in `relay/delivery.py` for the scalability
-profile. It is exercised by unit tests but has **no production consumer** in
-this slice — a genuine exception to the no-dead-code rule, recorded here
-rather than hidden.
+`PathScopedDelivery` in `relay/delivery.py` now has a production consumer: the
+scalability profile installs it (`causalmesh experiment scalability`). The four
+primary arms still deliver by broadcast, so it is not used by the main design.
 
-`RunState.TIMED_OUT` is reachable in the state machine and tested there, but
-no run has yet reached it: whole-run timeouts need a watchdog this slice
-does not have.
+`RunState.HANDED_OFF` exists in the state machine and `HandoffPackage` is a record
+shape, but nothing in the loop assigns the state: a run still has exactly one agent.
+
+`RunState.TIMED_OUT` is assigned, but only by an opt-in watchdog (`--run-timeout`) that
+is cooperative: a run blocked in a synchronous call is not interrupted.
 
 ## Defects found by execution
 
