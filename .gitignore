@@ -77,6 +77,10 @@ data/processed/**
 data/exports/**
 !data/exports/.gitkeep
 
+# CooperBench batch import: base-repo fetches and generated tasks/fixtures/results
+data/cooperbench_cache/
+data/cooperbench_out/
+
 # Manifests are tracked deliberately — do not add them here.
 !data/manifests/**
 
