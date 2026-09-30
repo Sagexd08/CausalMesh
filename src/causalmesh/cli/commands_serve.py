@@ -11,11 +11,11 @@ reached it, it had no authentication, and it still carried defects fixed here.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import typer
 
-from causalmesh.cli._output import Exit, fail, note, out_console
+from causalmesh.cli._output import Exit, fail, note, out_console, warn
 
 app = typer.Typer(help="Run an OpenAI-compatible gate-and-record endpoint.", no_args_is_help=False)
 
@@ -23,8 +23,8 @@ app = typer.Typer(help="Run an OpenAI-compatible gate-and-record endpoint.", no_
 @app.callback(invoke_without_command=True)
 def serve_command(
     ctx: typer.Context,
-    host: Annotated[str, typer.Option("--host")] = "127.0.0.1",
-    port: Annotated[int, typer.Option("--port")] = 8420,
+    host: Annotated[str, typer.Option("--host", envvar="CAUSALMESH_HOST")] = "127.0.0.1",
+    port: Annotated[int, typer.Option("--port", envvar="CAUSALMESH_PORT")] = 8420,
     root_option: Annotated[Path | None, typer.Option("--root")] = None,
     run_id: Annotated[str, typer.Option("--run-id")] = "serve",
     upstream: Annotated[
@@ -66,11 +66,86 @@ def serve_command(
             help="Requests per minute allowed per credential, in this process (429 beyond it).",
         ),
     ] = None,
+    ssl_certfile: Annotated[
+        Path | None,
+        typer.Option(
+            "--ssl-certfile",
+            envvar="CAUSALMESH_SSL_CERTFILE",
+            help="PEM certificate (chain) to serve HTTPS with. Needs --ssl-keyfile.",
+        ),
+    ] = None,
+    ssl_keyfile: Annotated[
+        Path | None,
+        typer.Option(
+            "--ssl-keyfile",
+            envvar="CAUSALMESH_SSL_KEYFILE",
+            help=(
+                "PEM private key. If it is encrypted, put its passphrase in the environment "
+                "variable CAUSALMESH_SSL_KEYFILE_PASSWORD (never on the command line)."
+            ),
+        ),
+    ] = None,
+    require_tls: Annotated[
+        bool,
+        typer.Option(
+            "--require-tls",
+            envvar="CAUSALMESH_REQUIRE_TLS",
+            help="Refuse to start on a non-localhost host without --ssl-certfile/--ssl-keyfile.",
+        ),
+    ] = False,
+    tools: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--tools",
+            help=(
+                "MODULE:FUNC or FILE.py:FUNC, repeatable. FUNC(mesh) registers tools with "
+                "mesh.register_tool. This IMPORTS AND RUNS operator code at startup, with "
+                "the server's privileges; only name code you would deploy."
+            ),
+        ),
+    ] = None,
+    workers: Annotated[
+        int,
+        typer.Option(
+            "--workers",
+            help="Only 1 is supported: evidence and the chain are per process, calls are serial.",
+        ),
+    ] = 1,
+    timeout_keep_alive: Annotated[
+        int,
+        typer.Option("--timeout-keep-alive", help="Seconds an idle keep-alive connection is held."),
+    ] = 5,
+    timeout_graceful_shutdown: Annotated[
+        int,
+        typer.Option(
+            "--timeout-graceful-shutdown",
+            help="Seconds to let in-flight requests finish after SIGINT/SIGTERM before closing.",
+        ),
+    ] = 10,
+    log_level: Annotated[
+        str, typer.Option("--log-level", help="debug, info, warning, error or critical.")
+    ] = "info",
     dev: Annotated[bool, typer.Option("--dev")] = False,
 ) -> None:
     """Start the endpoint. Ctrl-C to stop."""
     if ctx.invoked_subcommand is not None:
         return
+
+    if workers != 1:
+        fail(
+            f"--workers {workers} is not supported",
+            hint=(
+                "Each worker process would hold its own evidence chain and its own rate "
+                "limits, and tool calls are serialised by design. Run one process."
+            ),
+        )
+        raise typer.Exit(Exit.USAGE)
+    if log_level.lower() not in ("debug", "info", "warning", "error", "critical"):
+        fail(f"--log-level {log_level!r} is not one of debug, info, warning, error, critical")
+        raise typer.Exit(Exit.USAGE)
+    if timeout_keep_alive < 1 or timeout_graceful_shutdown < 1:
+        fail("--timeout-keep-alive and --timeout-graceful-shutdown must be at least 1 second")
+        raise typer.Exit(Exit.USAGE)
 
     try:
         import uvicorn
@@ -79,8 +154,13 @@ def serve_command(
         raise typer.Exit(Exit.USAGE) from None
 
     from causalmesh.policy.contract import Contract, ContractError
+    from causalmesh.sdk.config import load_sdk_config
+    from causalmesh.sdk.errors import ConfigurationError
     from causalmesh.sdk.mesh import CausalMesh
     from causalmesh.server.app import create_app
+    from causalmesh.server.observability import configure_logging
+    from causalmesh.server.tls import TlsConfigError, is_loopback, key_password, validate_tls
+    from causalmesh.server.tools import ToolLoadError, load_tools
 
     try:
         contract = Contract.find(root_option or Path.cwd())
@@ -99,7 +179,7 @@ def serve_command(
     if api_token is not None and not api_token.strip():
         api_token = None
 
-    if dev and host not in ("127.0.0.1", "localhost"):
+    if dev and not is_loopback(host):
         fail("--dev mode disables authentication and is only allowed on localhost/127.0.0.1")
         raise typer.Exit(Exit.USAGE)
 
@@ -121,7 +201,46 @@ def serve_command(
         fail("--api-token or --agent-token is required when not in --dev mode")
         raise typer.Exit(Exit.USAGE)
 
-    mesh = CausalMesh(contract=contract, run_id=run_id, agent_id="agent")
+    passphrase = key_password()
+    try:
+        tls_on = validate_tls(ssl_certfile, ssl_keyfile, passphrase)
+    except TlsConfigError as exc:
+        fail(str(exc))
+        raise typer.Exit(Exit.USAGE) from None
+
+    if not tls_on and not is_loopback(host):
+        if require_tls:
+            fail(
+                f"--require-tls: refusing to serve on {host} without TLS",
+                hint="Pass --ssl-certfile and --ssl-keyfile, or bind to 127.0.0.1.",
+            )
+            raise typer.Exit(Exit.USAGE)
+        warn(
+            f"serving bearer tokens over plain HTTP on {host}: anyone on the network path can "
+            "read them. Use --ssl-certfile/--ssl-keyfile, or terminate TLS in a reverse proxy "
+            "and keep this port private. --require-tls turns this warning into a refusal."
+        )
+
+    # The default agent is the contract's `agent.id` when it names one, so the
+    # file means the same thing here as in `CausalMesh.from_config`.
+    default_agent = "agent"
+    if contract.source is not None:
+        try:
+            default_agent = load_sdk_config(contract.source)[1].agent_id or default_agent
+        except ConfigurationError as exc:
+            fail(str(exc), hint="Fix causalmesh.yaml, then run this again.")
+            raise typer.Exit(Exit.USAGE) from None
+
+    mesh = CausalMesh(contract=contract, run_id=run_id, agent_id=default_agent)
+
+    # Imports and runs operator code, by explicit request only (server/tools.py).
+    loaded: list[str] = []
+    for index, spec in enumerate(tools or []):
+        try:
+            loaded.extend(load_tools(mesh, spec, index=index))
+        except ToolLoadError as exc:
+            fail(str(exc), hint="See `causalmesh serve --help` for the --tools forms.")
+            raise typer.Exit(Exit.USAGE) from None
 
     # A token that was given is always enforced, `--dev` or not: `--dev` only
     # permits running without one, it does not switch a supplied one off.
@@ -152,12 +271,43 @@ def serve_command(
             '(for example `python -c "import secrets; print(secrets.token_urlsafe(32))"`)'
         )
 
-    out_console.print(f"causalmesh serve  [bold]http://{host}:{port}[/bold]  arm={contract.arm}")
+    scheme = "https" if tls_on else "http"
+    out_console.print(
+        f"causalmesh serve  [bold]{scheme}://{host}:{port}[/bold]  arm={contract.arm}"
+    )
+    if loaded:
+        note(f"tools loaded by --tools: {', '.join(sorted(loaded))}")
     if upstream:
         note(f"forwarding allowed calls to {upstream}")
     else:
         note("no --upstream set; calls are gated and recorded, and get a stub reply")
-    note("POST /v1/chat/completions  ·  GET /healthz  ·  Ctrl-C to stop")
+    note("POST /v1/chat/completions, /v1/tools/NAME/execute  |  GET /health, /readyz  |  Ctrl-C")
+    note("evidence is held in this process only; it is gone when the server stops")
 
-    uvicorn.run(fastapi_app, host=host, port=port, log_level="warning")
+    # Access logging is ours (method, path, status: never headers or bodies),
+    # so uvicorn's is off. Every configured secret is scrubbed from what is written.
+    restore_logging = configure_logging(
+        level=log_level,
+        secrets=[api_token or "", *bound.values(), upstream_api_key or "", passphrase or ""],
+    )
+    ssl_options: dict[str, Any] = {}
+    if tls_on:
+        ssl_options = {
+            "ssl_certfile": str(ssl_certfile),
+            "ssl_keyfile": str(ssl_keyfile),
+            "ssl_keyfile_password": passphrase,
+        }
+    try:
+        uvicorn.run(
+            fastapi_app,
+            host=host,
+            port=port,
+            log_level="warning",
+            access_log=False,
+            timeout_keep_alive=timeout_keep_alive,
+            timeout_graceful_shutdown=timeout_graceful_shutdown,
+            **ssl_options,
+        )
+    finally:
+        restore_logging()
     raise typer.Exit(Exit.OK)
