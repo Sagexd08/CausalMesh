@@ -18,6 +18,7 @@ from .accounting import (
     collect,
 )
 from .contrasts import ContrastResult, measure
+from .scaling import ScalingRun, ScalingSeries, growth_exponent, summarize_scaling
 
 __all__ = [
     "ArmMetrics",
@@ -25,6 +26,10 @@ __all__ = [
     "ContrastResult",
     "MetricsError",
     "RunMetrics",
+    "ScalingRun",
+    "ScalingSeries",
     "collect",
+    "growth_exponent",
     "measure",
+    "summarize_scaling",
 ]
