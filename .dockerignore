@@ -1,0 +1,12 @@
+# The image is built from pyproject.toml, README.md, LICENSE and src/ only.
+# Keeping everything else out of the build context makes the build fast (the
+# repository holds hundreds of megabytes of video and website assets) and keeps
+# run data, keys and experimental fixtures out of any layer.
+*
+!pyproject.toml
+!README.md
+!LICENSE
+!src/
+**/__pycache__
+**/*.py[cod]
+**/*.egg-info
