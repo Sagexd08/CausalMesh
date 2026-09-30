@@ -90,6 +90,16 @@ failure. That is a property of the §38 rule as implemented, not something these
 tasks introduced, and it is pinned in
 `tests/integration/test_task_families.py::TestTheDependencyIsTheBreakingChange`.
 
+**A side effect on the confirmatory plan.** `experiment plan --profile
+confirmatory --allow-gated` plans every authored task in `tasks/`. It now
+returns 1920 runs (120 repetitions x 4 arms x 4 tasks), matching the design the
+spec names, where it returned 960 with two tasks.
+`tests/integration/test_cli.py::TestPlan::test_the_gate_opens_when_asked_explicitly`
+was updated from 960 to 1920 for that reason. The gate on the confirmatory
+profile stays closed and nothing was executed. Only the plan grew; note that all
+four tasks' C0-versus-C2 contrast comes from authored scripts, per the next
+section.
+
 **What this does not claim.**
 
 - **Nothing about agent behaviour.** Every run used a deterministic mock agent
