@@ -7,6 +7,74 @@ Status: describes Phase 1. All three adapters are built and tested against
 a real HTTP endpoint. **No hosted model has been run** — see "What has not
 been executed" below, which is the honest limit of what this page claims.
 
+## Framework adapters (the SDK side)
+
+The rest of this page is about the harness's model adapters. This section is
+about the other direction: `causalmesh.integrations`, which puts the SDK's
+gate in front of the tools of an agent built with someone else's framework.
+Agent -> CausalMesh SDK -> Tool Gateway -> Policy/Contract Gate -> Tool
+Handler -> Evidence.
+
+There is one authorization path. Every adapter hands a call to
+`BaseFrameworkAdapter.observe` / `aobserve`, which call
+`CausalMesh.execute` / `execute_async`. No adapter calls a handler, and none
+builds a gate. `tests/integration/test_adapter_gate.py` checks that two ways:
+behaviourally (a counter on the boundary and one on the handler, through every
+adapter) and structurally (no adapter module contains a call to `.handler(...)`).
+
+| Adapter | Speaks | Needs | Async |
+|---|---|---|---|
+| `GenericAdapter` | `call_tool(name, args)` returning a `GatewayResult` | nothing | `acall_tool` |
+| `OpenAIAdapter` | Chat Completions `tool_calls` -> `role: tool` messages | nothing | `ahandle_tool_call(s)` |
+| `AnthropicAdapter` | Messages API `tool_use` blocks -> `tool_result` blocks, `is_error` | nothing | `ahandle_tool_use(s)`, `ahandle_message` |
+| `LangChainAdapter` | `langchain_core` `StructuredTool` | `langchain-core` | `ainvoke` |
+| `LangGraphAdapter` | the same tools, plus `tool_node()` for a `ToolNode` | `langgraph` | `ainvoke` |
+| `CrewAIAdapter` | `crewai.tools.BaseTool` subclasses | `crewai` | `arun` |
+
+Importing `causalmesh.integrations` needs none of the frameworks. Constructing
+an adapter whose framework is missing raises `ImportError` naming the package.
+
+**What the model gets to see.** A denial is `Action denied by policy: ...`, a
+handler failure and a mistake by the model are `Action failed: ...`, and on an
+arm that does not enforce, a call C3 would refuse runs and says so. The
+Anthropic adapter marks the first two `is_error: true`. Mistakes by the
+model that run nothing and record nothing: an unregistered tool name, a
+missing or unusable resource argument, arguments that are not a JSON object.
+Arguments the handler cannot bind (an unexpected keyword) are answered before
+the gate by the LangChain, LangGraph and CrewAI adapters; the OpenAI and
+Anthropic adapters pass them through, so the gate allows the call, the handler
+raises `TypeError`, and it comes back as `Action failed:` with the failure
+recorded.
+
+**What raises.** An unknown `agent_id` raises `UnknownAgentError`, before the
+gate or the handler, on the sync and async paths, through every adapter. The
+agent id is configuration, not model output; folding it into a tool message
+would leave every call failing with no error. In LangGraph this means leaving
+`ToolNode(handle_tool_errors=...)` at its default: a catch-all handler would
+swallow it. `GenericAdapter` is called by the developer's own code rather than
+a model, so it raises for every error, including an unregistered tool.
+
+**How each is tested, and what that does not show.**
+
+| Adapter | Tested against | Not validated |
+|---|---|---|
+| Generic, OpenAI, Anthropic | hand-written payloads in the documented shapes | any real model producing them; the Anthropic block shapes come from the public documentation, not from a live API response |
+| LangChain | real `langchain-core` (1.2.26 here) | a hosted model driving an agent |
+| LangGraph | real `langgraph` 1.1.6 and `langgraph-prebuilt` 1.0.9: a real `ToolNode` inside a `StateGraph`, and a prebuilt agent driven by a scripted fake chat model | a hosted model; any other version |
+| CrewAI | a minimal fake of `BaseTool` (a pydantic model with `name`, `description`, `args_schema`, `_run`, `_arun`) | **the real package.** `crewai` is not installed here. The `BaseTool` contract is written from its public interface and has never been run against it. Two real-package tests are skipped, with a reason, until it is installed, and may need adjusting on first run |
+
+None of these has been run through a real agent loop with a hosted model.
+The LangChain and LangGraph runs use scripted messages, so they show the tools
+work inside those frameworks and nothing about how a model uses them.
+
+**Known limits.** Tools are not filtered per agent: every registered tool is
+offered. Handlers must accept keyword arguments (the gateway calls
+`handler(**arguments)`), so extra positional arguments are refused. The JSON
+Schema covers scalars, `Optional`, `Literal`, `dict`, and `list`/`tuple`/`set`
+of a scalar; anything else (Pydantic models, unions of several types) is
+described as a string, and the handler receives whatever the model sent. Tool
+calls in one Anthropic message run sequentially, in order.
+
 ## The acceptance criterion
 
 > Every existing coordination guarantee must hold identically with a real

@@ -1,0 +1,9 @@
+2 recorded events:
+  sdk_coding-agent_000001  WRITE    agent=coding-agent  path=src/app.py  executed
+  sdk_coding-agent_000002  FAILURE  agent=coding-agent  path=production/schema.sql  denied (rule: ownership)
+recorded chain: valid=True events=2 failures=0
+
+forged copy: the denied call is rewritten as 'executed'
+forged chain  : valid=False events=2 failures=1
+  - chain_break: recorded digest acc2fcd5340145d9... does not match recomputed 323b24558de9d7c2...; the event content changed
+tampering detected
