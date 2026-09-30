@@ -140,7 +140,13 @@ def profile(name: str, *, allow_gated: bool = False) -> Profile:
     try:
         found = PROFILES[name]
     except KeyError:
-        raise ProfileError(f"unknown profile {name!r}; defined: {sorted(PROFILES)}") from None
+        hint = (
+            "; scalability profiles vary agent count, not repetitions, and run with "
+            "`causalmesh experiment scalability`"
+            if name.startswith("scalability")
+            else ""
+        )
+        raise ProfileError(f"unknown profile {name!r}; defined: {sorted(PROFILES)}{hint}") from None
     if found.gated and not allow_gated:
         raise ProfileError(f"profile {name!r} is gated. {found.gate_reason}")
     return found
