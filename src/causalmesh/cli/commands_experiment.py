@@ -225,6 +225,45 @@ def run_command(
     raise typer.Exit(Exit.OK if report.is_complete else Exit.FAILED)
 
 
+@app.command("scalability")
+def scalability_command(
+    profile_name: Annotated[
+        str,
+        typer.Option("--profile", help="scalability, scalability_smoke."),
+    ] = "scalability_smoke",
+    seed: Annotated[str, typer.Option("--seed")] = "causalmesh-scalability-seed-0001",
+    as_json: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Measure delivery cost against agent count (broadcast vs path-scoped).
+
+    Runs scripted mock agents on a generated N-agent task, in a scratch
+    directory that is removed afterwards, and prints what was measured on
+    this machine. Nothing is written to the repository and no gate applies:
+    the profile registers no hypothesis and says nothing about real agents.
+    """
+    import tempfile
+
+    from causalmesh.experiments.scalability import scalability_profile
+    from causalmesh.tasks.scalability import render_scalability, run_scalability
+
+    try:
+        selected = scalability_profile(profile_name)
+    except ValueError as exc:
+        fail(str(exc), hint="Try scalability_smoke for a quick check.")
+        raise typer.Exit(Exit.USAGE) from exc
+
+    note(f"{selected.name}: {selected.run_count()} runs (scripted mock agents)")
+    with tempfile.TemporaryDirectory(prefix="causalmesh_scal_") as scratch:
+        report = asyncio.run(
+            run_scalability(selected, workspace_root=Path(scratch), seed=_seed_bytes(seed))
+        )
+
+    if not emit(report.to_dict(), as_json=as_json):
+        typer.echo(render_scalability(report))
+    bad = [run for run in report.runs if not run.chain_valid]
+    raise typer.Exit(Exit.OK if not bad else Exit.FAILED)
+
+
 @app.command("status")
 def status_command(
     experiment_id: Annotated[str | None, typer.Option("--id")] = None,
