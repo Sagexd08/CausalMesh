@@ -6,6 +6,7 @@ is what the command *asks uvicorn to do*, and what it refuses to ask for.
 
 from __future__ import annotations
 
+import secrets
 from pathlib import Path
 from typing import Any
 
@@ -117,21 +118,22 @@ class TestUvicornSettings:
     def test_tls_is_passed_through_and_the_passphrase_is_not_in_argv(
         self, root: Path, recorder: Recorder
     ) -> None:
-        cert, key = make_cert(root, password=b"pw-from-env-1")
+        passphrase = secrets.token_hex(8)
+        cert, key = make_cert(root, password=passphrase.encode())
         result = serve(
             root,
             "--ssl-certfile",
             str(cert),
             "--ssl-keyfile",
             str(key),
-            env={"CAUSALMESH_SSL_KEYFILE_PASSWORD": "pw-from-env-1"},
+            env={"CAUSALMESH_SSL_KEYFILE_PASSWORD": passphrase},
         )
         assert result.exit_code == 0, result.output
         kwargs = recorder.kwargs[0]
         assert kwargs["ssl_certfile"] == str(cert)
         assert kwargs["ssl_keyfile"] == str(key)
-        assert kwargs["ssl_keyfile_password"] == "pw-from-env-1"
-        assert "pw-from-env-1" not in result.output
+        assert kwargs["ssl_keyfile_password"] == passphrase
+        assert passphrase not in result.output
         assert "https://" in result.output
 
     def test_there_is_no_command_line_option_for_the_passphrase(self) -> None:

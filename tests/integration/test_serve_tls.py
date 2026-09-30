@@ -7,6 +7,7 @@ verified the server's certificate, not that verification was switched off.
 
 from __future__ import annotations
 
+import secrets
 import ssl
 import urllib.error
 import urllib.request
@@ -162,24 +163,25 @@ class TestTlsRefusals:
         assert "Traceback" not in output
 
     def test_an_encrypted_key_without_a_passphrase_never_prompts(self, root: Path) -> None:
-        cert, key = make_cert(root, password=b"s3cret-pass")
+        cert, key = make_cert(root, password=secrets.token_hex(8).encode())
         code, output = self._run(root, "--ssl-certfile", str(cert), "--ssl-keyfile", str(key))
         assert code == 2
         assert KEY_PASSWORD_ENV in output
 
     def test_a_wrong_passphrase_is_refused_and_not_echoed(self, root: Path) -> None:
-        cert, key = make_cert(root, password=b"the-right-one")
+        right, wrong = secrets.token_hex(8), secrets.token_hex(8)
+        cert, key = make_cert(root, password=right.encode())
         code, output = self._run(
             root,
             "--ssl-certfile",
             str(cert),
             "--ssl-keyfile",
             str(key),
-            env={KEY_PASSWORD_ENV: "the-wrong-one"},
+            env={KEY_PASSWORD_ENV: wrong},
         )
         assert code == 2
-        assert "the-wrong-one" not in output
-        assert "the-right-one" not in output
+        assert wrong not in output
+        assert right not in output
 
     def test_a_passphrase_with_nothing_to_open_is_a_mistake_not_ignored(self, root: Path) -> None:
         code, output = self._run(root, env={KEY_PASSWORD_ENV: "orphan"})
