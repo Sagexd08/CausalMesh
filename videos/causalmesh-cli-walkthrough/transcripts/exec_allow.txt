@@ -1,0 +1,17 @@
+HTTP 200
+{
+  "allowed": true,
+  "executed": true,
+  "denied": false,
+  "failed": false,
+  "tool": "write_file",
+  "agent_id": "coding-agent",
+  "event_id": "sdk_coding-agent_000001",
+  "recorded": true,
+  "reason": "allowed",
+  "rule": "",
+  "audit_error": null,
+  "would_refuse": false,
+  "value": 8,
+  "value_omitted": null
+}

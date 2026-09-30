@@ -1,0 +1,2 @@
+VALID  C:\demo\cli_demo\causalmesh.yaml
+  arm: C3  roles: 2

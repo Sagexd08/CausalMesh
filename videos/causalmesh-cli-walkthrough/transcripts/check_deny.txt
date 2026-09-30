@@ -1,0 +1,3 @@
+REFUSE  path:production/schema.sql
+       ownership  'production/schema.sql' is owned by 'dba-agent', not 
+'coding-agent'
