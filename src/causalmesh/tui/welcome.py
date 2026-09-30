@@ -298,8 +298,10 @@ def _footer() -> Text:
     return line
 
 
-def render(console: Console, *, version: str = "0.1.0", selected: int = 1) -> RenderableType:
+def render(console: Console, *, version: str | None = None, selected: int = 1) -> RenderableType:
     """The whole first screen."""
+    if version is None:
+        from causalmesh import __version__ as version
     return Group(
         _title(version),
         _rule(console),
