@@ -54,12 +54,15 @@ from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
+from causalmesh.claims import ClaimOutcome, ClaimRegistry
 from causalmesh.crypto.keys import KeyPair, SignatureError, load_identity_keys
 from causalmesh.events.schema import EventIdentity, utc_now_micros
 from causalmesh.hooks.lifecycle import LifecycleBoundary
 from causalmesh.hooks.policy_gate import ContractGate
+from causalmesh.policy.checkpoints import CheckpointHandler
 from causalmesh.policy.contract import Contract, ContractError
 from causalmesh.policy.ledger import Ledger
+from causalmesh.policy.resource import Resource, ResourceError
 from causalmesh.relay import NullDelivery, Relay
 from causalmesh.relay.store import ChainStore, StoreError
 
@@ -68,7 +71,7 @@ from ..gateway.gateway import ToolGateway
 from ..gateway.result import GatewayResult
 from ..gateway.tool import Tool
 from .config import SDKConfig, load_sdk_config
-from .errors import ConfigurationError
+from .errors import ConfigurationError, UnknownAgentError
 from .identity import make_identity
 
 __all__ = ["CausalMesh"]
@@ -132,6 +135,19 @@ class CausalMesh:
                     beside it, so a crash loses nothing already recorded.
                     Must not already hold a chain.  ``export()`` is still how
                     a ``causalmesh verify --run`` artifact is produced.
+        claims:     A ``ClaimRegistry`` to make exclusive leases apply to this
+                    session.  Off by default (``None``).  The gate consults it
+                    under the run id above, so a path another agent holds is
+                    refused with rule ``claim`` and the refusal is recorded in
+                    ``denials()``.  Nothing acquires a lease implicitly: take
+                    one with ``claim()``.  On C0-C2 the same rule runs as a
+                    shadow check, so a contested call reports ``would_refuse``
+                    and runs.
+        checkpoint_handler:
+                    Decides a matched ``policy.checkpoints`` rule.  When
+                    omitted the gate's default applies: refuse every matched
+                    checkpoint.  Pass a ``TerminalCheckpointHandler`` to ask
+                    a person at a terminal.
     """
 
     def __init__(
@@ -146,9 +162,13 @@ class CausalMesh:
         clock_base_us: int = DEFAULT_CLOCK_BASE_US,
         clock_tick_us: int = DEFAULT_CLOCK_TICK_US,
         persist_to: str | Path | None = None,
+        claims: ClaimRegistry | None = None,
+        checkpoint_handler: CheckpointHandler | None = None,
         _sdk_config: SDKConfig | None = None,
     ) -> None:
         self._agent_id = agent_id
+        self._claims = claims
+        self._claim_sequence = 0
         self._contract = contract
         self._run_id = run_id or _DEFAULT_RUN_ID
         self._sdk_config = _sdk_config
@@ -168,6 +188,8 @@ class CausalMesh:
             seed=seed,
             ledger=ledger,
             store=store,
+            claims=claims,
+            checkpoint_handler=checkpoint_handler,
         )
         if persist_to is not None:
             _write_json(Path(persist_to) / _KEYRING_FILE, self._relay.key_ring().to_dict())
@@ -202,12 +224,14 @@ class CausalMesh:
         clock_base_us: int = DEFAULT_CLOCK_BASE_US,
         clock_tick_us: int = DEFAULT_CLOCK_TICK_US,
         persist_to: str | Path | None = None,
+        claims: ClaimRegistry | None = None,
+        checkpoint_handler: CheckpointHandler | None = None,
     ) -> CausalMesh:
         """Build a ``CausalMesh`` from a ``causalmesh.yaml`` file.
 
-        ``run_id``, ``seed``, ``agents``, ``ledger``, the clock arguments and
-        ``persist_to`` are passed through to the constructor; see the class
-        docstring.
+        ``run_id``, ``seed``, ``agents``, ``ledger``, ``claims``,
+        ``checkpoint_handler``, the clock arguments and ``persist_to`` are
+        passed through to the constructor; see the class docstring.
 
         Raises:
             ConfigurationError: When the file is missing, invalid, or
@@ -233,6 +257,8 @@ class CausalMesh:
                 clock_base_us=clock_base_us,
                 clock_tick_us=clock_tick_us,
                 persist_to=persist_to,
+                claims=claims,
+                checkpoint_handler=checkpoint_handler,
                 _sdk_config=sdk_config,
             )
         except SignatureError as exc:
@@ -333,6 +359,108 @@ class CausalMesh:
             now_us=now_us,
             annotations=annotations,
         )
+
+    # ------------------------------------------------------------------ #
+    # Claims (opt-in)                                                     #
+    # ------------------------------------------------------------------ #
+
+    def claim(
+        self,
+        *,
+        path: str | Resource,
+        duration_us: int,
+        agent_id: str | None = None,
+        now_us: int | None = None,
+        claim_id: str | None = None,
+    ) -> ClaimOutcome:
+        """Take an exclusive write lease on ``path`` for one agent.
+
+        The outcome is returned as data: ``granted`` is False with the
+        ``holder`` when another agent holds the path, and the registry records
+        that contested attempt in ``denials()``.  Re-claiming a path the agent
+        already holds renews it.  A lease only blocks *other* agents; a path
+        nobody has claimed stays writable, as it is under C3 everywhere.
+
+        The lease is taken under this session's ``run_id``, which is the
+        namespace the gate consults, so what is granted here is what the gate
+        enforces.  ``now_us`` defaults to the wall clock; a caller that
+        passes its own ``now_us`` to ``execute()`` must pass the same clock
+        here, or expiry is judged against two different clocks.
+
+        Raises:
+            ConfigurationError: The session was built without ``claims=``.
+            UnknownAgentError: ``agent_id`` has no signing key in this session.
+            ClaimError: ``duration_us`` is not positive, or ``claim_id`` is
+                already in use.
+        """
+        registry = self._require_claims()
+        aid = agent_id or self._agent_id
+        self._require_known(aid)
+        try:
+            resource = path if isinstance(path, Resource) else Resource.path(path)
+        except ResourceError as exc:
+            return ClaimOutcome(
+                granted=False, claim=None, reason=f"{path!r} is not a usable resource: {exc}"
+            )
+        if claim_id is None:
+            self._claim_sequence += 1
+            claim_id = f"{self._run_id}_{aid}_{self._claim_sequence}"
+        return registry.acquire(
+            claim_id=claim_id,
+            path=resource.identity,
+            agent_id=aid,
+            run_id=self._run_id,
+            now_us=now_us if now_us is not None else utc_now_micros(),
+            duration_us=duration_us,
+        )
+
+    def release(
+        self, *, claim_id: str, agent_id: str | None = None, now_us: int | None = None
+    ) -> ClaimOutcome:
+        """Release a lease the agent holds, freeing the path at once.
+
+        Refused as data (``granted=False``) when the claim is someone else's.
+        """
+        registry = self._require_claims()
+        aid = agent_id or self._agent_id
+        self._require_known(aid)
+        return registry.release(
+            claim_id=claim_id,
+            agent_id=aid,
+            now_us=now_us if now_us is not None else utc_now_micros(),
+        )
+
+    def denials(self) -> list[dict[str, Any]]:
+        """Every write this session's gate blocked on a lease, or a contested claim.
+
+        Empty (not an error) on a session without ``claims=``: nothing there
+        can be blocked on a lease.  Only an enforcing arm writes these; on
+        C0-C2 the same attempt is reported as ``would_refuse`` on its result
+        and is not a denial, because nothing was blocked.
+        """
+        if self._claims is None:
+            return []
+        return self._claims.denials(run_id=self._run_id)
+
+    @property
+    def claim_registry(self) -> ClaimRegistry | None:
+        """The registry behind ``claim()``, or ``None`` when claims are off."""
+        return self._claims
+
+    def _require_claims(self) -> ClaimRegistry:
+        if self._claims is None:
+            raise ConfigurationError(
+                "this session has no claim registry. Pass `claims=ClaimRegistry(...)` "
+                "to CausalMesh(...) or CausalMesh.from_config(...) to use leases."
+            )
+        return self._claims
+
+    def _require_known(self, agent_id: str) -> None:
+        if not self._relay.has_key(agent_id):
+            raise UnknownAgentError(
+                f"agent {agent_id!r} has no signing key in this session. "
+                f"Known agents: {list(self._relay.actors)}."
+            )
 
     # ------------------------------------------------------------------ #
     # Inspection                                                          #
@@ -470,6 +598,8 @@ def _build_runtime(
     seed: bytes | None,
     ledger: Ledger | None = None,
     store: ChainStore | None = None,
+    claims: ClaimRegistry | None = None,
+    checkpoint_handler: CheckpointHandler | None = None,
 ) -> tuple[Relay, LifecycleBoundary, ContractGate]:
     """Assemble the relay, boundary, and gate for one SDK session.
 
@@ -486,7 +616,8 @@ def _build_runtime(
     gate = ContractGate.build(
         contract,
         run_id=run_id,
-        registry=None,  # No claim registry in Phase 1 SDK mode
+        registry=claims,  # None unless the caller opted in to leases
+        checkpoint_handler=checkpoint_handler,
         enforcing=contract.arm == "C3",
         ledger=ledger,
         require_ledger=True,
