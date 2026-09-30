@@ -49,18 +49,21 @@ Architecture::
 
 from __future__ import annotations
 
+import json
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
 from causalmesh.crypto.keys import KeyPair, SignatureError, load_identity_keys
-from causalmesh.events.schema import EventIdentity
+from causalmesh.events.schema import EventIdentity, utc_now_micros
 from causalmesh.hooks.lifecycle import LifecycleBoundary
 from causalmesh.hooks.policy_gate import ContractGate
 from causalmesh.policy.contract import Contract, ContractError
 from causalmesh.policy.ledger import Ledger
 from causalmesh.relay import NullDelivery, Relay
+from causalmesh.relay.store import ChainStore, StoreError
 
+from ..gateway.clock import DEFAULT_CLOCK_BASE_US, DEFAULT_CLOCK_TICK_US
 from ..gateway.gateway import ToolGateway
 from ..gateway.result import GatewayResult
 from ..gateway.tool import Tool
@@ -74,6 +77,10 @@ __all__ = ["CausalMesh"]
 # would make two identical sessions produce different chains.  A caller that
 # keeps several chains side by side passes its own stable run_id.
 _DEFAULT_RUN_ID = "sdk"
+
+_CHAIN_FILE = "chain.jsonl"
+_KEYRING_FILE = "keyring.json"
+_RUN_FILE = "run.json"
 
 
 class CausalMesh:
@@ -113,6 +120,18 @@ class CausalMesh:
                     that declares a total (``usd_total``, ``tokens``, ...)
                     needs one: without it the gate refuses the spend, since a
                     total nothing records is a total nothing enforces.
+        clock_base_us, clock_tick_us:
+                    The logical clock that stamps the signed chain: the n-th
+                    call is signed at ``base + n * tick``, so two sessions
+                    with the same seed and the same calls have the same head
+                    hash.  The wall-clock time of each call goes in the
+                    unsigned envelope of ``export()``.  A lease or window is
+                    therefore measured in calls: see ``now_us``.
+        persist_to: A directory to append the chain to as it is written
+                    (``chain.jsonl``, flushed per event) with ``keyring.json``
+                    beside it, so a crash loses nothing already recorded.
+                    Must not already hold a chain.  ``export()`` is still how
+                    a ``causalmesh verify --run`` artifact is produced.
     """
 
     def __init__(
@@ -124,6 +143,9 @@ class CausalMesh:
         seed: bytes | None = None,
         agents: Iterable[str] = (),
         ledger: Ledger | None = None,
+        clock_base_us: int = DEFAULT_CLOCK_BASE_US,
+        clock_tick_us: int = DEFAULT_CLOCK_TICK_US,
+        persist_to: str | Path | None = None,
         _sdk_config: SDKConfig | None = None,
     ) -> None:
         self._agent_id = agent_id
@@ -132,13 +154,23 @@ class CausalMesh:
         self._sdk_config = _sdk_config
 
         agent_ids = sorted({agent_id, *(role.agent_id for role in contract.roles), *agents})
+        store: ChainStore | None = None
+        if persist_to is not None:
+            try:
+                store = ChainStore(Path(persist_to) / _CHAIN_FILE)
+            except StoreError as exc:
+                raise ConfigurationError(str(exc)) from exc
+        self._store = store
         self._relay, self._boundary, self._gate = _build_runtime(
             contract=contract,
             run_id=self._run_id,
             agent_ids=agent_ids,
             seed=seed,
             ledger=ledger,
+            store=store,
         )
+        if persist_to is not None:
+            _write_json(Path(persist_to) / _KEYRING_FILE, self._relay.key_ring().to_dict())
 
         def _identity_factory(aid: str) -> EventIdentity:
             return make_identity(aid, contract=contract, run_id=self._run_id)
@@ -150,6 +182,8 @@ class CausalMesh:
             identity_factory=_identity_factory,
             gate=self._gate,
             ledger=ledger,
+            clock_base_us=clock_base_us,
+            clock_tick_us=clock_tick_us,
         )
 
     # ------------------------------------------------------------------ #
@@ -165,11 +199,15 @@ class CausalMesh:
         seed: bytes | None = None,
         agents: Iterable[str] = (),
         ledger: Ledger | None = None,
+        clock_base_us: int = DEFAULT_CLOCK_BASE_US,
+        clock_tick_us: int = DEFAULT_CLOCK_TICK_US,
+        persist_to: str | Path | None = None,
     ) -> CausalMesh:
         """Build a ``CausalMesh`` from a ``causalmesh.yaml`` file.
 
-        ``run_id``, ``seed`` and ``agents`` are passed through to the
-        constructor; see the class docstring.
+        ``run_id``, ``seed``, ``agents``, ``ledger``, the clock arguments and
+        ``persist_to`` are passed through to the constructor; see the class
+        docstring.
 
         Raises:
             ConfigurationError: When the file is missing, invalid, or
@@ -192,6 +230,9 @@ class CausalMesh:
                 seed=seed,
                 agents=agents,
                 ledger=ledger,
+                clock_base_us=clock_base_us,
+                clock_tick_us=clock_tick_us,
+                persist_to=persist_to,
                 _sdk_config=sdk_config,
             )
         except SignatureError as exc:
@@ -338,6 +379,83 @@ class CausalMesh:
         """Per-outcome counts and hook latency from the lifecycle boundary."""
         return self._boundary.summary()
 
+    @property
+    def now_us(self) -> int:
+        """The session's logical time: what the last call was signed at.
+
+        ``clock_base_us`` before the first call.  Acquire a lease at this
+        value, not at the wall clock, or it expires on a clock the gate never
+        reads.
+        """
+        return self._gateway.clock.now_us
+
+    # ------------------------------------------------------------------ #
+    # Export                                                              #
+    # ------------------------------------------------------------------ #
+
+    def export(self, directory: str | Path) -> dict[str, Path]:
+        """Write this session's evidence where ``causalmesh verify --run`` reads it.
+
+        Writes ``run.json`` (the signed chain, plus an unsigned ``envelope``)
+        and ``keyring.json`` (the public keys, never a private one).  Verify
+        with ``causalmesh verify --run <directory>``; the verifier prefers
+        ``keyring.json`` to the keys embedded in the records, so a chain
+        re-signed with a different key is rejected.
+
+        The envelope holds what must not be signed: the wall-clock time of
+        the export and of each call, and a description of the logical clock.
+        Editing it changes nothing the verifier checks.  ``keyring.json``
+        is only as trustworthy as the channel it travels on: hand it to the
+        verifier separately from the run, or pin its fingerprint.
+
+        Raises:
+            FileExistsError: When ``directory`` already holds a ``run.json``
+                or ``keyring.json``.  Raw evidence is written once.
+        """
+        destination = Path(directory)
+        run_path = destination / _RUN_FILE
+        keyring_path = destination / _KEYRING_FILE
+        ring = self._relay.key_ring()
+        ring_text = _json_text(ring.to_dict())
+        if run_path.exists():
+            raise FileExistsError(
+                f"{run_path} already exists. Evidence is written once; export to a new directory."
+            )
+        # `persist_to` already wrote this ring; the same ring again is fine,
+        # a different one is someone else's evidence.
+        if keyring_path.exists() and keyring_path.read_text(encoding="utf-8") != ring_text:
+            raise FileExistsError(
+                f"{keyring_path} already exists with different keys. Export to a new directory."
+            )
+
+        chain = self._relay.records()
+        artifact: dict[str, Any] = {
+            "agents": list(self._relay.actors),
+            "arm": self._contract.arm,
+            "chain": chain,
+            "envelope": {
+                "clock": self._gateway.clock.to_dict(),
+                "exported_at_us": utc_now_micros(),
+                "note": "Unsigned. Wall-clock values are for the reader; nothing here is verified.",
+                "wall_time_us_by_event": self._gateway.wall_times(),
+            },
+            "events": len(chain),
+            "head_hash": self._relay.head_hash,
+            "key_ring_fingerprint": ring.fingerprint(),
+            "run_id": self._run_id,
+        }
+        destination.mkdir(parents=True, exist_ok=True)
+        # Keys first: a half-written export must not look verifiable against a
+        # ring that is missing.
+        keyring_path.write_text(ring_text, encoding="utf-8")
+        _write_json(run_path, artifact)
+        return {"keyring": keyring_path, "run": run_path}
+
+    def close(self) -> None:
+        """Close the persisted chain file, when ``persist_to`` was given."""
+        if self._store is not None:
+            self._store.close()
+
 
 # ------------------------------------------------------------------ #
 # Internal assembly                                                    #
@@ -351,6 +469,7 @@ def _build_runtime(
     agent_ids: list[str],
     seed: bytes | None,
     ledger: Ledger | None = None,
+    store: ChainStore | None = None,
 ) -> tuple[Relay, LifecycleBoundary, ContractGate]:
     """Assemble the relay, boundary, and gate for one SDK session.
 
@@ -360,6 +479,7 @@ def _build_runtime(
     relay = Relay(
         run_id=run_id,
         keypairs=_keypairs(contract, agent_ids, seed),
+        store=store,
         delivery=NullDelivery(),  # SDK runs: no peer fan-out needed
     )
 
@@ -375,6 +495,15 @@ def _build_runtime(
     boundary = LifecycleBoundary(gate=gate)
 
     return relay, boundary, gate
+
+
+def _json_text(payload: Any) -> str:
+    return json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=True) + "\n"
+
+
+def _write_json(path: Path, payload: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(_json_text(payload), encoding="utf-8")
 
 
 def _keypairs(contract: Contract, agent_ids: list[str], seed: bytes | None) -> dict[str, KeyPair]:

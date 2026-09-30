@@ -37,8 +37,36 @@ def _key_ring_for(records: list[dict[str, Any]]):
     return PublicKeyRing(keys=keys)
 
 
+def _pinned_key_ring(run_dir: Path):
+    """The key ring in `keyring.json` beside `run.json`, when there is one.
+
+    Returns `(ring, None)`, `(None, None)` when the file is absent, or
+    `(None, reason)` when it is present but unusable. A present-but-broken
+    ring must fail the run: falling back to the keys embedded in the records
+    would let whoever damaged the file choose the weaker check.
+    """
+    from causalmesh.crypto import PublicKeyRing
+
+    path = run_dir / "keyring.json"
+    if not path.is_file():
+        return None, None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        return None, f"keyring.json is unreadable: {exc}"
+    if not isinstance(data, dict) or not all(
+        isinstance(k, str) and isinstance(v, str) for k, v in data.items()
+    ):
+        return None, "keyring.json must be an object of agent id to hex public key"
+    return PublicKeyRing.from_dict(data), None
+
+
 def _verify_one(run_dir: Path) -> dict[str, Any]:
-    """Verify the chain embedded in one run artifact."""
+    """Verify the chain embedded in one run artifact.
+
+    Keys come from a `keyring.json` beside `run.json` when present, which is
+    independent of the records; otherwise from the records themselves.
+    """
     from causalmesh.verifier import verify_chain
 
     artifact = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
@@ -52,9 +80,19 @@ def _verify_one(run_dir: Path) -> dict[str, Any]:
             "valid": False,
         }
 
-    result = verify_chain(records, _key_ring_for(records))
+    pinned, problem = _pinned_key_ring(run_dir)
+    if problem is not None:
+        return {
+            "arm": artifact.get("arm"),
+            "detail": problem,
+            "events": len(records),
+            "run": run_dir.name,
+            "valid": False,
+        }
+    result = verify_chain(records, pinned if pinned is not None else _key_ring_for(records))
     return {
         "arm": artifact.get("arm"),
+        "keys": "keyring.json" if pinned is not None else "embedded",
         "detail": "" if result.valid else "; ".join(str(f.detail) for f in result.failures[:3]),
         "events": result.events,
         "head_hash": result.head_hash,
