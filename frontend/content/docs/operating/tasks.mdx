@@ -38,7 +38,11 @@ a C0-versus-C3 difference could come from either factor.
 Structural validation is cheap and runs on every task. The quality gate is
 expensive, deliberately.
 
-## The two tasks that exist
+## The tasks that exist
+
+Four authored tasks, one per family, plus a synthetic CooperBench import. Every verdict
+below comes from deterministic scripted agents, so each says the construction is wired
+correctly and nothing about how a real model behaves.
 
 ### `schema_handler_widen` — dependency
 
@@ -49,6 +53,15 @@ disjoint, so enforcement never has anything to refuse.
 
 Both agents must register a handler in one shared config file. The path is
 genuinely contested, so C3 has something real to block.
+
+### `interface_consumer` and `shared_utility_refactor` — dependency
+
+Both are dependency-shaped, like `schema_handler_widen`: ownership is disjoint, so C3
+equals C2. In `interface_consumer` one agent adds a required argument to a function and
+the other's stale call fails with `TypeError`; in `shared_utility_refactor` a helper is
+renamed and the stale call fails with `AttributeError`. The real §37 gate returns
+SENSITIVE for both (mock agents). The informed and uninformed branches are authored in
+the script, not discovered.
 
 <Callout>
 This second task exists because the claim registry had recorded **2 claims
