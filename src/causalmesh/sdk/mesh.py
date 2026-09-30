@@ -49,7 +49,7 @@ Architecture::
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -232,6 +232,7 @@ class CausalMesh:
         arguments: dict[str, Any] | None = None,
         paths: tuple[str, ...] | None = None,
         now_us: int | None = None,
+        annotations: Mapping[str, str] | None = None,
     ) -> GatewayResult:
         """Execute a tool call through the policy gate.
 
@@ -248,6 +249,9 @@ class CausalMesh:
                         claim rules).  When omitted, extracted by the
                         ResourceResolver based on the Tool's resource_args.
             now_us:     Timestamp override for deterministic tests.
+            annotations: Extra string fields recorded on the call's event
+                        (signed, so reproducible values only).  See
+                        ``ToolGateway.execute``.
 
         Returns:
             ``GatewayResult`` describing the outcome.
@@ -262,6 +266,7 @@ class CausalMesh:
             arguments,
             paths=paths,
             now_us=now_us,
+            annotations=annotations,
         )
 
     async def execute_async(
@@ -272,6 +277,7 @@ class CausalMesh:
         arguments: dict[str, Any] | None = None,
         paths: tuple[str, ...] | None = None,
         now_us: int | None = None,
+        annotations: Mapping[str, str] | None = None,
     ) -> GatewayResult:
         """Execute an asynchronous tool call through the policy gate.
 
@@ -284,6 +290,7 @@ class CausalMesh:
             arguments=arguments,
             paths=paths,
             now_us=now_us,
+            annotations=annotations,
         )
 
     # ------------------------------------------------------------------ #
