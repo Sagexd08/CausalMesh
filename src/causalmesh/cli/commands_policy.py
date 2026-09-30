@@ -264,10 +264,9 @@ def validate_command(
     from causalmesh.sdk.errors import ConfigurationError
 
     if config_path is None:
-        # Search upward for the file without parsing it. `Contract.find` loads
-        # what it finds with the strict core schema, which rejects the SDK-only
-        # `agent` and `tools` sections this command exists to check, and raises
-        # rather than reporting. `load_sdk_config` below does the parsing.
+        # Search upward for the file without parsing it, so that a file that
+        # fails to parse is reported below as `valid: false` (exit 1) rather
+        # than raised by `Contract.find` as a usage error (exit 2).
         from causalmesh.policy.contract import CONTRACT_FILENAME
 
         here = Path.cwd().resolve()

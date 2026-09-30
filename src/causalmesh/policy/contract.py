@@ -31,11 +31,19 @@ from typing import Any
 
 from causalmesh.policy.resource import Resource, ResourceKind, path_match_key
 
-__all__ = ["Checkpoint", "Contract", "ContractError", "Role"]
+__all__ = ["Checkpoint", "Contract", "ContractError", "Role", "parse_sdk_sections"]
 
 CONTRACT_FILENAME = "causalmesh.yaml"
 
-_TOP_LEVEL = {"version", "identity", "roles", "policy", "evidence"}
+# `agent` and `tools` are the developer-SDK sections. The gate reads neither,
+# but every command that reads a contract must accept the same file, so the
+# core schema names them and validates their shape (`parse_sdk_sections`); a
+# typo in any *other* top-level key is still an error.
+_SDK_SECTIONS = {"agent", "tools"}
+_TOP_LEVEL = {"version", "identity", "roles", "policy", "evidence"} | _SDK_SECTIONS
+_AGENT_KEYS = {"id"}
+_TOOL_ENTRY_KEYS = {"mode"}
+_ALLOWED_TOOL_MODES = {"auto"}
 _ROLE_KEYS = {"agent_id", "archetype", "owns", "allow", "budget"}
 _BUDGET_KEYS = {"usd_total", "usd_per_call", "tokens", "wall_clock_s", "coordination_bytes"}
 _POLICY_KEYS = {"arm", "contested", "budgets", "checkpoints"}
@@ -225,6 +233,9 @@ class Contract:
         if not isinstance(raw, dict):
             raise ContractError("a contract must be a mapping at the top level")
         _reject_unknown(raw, _TOP_LEVEL, "top level")
+        # The gate does not use these; they are checked here so that a bad
+        # `agent:`/`tools:` section fails every command the same way.
+        parse_sdk_sections(raw)
 
         version = raw.get("version", SUPPORTED_VERSION)
         if version != SUPPORTED_VERSION:
@@ -284,6 +295,48 @@ class Contract:
             verify_on_exit=bool(evidence.get("verify_on_exit", True)),
             version=int(version),
         )
+
+
+def parse_sdk_sections(raw: dict[str, Any]) -> tuple[str | None, tuple[str, ...]]:
+    """Validate the SDK-only `agent` and `tools` sections of a contract mapping.
+
+    Returns `(default agent id or None, declared tool names)`. The contract
+    itself ignores both; `causalmesh.sdk.config` uses the result. This is the
+    one implementation, so `policy validate`, `policy show`, `policy check`,
+    `serve` and `CausalMesh.from_config` cannot disagree about a file.
+    """
+    agent_section = raw.get("agent")
+    agent_id: str | None = None
+    if agent_section is not None:
+        if not isinstance(agent_section, dict):
+            raise ContractError("`agent` must be a mapping")
+        _reject_unknown(agent_section, _AGENT_KEYS, "`agent`")
+        raw_id = agent_section.get("id")
+        if raw_id is not None:
+            if not isinstance(raw_id, str) or not raw_id.strip():
+                raise ContractError("`agent.id` must be a non-empty string")
+            agent_id = raw_id.strip()
+
+    tools_section = raw.get("tools")
+    names: list[str] = []
+    if tools_section is not None:
+        if not isinstance(tools_section, dict):
+            raise ContractError("`tools` must be a mapping")
+        for tool_name, tool_conf in tools_section.items():
+            if not isinstance(tool_name, str) or not tool_name.strip():
+                raise ContractError("`tools` keys must be non-empty strings")
+            if tool_conf is not None:
+                if not isinstance(tool_conf, dict):
+                    raise ContractError(f"`tools.{tool_name}` must be a mapping or null")
+                _reject_unknown(tool_conf, _TOOL_ENTRY_KEYS, f"`tools.{tool_name}`")
+                mode = tool_conf.get("mode", "auto")
+                if mode not in _ALLOWED_TOOL_MODES:
+                    raise ContractError(
+                        f"`tools.{tool_name}.mode` must be one of "
+                        f"{sorted(_ALLOWED_TOOL_MODES)}, got {mode!r}"
+                    )
+            names.append(tool_name.strip())
+    return agent_id, tuple(names)
 
 
 def _parse_role(entry: Any, index: int) -> Role:
