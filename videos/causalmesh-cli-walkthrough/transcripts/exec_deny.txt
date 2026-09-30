@@ -1,0 +1,9 @@
+HTTP 403
+{
+  "detail": {
+    "message": "'production/schema.sql' is owned by 'dba-agent', not 'coding-agent'",
+    "rule": "ownership",
+    "event_id": "sdk_coding-agent_000002",
+    "recorded": true
+  }
+}

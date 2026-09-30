@@ -1,0 +1,65 @@
+HTTP 200
+[
+  {
+    "actor_public_key": "392d2d2d6b04ad70869b35d13a634a66bf3fcf77f42dae92d27cc22353cc26e3",
+    "chain_hash": "f06bd493786351c154fcbfabcc5a56809769a710d1fd85cf7fbc479826e86a53",
+    "event": {
+      "event_id": "sdk_coding-agent_000001",
+      "event_type": "WRITE",
+      "identity": {
+        "agent_id": "coding-agent",
+        "arm": "C3",
+        "experiment_id": "sdk-run",
+        "run_id": "sdk",
+        "task_id": "sdk-task"
+      },
+      "parent_id": null,
+      "paths": [
+        "src/app.py"
+      ],
+      "payload": {
+        "tool": "write_file",
+        "outcome": "executed"
+      },
+      "references": [],
+      "schema_version": 1,
+      "sequence": 0,
+      "timestamp_us": 1790757088145514
+    },
+    "previous_hash": "4cdd748cb4091631a3436a340d31e67dc9a6df610c135788208113afb7fdd822",
+    "signature": "9080b61b8e5bf0e3f8d415d431d41aaafa362a5f22c160e1a7da0d20a9628ca6e57b0b732ed9fb31dfae18920542502d03c1770c201c6e6140337c61640dae00"
+  },
+  {
+    "actor_public_key": "392d2d2d6b04ad70869b35d13a634a66bf3fcf77f42dae92d27cc22353cc26e3",
+    "chain_hash": "acc2fcd5340145d921757a80afe00b4c81442430d5c1bdd7ceb839cbc9915fea",
+    "event": {
+      "event_id": "sdk_coding-agent_000002",
+      "event_type": "FAILURE",
+      "identity": {
+        "agent_id": "coding-agent",
+        "arm": "C3",
+        "experiment_id": "sdk-run",
+        "run_id": "sdk",
+        "task_id": "sdk-task"
+      },
+      "parent_id": null,
+      "paths": [
+        "production/schema.sql"
+      ],
+      "payload": {
+        "tool": "write_file",
+        "outcome": "denied",
+        "reason": "'production/schema.sql' is owned by 'dba-agent', not 'coding-agent'",
+        "holder_agent": "dba-agent",
+        "blocked_path": "production/schema.sql",
+        "rule": "ownership"
+      },
+      "references": [],
+      "schema_version": 1,
+      "sequence": 1,
+      "timestamp_us": 1790757089333992
+    },
+    "previous_hash": "f06bd493786351c154fcbfabcc5a56809769a710d1fd85cf7fbc479826e86a53",
+    "signature": "814fca08916445b25ee3df68b377ec48a304c02ac31e0019f08482ed7ea8d993c18b5e9cabfd08f60186cb0d6c54f850aa5d372e2779e436012ff437a5d09b0c"
+  }
+]

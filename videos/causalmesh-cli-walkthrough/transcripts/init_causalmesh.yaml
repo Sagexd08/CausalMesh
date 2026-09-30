@@ -1,0 +1,39 @@
+# causalmesh.yaml - what agents in this repository may do.
+#
+# Sibling to AGENTS.md, not a replacement. AGENTS.md says what agents should
+# do; this says what they are allowed to do, and the gate holds them to it.
+#
+# Absent means unrestricted. Declare the parts you care about; the rest keeps
+# working. Check any rule with:
+#     causalmesh policy check --agent agent_a --kind path --name src/config.py
+version: 1
+
+roles:
+  - agent_id: agent_a
+    archetype: writer
+    # Paths this agent owns. A directory covers everything under it, and a
+    # longer declaration wins, so you can carve one file out of a directory.
+    owns: []
+
+  # An agent that spends money. Uncomment to enforce it.
+  # - agent_id: buyer
+  #   archetype: spender
+  #   allow: [api.example.com]      # hosts it may reach; covers subdomains
+  #   budget:
+  #     usd_total: "5.00"           # quote money, or use an integer
+  #     usd_per_call: "0.10"        # the one catastrophic call, refused
+
+policy:
+  # C0 none - C1 transcripts - C2 metadata - C3 metadata + enforced claims.
+  # Only C3 refuses; the others record what C3 would have done.
+  arm: C3
+
+  # Paths that need an exclusive lease before a write.
+  contested: {}
+
+  # Allowances for the whole run, unless a role declares its own.
+  budgets: {}
+    # tokens: 200000
+
+evidence:
+  sign: true
