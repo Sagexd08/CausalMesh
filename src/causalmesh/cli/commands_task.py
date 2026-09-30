@@ -52,6 +52,7 @@ def list_command(
             "family": task.family,
             "fixture": task.fixture,
             "hash": task.content_hash(),
+            "in_design": task.in_design,
             "task_id": task.task_id,
             "version": task.version,
         }
