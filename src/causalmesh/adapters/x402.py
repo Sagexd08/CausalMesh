@@ -34,6 +34,10 @@ already documents.
 
 Both are parsed into the same `PaymentRequirement`, because the gate does not
 care which wire version asked — only what and how much.
+
+**Paying.** The operator-facing orchestration (a `PaymentSigner` protocol the
+operator implements, reserve-then-commit ledger recording, idempotency) lives
+in `adapters/x402_pay.py`; this module stays the parse-and-decide half.
 """
 
 from __future__ import annotations
