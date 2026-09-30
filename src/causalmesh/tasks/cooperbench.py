@@ -198,6 +198,25 @@ class CooperBenchImportError(ValueError):
     """Raised when a CooperBench-shaped directory cannot be imported."""
 
 
+def _read_text_exact(path: Path) -> str:
+    """Read UTF-8 text without newline translation.
+
+    `Path.read_text` folds CRLF into LF. A real repository's file may
+    genuinely use CRLF, and a patch against it carries CRLF context lines,
+    so folding them changes what `git apply` sees.
+    """
+    return path.read_bytes().decode("utf-8")
+
+
+def _write_text_exact(path: Path, content: str) -> None:
+    """Write UTF-8 text without newline translation.
+
+    `Path.write_text` turns LF into CRLF on Windows, which would make the
+    materialized content depend on the platform the import ran on.
+    """
+    path.write_bytes(content.encode("utf-8"))
+
+
 _DIFF_PATH_PATTERN = re.compile(r"^(?:---|\+\+\+) (?:a/|b/)?(\S+)")
 
 
@@ -244,13 +263,11 @@ class ImportedFeature:
         if not feature_patch.is_file():
             raise CooperBenchImportError(f"{path}: missing feature.patch")
 
-        description = feature_md.read_text(encoding="utf-8") if feature_md.is_file() else ""
-        patch_text = feature_patch.read_text(encoding="utf-8")
+        description = _read_text_exact(feature_md) if feature_md.is_file() else ""
+        patch_text = _read_text_exact(feature_patch)
 
         tests_patch = path / "tests.patch"
-        tests_patch_text = (
-            tests_patch.read_text(encoding="utf-8") if tests_patch.is_file() else None
-        )
+        tests_patch_text = _read_text_exact(tests_patch) if tests_patch.is_file() else None
 
         return cls(
             agent_id=agent_id,
@@ -334,11 +351,11 @@ class ImportedTask:
         for relative, content in self.base_files.items():
             target = root / relative
             target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text(content, encoding="utf-8")
+            _write_text_exact(target, content)
         if self.setup_sh is not None:
-            (root / "setup.sh").write_text(self.setup_sh, encoding="utf-8")
+            _write_text_exact(root / "setup.sh", self.setup_sh)
         if self.run_tests_sh is not None:
-            (root / "run_tests.sh").write_text(self.run_tests_sh, encoding="utf-8")
+            _write_text_exact(root / "run_tests.sh", self.run_tests_sh)
         return root
 
 
@@ -375,10 +392,10 @@ def _apply_patch(base_files: dict[str, str], patch_text: str, *, source: Path) -
         for relative, content in base_files.items():
             target = work / relative
             target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text(content, encoding="utf-8")
+            _write_text_exact(target, content)
 
         patch_path = work / "_import.patch"
-        patch_path.write_text(patch_text, encoding="utf-8")
+        _write_text_exact(patch_path, patch_text)
 
         subprocess.run(["git", "init", "-q"], cwd=work, check=True, capture_output=True)
         subprocess.run(
@@ -423,7 +440,7 @@ def _apply_patch(base_files: dict[str, str], patch_text: str, *, source: Path) -
         for path in work.rglob("*"):
             if path.is_file() and ".git" not in path.parts and path.name != "_import.patch":
                 relative = path.relative_to(work).as_posix()
-                applied[relative] = path.read_text(encoding="utf-8", errors="replace")
+                applied[relative] = path.read_bytes().decode("utf-8", errors="replace")
         return applied
 
 
@@ -554,10 +571,8 @@ def import_task(
         source_task_id=source_task_id,
         features={"agent_a": feature_a, "agent_b": feature_b},
         base_files=base_files,
-        setup_sh=setup_sh_path.read_text(encoding="utf-8") if setup_sh_path.is_file() else None,
-        run_tests_sh=(
-            run_tests_sh_path.read_text(encoding="utf-8") if run_tests_sh_path.is_file() else None
-        ),
+        setup_sh=_read_text_exact(setup_sh_path) if setup_sh_path.is_file() else None,
+        run_tests_sh=_read_text_exact(run_tests_sh_path) if run_tests_sh_path.is_file() else None,
     )
 
 
