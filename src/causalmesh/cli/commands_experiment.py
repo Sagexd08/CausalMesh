@@ -142,6 +142,17 @@ def run_command(
         typer.Option("--limit", help="Stop after this many runs; the rest stay planned."),
     ] = None,
     allow_gated: Annotated[bool, typer.Option("--allow-gated")] = False,
+    run_timeout: Annotated[
+        float | None,
+        typer.Option(
+            "--run-timeout",
+            help=(
+                "Wall-clock budget per run, in seconds. A run that exceeds it is interrupted "
+                "at its next await, keeps its partial evidence and is recorded timed out "
+                "(never retried). Default: no timeout."
+            ),
+        ),
+    ] = None,
     use_contract: Annotated[
         bool,
         typer.Option(
@@ -159,6 +170,10 @@ def run_command(
     from causalmesh.policy.contract import Contract, ContractError
     from causalmesh.provenance import Environment
     from causalmesh.scheduler import ExperimentRunner, RunEnvironment
+
+    if run_timeout is not None and not run_timeout > 0:
+        fail("--run-timeout must be greater than zero", hint="Omit it for no timeout.")
+        raise typer.Exit(Exit.USAGE)
 
     repo = _repo_or_exit(root_option)
     name = experiment_id or f"exp_{profile_name}"
@@ -199,6 +214,7 @@ def run_command(
         environment=environment,
         master_seed=_seed_bytes(seed),
         run_config=run_config,
+        run_timeout_s=run_timeout,
     ) as runner:
         registered = runner.prepare()
         if registered:
@@ -214,6 +230,7 @@ def run_command(
         rendered.add_row("executed", str(report.executed))
         rendered.add_row("completed", str(report.completed))
         rendered.add_row("failed", str(report.failed))
+        rendered.add_row("timed out", str(report.timed_out))
         rendered.add_row("already done", str(report.already_done))
         rendered.add_row("task successes", f"{report.succeeded_tasks} of {report.planned}")
         out_console.print(rendered)
