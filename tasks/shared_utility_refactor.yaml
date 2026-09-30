@@ -1,0 +1,152 @@
+# Task: refactor a shared utility while two consumers still import it.
+#
+# The coordination dependency (spec §35, family shared_utility_refactor):
+#   agent_a owns src/textutil.py and refactors it: `clean` is renamed to
+#   `normalize_text` and the old name is removed.
+#   agent_b owns src/search.py and agent_c owns src/exporter.py. Both import
+#   `clean` by name and must follow the rename.
+#
+# How this differs from interface_consumer: one change invalidates TWO
+# consumers owned by TWO different agents, so the task has three agents and a
+# fan-out dependency, and the stale failure is an ImportError at module load
+# rather than a wrong call. A refactor that removes a shared name is the case
+# where one agent's tidy-up breaks work it never looked at. No path is
+# contested; each file has exactly one owner.
+#
+# What makes the arms differ: each consumer's write is CONDITIONAL on whether
+# it was told about agent_a's change to src/textutil.py.
+#   - informed   -> imports normalize_text; tests pass
+#   - uninformed -> keeps importing clean; the module fails at import
+#
+# The success divergence check names one file (src/search.py). The
+# integration test covers both consumers, so a run where only agent_c is
+# stale still fails on the test half of success.
+#
+# The agents stay deterministic: the same observations always produce the
+# same behaviour. What varies between arms is what they were told.
+
+task_id: shared_utility_refactor
+version: "1.0.0"
+family: shared_utility_refactor
+description: >
+  agent_a renames the shared text utility and removes the old name, while
+  agent_b and agent_c, whose modules import it, write their consumers. Each
+  follows the rename only if it is told about the change; a consumer left
+  importing the removed name fails at import.
+
+fixture: text_utility
+
+# Held out of experiment profiles until admitted (see TaskDefinition.in_design).
+# This task passes the section 37 gate (its integration test runs it), but adding
+# it to `pilot`, `small` and `medium` would silently double their run counts and
+# stop them describing the collection they were calibrated on. To admit it: set
+# this true and bump `version`.
+in_design: false
+
+roles:
+  - agent_id: agent_a
+    owns: [src/textutil.py]
+    description: Refactors the shared utility, renaming clean to normalize_text.
+  - agent_id: agent_b
+    owns: [src/search.py]
+    depends_on: [src/textutil.py]
+    description: Keeps the search consumer importing a name the utility provides.
+  - agent_id: agent_c
+    owns: [src/exporter.py]
+    depends_on: [src/textutil.py]
+    description: Keeps the export consumer importing a name the utility provides.
+
+success:
+  integration_test: [python, -m, pytest, -q, tests/]
+  # A stale search consumer still imports the removed name.
+  divergence_file: src/search.py
+  divergence_marker: "from textutil import clean"
+
+contested_paths: []
+
+scenario:
+  agent_a:
+    owns: [src/textutil.py]
+    actions:
+      - read: src/textutil.py
+      - write:
+          path: src/textutil.py
+          content: |
+            """The shared text utility both consumers import.
+
+            `clean` was renamed to `normalize_text` and the old name removed.
+            """
+
+
+            def normalize_text(text):
+                """Trim surrounding whitespace and lowercase a string."""
+                return text.strip().lower()
+
+  agent_b:
+    owns: [src/search.py]
+    depends_on: [src/textutil.py]
+    actions:
+      # Reads the utility before agent_a's refactor lands.
+      - read: src/textutil.py
+      # Deliberation window: agent_a's write happens during this (§23).
+      - wait: 2s
+      # Informed path: agent_b learned the utility changed and imports the
+      # new name. It does NOT touch src/textutil.py; that file belongs to
+      # agent_a.
+      - write:
+          if_informed_about: src/textutil.py
+          path: src/search.py
+          content: |
+            """First consumer of the shared text utility: query matching."""
+
+            from textutil import normalize_text
+
+
+            def matches(query, title):
+                """Whether a query appears in a title, ignoring case and outer whitespace."""
+                return normalize_text(query) in normalize_text(title)
+      # Uninformed path: agent_b never heard, so it keeps the import it
+      # planned from the utility it read. The removed name remains.
+      - write:
+          if_uninformed_about: src/textutil.py
+          path: src/search.py
+          content: |
+            """First consumer of the shared text utility: query matching."""
+
+            from textutil import clean
+
+
+            def matches(query, title):
+                """Whether a query appears in a title, ignoring case and outer whitespace."""
+                return clean(query) in clean(title)
+
+  agent_c:
+    owns: [src/exporter.py]
+    depends_on: [src/textutil.py]
+    actions:
+      - read: src/textutil.py
+      - wait: 2s
+      - write:
+          if_informed_about: src/textutil.py
+          path: src/exporter.py
+          content: |
+            """Second consumer of the shared text utility: export keys."""
+
+            from textutil import normalize_text
+
+
+            def export_key(label):
+                """A normalised key for an exported label."""
+                return normalize_text(label).replace(" ", "_")
+      - write:
+          if_uninformed_about: src/textutil.py
+          path: src/exporter.py
+          content: |
+            """Second consumer of the shared text utility: export keys."""
+
+            from textutil import clean
+
+
+            def export_key(label):
+                """A normalised key for an exported label."""
+                return clean(label).replace(" ", "_")
