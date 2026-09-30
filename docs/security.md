@@ -170,6 +170,7 @@ a row is only here if a test runs it.
 | A resource argument that is not text (list, `None`, bytes, number) is refused, because the handler would receive the raw object while the gate checked `str(value)` | `tests/gateway/test_resource_kinds.py::TestMalformedPathArguments`, `tests/gateway/test_resolver.py` |
 | Endpoint, spend and budget resources reach the gate: allowlist, per-call ceiling, exact-at-the-limit totals, no ledger means refused, refused calls never counted, unknown amount forms refused | `tests/gateway/test_resource_kinds.py::TestEndpoint`, `::TestSpend`, `::TestBudget` |
 | A token bound to an agent cannot act as another (403), chain events say whether the agent was token-bound or asserted, and bad token configuration is refused | `tests/server/test_identity_and_hardening.py::TestABoundTokenFixesTheAgent`, `::TestAnUnboundTokenAssertsAndSaysSo`, `::TestTokenConfigurationIsRefusedWhenItWouldMeanLess` |
+| A token can expire (valid while `now < expires_at`), be revoked or added by editing `--tokens-file` with no restart, and overlap with a new one for rotation; a malformed, missing or group/world-readable reload keeps the last good set and logs no content; every credential is still compared in constant time; chain events carry the operator's `credential_id` label (never the token or a digest) | `tests/server/test_token_lifecycle.py`, `tests/integration/test_serve_tokens.py` |
 | `/docs`, `/redoc` and `/openapi.json` are absent when auth is on | `tests/server/test_identity_and_hardening.py::TestDocsAndSchemaAreNotPublic` |
 | Bodies over the limit are 413, including chunked ones a handler's broad `except` cannot absorb | `tests/server/test_identity_and_hardening.py::TestBodyLimit` |
 | A slow sync handler or upstream does not stall the server, concurrent calls never overlap and the chain still verifies | `tests/server/test_identity_and_hardening.py::TestASlowHandlerDoesNotStallTheServer`, `::TestConcurrentCallsShareOneChain` |
@@ -191,7 +192,9 @@ Not protected:
 - **Identity.** A bearer token is a shared secret over plain HTTP. A token bound
   to an agent fixes which agent a request is (`--agent-token`); an unbound token
   asserts one. Neither proves anything to a third party, and the server holds every
-  agent's signing key (see `docs/backlog.md`).
+  agent's signing key (see `docs/backlog.md`). Tokens can expire and be revoked or rotated without
+  a restart (`--tokens-file`, `docs/fragments/token-lifecycle.md`); that narrows the
+  window a leaked token is useful, it does not make it proof.
 - **Resources through the SDK.** A tool that declares no resource is checked against
   nothing, `mutating=False` skips the gate for every kind, and totals are
   check-then-record (see `docs/backlog.md` for the full list).
