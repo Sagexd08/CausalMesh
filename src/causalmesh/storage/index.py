@@ -382,21 +382,63 @@ class RunIndex:
                 connection.execute("SELECT * FROM runs WHERE run_id = ?", (run_id,)).fetchone()
             )
 
+    def hand_off(self, run_id: str, *, now_us: int, note: str = "") -> RunRecord:
+        """Move a RUNNING run to HANDED_OFF: its first agent has stopped.
+
+        A prerequisite, not a feature: nothing in the loop calls this yet,
+        because there is no `recover` decision and no second agent to hand
+        to. It exists so the state is reachable through the same
+        transition-checked path as every other, and therefore tested there,
+        before anything depends on it. `attempts` is untouched: a handoff
+        continues a run, it does not start another attempt at it.
+        """
+        return self._move(run_id, RunState.HANDED_OFF, now_us=now_us, note=note or "handed off")
+
+    def continue_handed_off(self, run_id: str, *, now_us: int, note: str = "") -> RunRecord:
+        """Move a HANDED_OFF run back to RUNNING under its continuation."""
+        return self._move(
+            run_id, RunState.RUNNING, now_us=now_us, note=note or "continued after handoff"
+        )
+
+    def _move(self, run_id: str, state: str, *, now_us: int, note: str) -> RunRecord:
+        with self._write() as connection:
+            row = connection.execute("SELECT * FROM runs WHERE run_id = ?", (run_id,)).fetchone()
+            if row is None:
+                raise KeyError(f"no run {run_id!r} in the index")
+            current = RunRecord._from_row(row)
+            check_transition(current.state, state)
+            connection.execute("UPDATE runs SET state = ? WHERE run_id = ?", (state, run_id))
+            connection.execute(
+                "INSERT INTO transitions (run_id, from_state, to_state, at_us, note) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (run_id, current.state, state, now_us, note),
+            )
+            return RunRecord._from_row(
+                connection.execute("SELECT * FROM runs WHERE run_id = ?", (run_id,)).fetchone()
+            )
+
     def abandon_running(self, experiment_id: str, *, now_us: int, note: str = "") -> int:
-        """Mark every RUNNING run of this experiment ABANDONED.
+        """Mark every RUNNING or HANDED_OFF run of this experiment ABANDONED.
 
         Called when a collection starts, to clean up after a previous
         process that was killed. A run left RUNNING by a crash is not a
         result — nothing recorded a verdict for it — so it becomes
         ABANDONED and is eligible for re-execution. Leaving it RUNNING
         would strand it forever, since `claim_next` skips that state.
+
+        HANDED_OFF is swept for the same reason: it is waiting for a
+        continuation that only a live process can start, and this loop is
+        single-process, so one found at startup is stranded. The transition
+        row records the state each run was actually found in, so the audit
+        trail distinguishes a crash mid-run from a crash mid-handoff.
         """
         with self._write() as connection:
             rows = connection.execute(
-                "SELECT run_id FROM runs WHERE experiment_id = ? AND state = ?",
-                (experiment_id, RunState.RUNNING),
+                "SELECT run_id, state FROM runs WHERE experiment_id = ? AND state IN (?, ?)",
+                (experiment_id, RunState.RUNNING, RunState.HANDED_OFF),
             ).fetchall()
             for row in rows:
+                check_transition(row["state"], RunState.ABANDONED)
                 connection.execute(
                     "UPDATE runs SET state = ? WHERE run_id = ?",
                     (RunState.ABANDONED, row["run_id"]),
@@ -406,10 +448,15 @@ class RunIndex:
                     "VALUES (?, ?, ?, ?, ?)",
                     (
                         row["run_id"],
-                        RunState.RUNNING,
+                        row["state"],
                         RunState.ABANDONED,
                         now_us,
-                        note or "found running at startup; previous process did not finish",
+                        note
+                        or (
+                            "found running at startup; previous process did not finish"
+                            if row["state"] == RunState.RUNNING
+                            else "found handed off at startup; no continuation was started"
+                        ),
                     ),
                 )
             return len(rows)

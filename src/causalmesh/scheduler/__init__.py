@@ -9,6 +9,14 @@ outcome it is also recording.
 
 from __future__ import annotations
 
+from .handoff import (
+    HANDOFF_SCHEMA_VERSION,
+    DiffEntry,
+    HandoffError,
+    HandoffPackage,
+    PriorDecision,
+    TestResult,
+)
 from .loop import ExperimentRunner, LoopReport, RunEnvironment
 from .states import (
     TERMINAL_STATES,
@@ -23,13 +31,19 @@ from .states import (
 )
 
 __all__ = [
+    "HANDOFF_SCHEMA_VERSION",
     "TERMINAL_STATES",
     "TRANSITIONS",
+    "DiffEntry",
     "ExperimentRunner",
+    "HandoffError",
+    "HandoffPackage",
     "InvalidTransitionError",
     "LoopReport",
+    "PriorDecision",
     "RunEnvironment",
     "RunState",
+    "TestResult",
     "can_transition",
     "check_transition",
     "describe",
