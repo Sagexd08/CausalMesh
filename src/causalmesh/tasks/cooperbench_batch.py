@@ -48,6 +48,13 @@ both arms and the gate reports NOT SENSITIVE. That is a property of this
 platform's merge, reported as data. Nothing here measures real agent
 coordination.
 
+`BatchOptions.contested_merge="three_way"` replaces that merge with a
+content-level one (`tasks/merge3.py`). Then a pair whose two patches merge
+cleanly passes the oracle in both arms and a pair that conflicts fails it in
+both, so the verdict is still NOT SENSITIVE (replay agents do not differ by
+arm) but `gated_with_isolated_success` now counts the pairs the platform solves.
+Read that number, not the verdict, when this option is on.
+
 ## Failure isolation and resumability
 
 Each pair is processed inside its own `try`; an exception becomes a `failed`
@@ -186,6 +193,10 @@ class BatchOptions:
     force: bool = False
     keep_workspaces: bool = False
     jobs: int = 1
+    contested_merge: str = "last_writer"
+    """How a path both features edit is integrated; see `ContestedMerge`. The
+    default keeps the winner-take-all behaviour every earlier result was
+    produced under; `"three_way"` merges the two features' files."""
 
 
 # ---------------------------------------------------------------------------
@@ -604,6 +615,7 @@ def process_pair(
     seed: bytes = DEFAULT_SEED,
     repetitions: int = 1,
     keep_workspaces: bool = False,
+    contested_merge: str = "last_writer",
 ) -> dict[str, Any]:
     """Import one pair, validate it, and run the real section-37 gate on it.
 
@@ -634,7 +646,7 @@ def process_pair(
         imported = import_task(
             stage_dir,
             base_files=pair_base,
-            options=ImportOptions(task_id=key.task_id),
+            options=ImportOptions(task_id=key.task_id, contested_merge=contested_merge),
         )
 
         writes_a = _write_actions(imported, "agent_a")
@@ -828,6 +840,11 @@ def summarize(results: dict[str, dict[str, Any]]) -> dict[str, Any]:
             for record in results.values()
             if record.get("sensitivity", {}).get("informed_successes", 0) > 0
         ),
+        "gated_with_isolated_success": sum(
+            1
+            for record in results.values()
+            if record.get("sensitivity", {}).get("isolated_successes", 0) > 0
+        ),
         "oracle_sequential_apply": dict(
             sorted(
                 Counter(
@@ -920,6 +937,7 @@ def run_batch(
                     "seed": options.seed,
                     "repetitions": options.repetitions,
                     "keep_workspaces": options.keep_workspaces,
+                    "contested_merge": options.contested_merge,
                 }
                 for key in keys
             ]
@@ -938,9 +956,16 @@ def run_batch(
             "finished_unix": int(time.time()),
             "note": (
                 "Every run is a deterministic scripted mock agent; the success test is an "
-                "offline line-multiset oracle, not the CooperBench hidden tests; the "
-                "contested-path merge is winner-take-all. These verdicts say nothing about "
-                "real agent coordination."
+                "offline line-multiset oracle, not the CooperBench hidden tests; "
+                + (
+                    "the contested-path merge is a content-level three-way merge, so a pair "
+                    "that merges cleanly passes in both arms and the arms never differ. "
+                    "An identical edit made by both features is kept once by a merge but "
+                    "expected twice by the oracle. "
+                    if options.contested_merge == "three_way"
+                    else "the contested-path merge is winner-take-all. "
+                )
+                + "These verdicts say nothing about real agent coordination."
             ),
             "python": sys.version.split()[0],
             **_dataset_provenance(dataset),
@@ -948,6 +973,12 @@ def run_batch(
         "options": {
             "repetitions": options.repetitions,
             "seed": options.seed.decode("utf-8", errors="replace"),
+            # Only when set, so a default run's document keeps its shape.
+            **(
+                {"contested_merge": options.contested_merge}
+                if options.contested_merge != "last_writer"
+                else {}
+            ),
         },
         "summary": summarize(final),
         "pairs": [final[key.pair_id] for key in pairs if key.pair_id in final],
