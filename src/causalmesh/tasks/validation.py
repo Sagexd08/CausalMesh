@@ -244,6 +244,7 @@ class SensitivityReport:
     isolated_divergences: int = 0
     informed_divergences: int = 0
     detail: str = ""
+    could_not_run: str = ""
 
     @property
     def sensitive(self) -> bool:
@@ -254,11 +255,19 @@ class SensitivityReport:
         them; the *reverse* would be a genuine finding but not one that
         makes the task usable as a coordination benchmark, so it fails the
         gate too and the detail says which case occurred.
+
+        A gate that could not run has no verdict at all: this is `False`, and
+        `could_not_run` says why. Read that field before reading `sensitive` as
+        "the arms do not differ".
         """
+        if self.could_not_run:
+            return False
         return self.informed_successes > self.isolated_successes
 
     def to_dict(self) -> dict[str, Any]:
+        extra = {"could_not_run": self.could_not_run} if self.could_not_run else {}
         return {
+            **extra,
             "detail": self.detail,
             "informed_divergences": self.informed_divergences,
             "informed_successes": self.informed_successes,
@@ -270,6 +279,8 @@ class SensitivityReport:
         }
 
     def summary(self) -> str:
+        if self.could_not_run:
+            return f"{self.task_id}: COULD NOT RUN - {self.could_not_run}"
         verdict = "SENSITIVE" if self.sensitive else "NOT SENSITIVE"
         return (
             f"{self.task_id}: {verdict} — "
@@ -306,7 +317,20 @@ async def check_sensitivity(
     agent and relay stack, and the validator must stay importable by the
     CLI for structural checks without dragging the runtime in.
     """
-    from .runner import RunConfig, execute_task
+    from .runner import RunConfig, execute_task, integration_test_preflight
+
+    problem = integration_test_preflight(task)
+    if problem is not None:
+        # No arm is run: every one would fail for this reason and the counts would
+        # read as "the arms do not differ".
+        return SensitivityReport(
+            task_id=task.task_id,
+            isolated_successes=0,
+            informed_successes=0,
+            repetitions=repetitions,
+            detail="the gate did not run: " + problem,
+            could_not_run=problem,
+        )
 
     isolated_successes = 0
     informed_successes = 0

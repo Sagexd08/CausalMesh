@@ -716,6 +716,16 @@ def process_pair(
                 repetitions=repetitions,
             )
         )
+        if verdict.could_not_run:
+            return _record(
+                key,
+                "failed",
+                "sensitivity",
+                f"gate_could_not_run: {verdict.could_not_run}",
+                sensitivity=verdict.to_dict(),
+                structure=structure,
+                **common,
+            )
         return _record(
             key,
             "sensitive" if verdict.sensitive else "not_sensitive",

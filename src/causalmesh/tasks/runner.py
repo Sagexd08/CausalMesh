@@ -44,7 +44,7 @@ from .outcome import (
     workspace_digest,
 )
 
-__all__ = ["RunConfig", "RunResult", "execute_task"]
+__all__ = ["RunConfig", "RunResult", "execute_task", "integration_test_preflight"]
 
 DEFAULT_MAX_TURNS = 20
 DEFAULT_TICK_US = 1_000_000
@@ -662,6 +662,74 @@ def _last_writer(path: str, records: list[dict[str, Any]]) -> str | None:
     return winner
 
 
+def _harness_environment() -> dict[str, str]:
+    """The scrubbed environment the integration test runs under.
+
+    One definition, used by the test itself and by its preflight, so the
+    preflight asks the question of the interpreter the test will really get.
+    """
+    return {
+        **{name: os.environ[name] for name in _INHERITED_ENVIRONMENT if name in os.environ},
+        "PYTHONHASHSEED": "0",
+        "PYTHONDONTWRITEBYTECODE": "1",
+    }
+
+
+def integration_test_preflight(task: TaskDefinition) -> str | None:
+    """Why this task's integration test cannot run here, or `None` if it can.
+
+    Without this a missing test runner is indistinguishable from a task that
+    does not discriminate between arms. `python -m pytest` with no pytest
+    installed exits 1, the same code as "a test failed", so every arm fails
+    identically and the sec 37 gate reports NOT SENSITIVE for a reason that has
+    nothing to do with the task (it happened to `interface_consumer` and
+    `shared_utility_refactor`). Checked against the harness's own environment,
+    not this process's: the test runs under a scrubbed one, and the `python` on
+    its `PATH` need not be the one running the harness.
+
+    Two things are checked: the command's executable resolves, and, for the
+    `<python> -m <module>` form every shipped task uses, that the module is
+    importable by that interpreter. Any other command shape is not probed and
+    is assumed runnable; the check says what it knows, not more.
+    """
+    import shutil
+    import subprocess
+    import tempfile
+
+    argv = list(task.success.integration_test)
+    if not argv:
+        return None
+    env = _harness_environment()
+    executable = shutil.which(argv[0], path=env.get("PATH"))
+    if executable is None:
+        return f"{argv[0]!r} is not found on the harness's PATH, so the integration test cannot run"
+    if len(argv) < 3 or argv[1] != "-m":
+        return None
+    module = argv[2]
+    probe = (
+        "import importlib.util, sys; sys.exit(0 if importlib.util.find_spec(sys.argv[1]) else 3)"
+    )
+    try:
+        with tempfile.TemporaryDirectory() as scratch:
+            completed = subprocess.run(
+                [executable, "-c", probe, module],
+                cwd=scratch,
+                capture_output=True,
+                text=True,
+                timeout=60,
+                env=env,
+                check=False,
+            )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return f"could not start {executable!r} to check for module {module!r}: {exc}"
+    if completed.returncode == 0:
+        return None
+    return (
+        f"the interpreter the harness will use ({executable}) cannot import {module!r}; "
+        f"the integration test would fail in every arm for that reason alone"
+    )
+
+
 def _run_integration_test(task: TaskDefinition, workspace: Workspace) -> int | None:
     """Run the task's integration test in a workspace.
 
@@ -679,11 +747,7 @@ def _run_integration_test(task: TaskDefinition, workspace: Workspace) -> int | N
             capture_output=True,
             text=True,
             timeout=300,
-            env={
-                **{name: os.environ[name] for name in _INHERITED_ENVIRONMENT if name in os.environ},
-                "PYTHONHASHSEED": "0",
-                "PYTHONDONTWRITEBYTECODE": "1",
-            },
+            env=_harness_environment(),
             check=False,
         )
     except (OSError, subprocess.TimeoutExpired):
