@@ -330,7 +330,13 @@ class ExperimentRunner:
                     preserve_evidence_on_cancel=self.run_timeout_s is not None,
                 )
             )
-        except BaseException as exc:
+        except (asyncio.CancelledError, KeyboardInterrupt, SystemExit):
+            # An operator's interrupt is not a verdict on the run. Record nothing:
+            # the run stays RUNNING, the next startup marks it ABANDONED, and it
+            # is resumed. Writing FAILED here (terminal, never retried) would turn
+            # a Ctrl-C into a permanent failure in the denominator.
+            raise
+        except Exception as exc:
             detail = traceback.format_exc()
             self._write_artifact(
                 artifact_path,
@@ -354,8 +360,6 @@ class ExperimentRunner:
             )
             report.failed += 1
             report.errors.append({"run_id": record.run_id, "error": f"{type(exc).__name__}: {exc}"})
-            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
-                raise
             return
 
         # A run that finished in the instant between the budget lapsing and the
