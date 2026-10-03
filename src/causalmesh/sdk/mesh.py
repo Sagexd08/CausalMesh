@@ -50,12 +50,18 @@ Architecture::
 from __future__ import annotations
 
 import json
+import threading
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
 from causalmesh.claims import ClaimOutcome, ClaimRegistry
-from causalmesh.crypto.keys import KeyPair, SignatureError, load_identity_keys
+from causalmesh.crypto.keys import (
+    KeyPair,
+    PublicKeyRing,
+    SignatureError,
+    load_identity_keys,
+)
 from causalmesh.events.schema import EventIdentity, utc_now_micros
 from causalmesh.hooks.lifecycle import LifecycleBoundary
 from causalmesh.hooks.policy_gate import ContractGate
@@ -71,7 +77,20 @@ from ..gateway.gateway import ToolGateway
 from ..gateway.result import GatewayResult
 from ..gateway.tool import Tool
 from .config import SDKConfig, load_sdk_config
-from .errors import ConfigurationError, UnknownAgentError
+from .errors import (
+    ConfigurationError,
+    EvidenceError,
+    EvidenceUnavailableError,
+    UnknownAgentError,
+)
+from .evidence import (
+    EvidenceStore,
+    last_event_counter,
+    load_evidence,
+    resume_chain,
+    write_evidence,
+    write_public_keys,
+)
 from .identity import make_identity
 
 __all__ = ["CausalMesh"]
@@ -148,6 +167,18 @@ class CausalMesh:
                     omitted the gate's default applies: refuse every matched
                     checkpoint.  Pass a ``TerminalCheckpointHandler`` to ask
                     a person at a terminal.
+        evidence_path: An append-only JSONL file the session writes every signed
+                    record to (flushed and ``fsync``-ed per event).  If the file
+                    already holds a chain it is verified against this session's
+                    keys and continued, so the same ``seed=`` (or
+                    ``identity.keys``) and ``run_id`` must be used on restart.
+                    See ``causalmesh.sdk.evidence`` for the guarantees.
+                    Exclusive with ``persist_to``: a session has one durable
+                    chain, and two writers to two files would be two chains.
+        recover_evidence: Repair a torn final line (an interrupted write): the
+                    fragment moves to ``<file>.torn`` and the chain resumes
+                    from the last whole record.  Off by default, so a torn
+                    file is refused rather than silently trimmed.
     """
 
     def __init__(
@@ -164,8 +195,16 @@ class CausalMesh:
         persist_to: str | Path | None = None,
         claims: ClaimRegistry | None = None,
         checkpoint_handler: CheckpointHandler | None = None,
+        evidence_path: str | Path | None = None,
+        recover_evidence: bool = False,
         _sdk_config: SDKConfig | None = None,
     ) -> None:
+        if persist_to is not None and evidence_path is not None:
+            raise ConfigurationError(
+                "persist_to and evidence_path are two ways to persist one chain; pass one. "
+                "persist_to writes chain.jsonl and keyring.json into a directory; "
+                "evidence_path writes a resumable single-writer JSONL file."
+            )
         self._agent_id = agent_id
         self._claims = claims
         self._claim_sequence = 0
@@ -183,17 +222,28 @@ class CausalMesh:
                 store = ChainStore(Path(persist_to) / _CHAIN_FILE)
             except StoreError as exc:
                 raise ConfigurationError(str(exc)) from exc
+        elif evidence_path is not None:
+            self._evidence = EvidenceStore(evidence_path, recover=recover_evidence)
+            store = self._evidence
         self._store = store
-        self._relay, self._boundary, self._gate = _build_runtime(
-            contract=contract,
-            run_id=self._run_id,
-            agent_ids=agent_ids,
-            seed=seed,
-            ledger=ledger,
-            store=store,
-            claims=claims,
-            checkpoint_handler=checkpoint_handler,
-        )
+        resumed = 0
+        try:
+            self._relay, self._boundary, self._gate = _build_runtime(
+                contract=contract,
+                run_id=self._run_id,
+                agent_ids=agent_ids,
+                seed=seed,
+                ledger=ledger,
+                store=store,
+                claims=claims,
+                checkpoint_handler=checkpoint_handler,
+            )
+            if self._evidence is not None:
+                resumed = resume_chain(self._relay, self._evidence, run_id=self._run_id)
+        except BaseException:
+            if store is not None:
+                store.close()
+            raise
         if persist_to is not None:
             _write_json(Path(persist_to) / _KEYRING_FILE, self._relay.key_ring().to_dict())
 
@@ -231,12 +281,14 @@ class CausalMesh:
         persist_to: str | Path | None = None,
         claims: ClaimRegistry | None = None,
         checkpoint_handler: CheckpointHandler | None = None,
+        evidence_path: str | Path | None = None,
+        recover_evidence: bool = False,
     ) -> CausalMesh:
         """Build a ``CausalMesh`` from a ``causalmesh.yaml`` file.
 
         ``run_id``, ``seed``, ``agents``, ``ledger``, ``claims``,
-        ``checkpoint_handler``, the clock arguments and ``persist_to`` are
-        passed through to the constructor; see the class docstring.
+        ``checkpoint_handler``, the clock arguments, ``persist_to``,
+        ``evidence_path`` and ``recover_evidence`` are passed through to the constructor; see the class docstring.
 
         Raises:
             ConfigurationError: When the file is missing, invalid, or
@@ -264,6 +316,8 @@ class CausalMesh:
                 persist_to=persist_to,
                 claims=claims,
                 checkpoint_handler=checkpoint_handler,
+                evidence_path=evidence_path,
+                recover_evidence=recover_evidence,
                 _sdk_config=sdk_config,
             )
         except SignatureError as exc:
@@ -588,10 +642,98 @@ class CausalMesh:
         _write_json(run_path, artifact)
         return {"keyring": keyring_path, "run": run_path}
 
+    # ------------------------------------------------------------------ #
+    # Evidence persistence (``evidence_path``)                            #
+    # ------------------------------------------------------------------ #
+
+    @property
+    def evidence_path(self) -> Path | None:
+        """The file this session persists to, or ``None`` when memory-only."""
+        return self._evidence.path if self._evidence is not None else None
+
+    @property
+    def evidence_recovery(self) -> dict[str, Any] | None:
+        """What ``recover_evidence`` repaired on open, or ``None`` if nothing.
+
+        ``{"torn_bytes", "preserved_in", "records_kept"}``: the size of the
+        interrupted final write, where it was kept, and how many whole
+        records survived.
+        """
+        return self._evidence.recovery if self._evidence is not None else None
+
+    @property
+    def evidence_head(self) -> str:
+        """The chain head hash right now: what an external anchor should hold.
+
+        Truncating a chain from the end leaves a shorter chain that still
+        verifies.  Only a copy of the head, kept somewhere the writer cannot
+        reach, shows that it happened.
+        """
+        return self._relay.head_hash
+
+    def key_ring(self) -> PublicKeyRing:
+        """The public keys this session signs with."""
+        return self._relay.key_ring()
+
+    def export_evidence(self, path: str | Path) -> Path:
+        """Write this session's whole chain to `path` as JSONL, atomically.
+
+        Works for a memory-only session and for a persisted one (it is then a
+        copy; the live file is never the destination).  Read it back with
+        ``load_evidence`` and verify it with ``causalmesh verify --evidence``.
+        """
+        destination = Path(path)
+        if self._evidence is not None and _same_file(destination, self._evidence.path):
+            raise EvidenceError(
+                f"{destination} is this session's live evidence file; export to another path"
+            )
+        return write_evidence(destination, self._relay.records())
+
+    def export_public_keys(self, directory: str | Path) -> list[Path]:
+        """Write one ``<agent_id>.pub`` per agent into `directory`.
+
+        The format ``causalmesh verify --keys`` reads.  Only public keys are
+        written.  A ring exported from the machine that also holds the log is
+        not independent trust: take it away before the session, or from
+        wherever the keys were issued.
+        """
+        return write_public_keys(self.key_ring(), directory)
+
+    @staticmethod
+    def load_evidence(path: str | Path, *, allow_torn_tail: bool = False) -> list[dict[str, Any]]:
+        """Read an evidence file back into records; see ``sdk.evidence.load_evidence``."""
+        return load_evidence(path, allow_torn_tail=allow_torn_tail)
+
     def close(self) -> None:
-        """Close the persisted chain file, when ``persist_to`` was given."""
+        """Release the persisted chain file and its lock.  Safe to call twice."""
+        with self._close_lock:
+            if self._closed:
+                return
+            self._closed = True
         if self._store is not None:
             self._store.close()
+
+    def __enter__(self) -> CausalMesh:
+        return self
+
+    def __exit__(self, *exc_info: object) -> None:
+        self.close()
+
+    def _require_evidence_writable(self) -> None:
+        """Refuse to run a tool whose record could not be written.
+
+        Checked before the gate, so the handler never runs after the evidence
+        file has failed or the session has been closed.
+        """
+        if self._evidence is None:
+            return
+        if self._closed:
+            raise EvidenceUnavailableError(
+                f"this session is closed; {self._evidence.path} is no longer being written"
+            )
+        failure = self._evidence.failure
+        if failure is not None:
+            raise EvidenceUnavailableError(failure)
 
 
 # ------------------------------------------------------------------ #
