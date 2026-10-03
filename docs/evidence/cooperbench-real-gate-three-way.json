@@ -1,0 +1,150 @@
+{
+ "pallets_click_task/task2800": {
+  "base_commit": "d8763b93021c416549b5f8b4b5497234619410db",
+  "combined_patch_applied": true,
+  "contested_merge": "three_way",
+  "contested_paths": [
+   "src/click/core.py"
+  ],
+  "features": [
+   1,
+   2
+  ],
+  "gate": {
+   "detail": "the arms are indistinguishable on this task; it contributes nothing to the contrasts and would dilute the measured effect",
+   "informed_divergences": 0,
+   "informed_successes": 0,
+   "isolated_divergences": 0,
+   "isolated_successes": 0,
+   "repetitions": 1,
+   "sensitive": false,
+   "task_id": "cb_pallets_click_task_task2800_real"
+  },
+  "gate_summary": "cb_pallets_click_task_task2800_real: NOT SENSITIVE \u2014 C0 0/1, C2 0/1",
+  "harness_on_base": [
+   "feature1: FAIL",
+   "feature2: FAIL"
+  ],
+  "harness_with_combined_patch": [
+   "feature1: PASS",
+   "feature2: PASS"
+  ],
+  "integrated_workspace_tests_by_arm": {
+   "C0": [
+    "feature1: PASS",
+    "feature2: FAIL"
+   ],
+   "C2": [
+    "feature1: PASS",
+    "feature2: FAIL"
+   ]
+  },
+  "merge_conflicts_by_arm": {
+   "C0": [],
+   "C2": []
+  },
+  "structure_issues": [],
+  "structure_valid": true
+ },
+ "pallets_jinja_task/task1621": {
+  "base_commit": "a2920752fd111c2d52c88eb57487667b3cf0ea7b",
+  "combined_patch_applied": true,
+  "contested_merge": "three_way",
+  "contested_paths": [
+   "src/jinja2/loaders.py"
+  ],
+  "features": [
+   1,
+   2
+  ],
+  "gate": {
+   "detail": "the arms are indistinguishable on this task; it contributes nothing to the contrasts and would dilute the measured effect",
+   "informed_divergences": 0,
+   "informed_successes": 1,
+   "isolated_divergences": 0,
+   "isolated_successes": 1,
+   "repetitions": 1,
+   "sensitive": false,
+   "task_id": "cb_pallets_jinja_task_task1621_real"
+  },
+  "gate_summary": "cb_pallets_jinja_task_task1621_real: NOT SENSITIVE \u2014 C0 1/1, C2 1/1",
+  "harness_on_base": [
+   "feature1: FAIL",
+   "feature2: FAIL"
+  ],
+  "harness_with_combined_patch": [
+   "feature1: PASS",
+   "feature2: PASS"
+  ],
+  "integrated_workspace_tests_by_arm": {
+   "C0": [
+    "feature1: PASS",
+    "feature2: PASS"
+   ],
+   "C2": [
+    "feature1: PASS",
+    "feature2: PASS"
+   ]
+  },
+  "merge_conflicts_by_arm": {
+   "C0": [],
+   "C2": []
+  },
+  "structure_issues": [],
+  "structure_valid": true
+ },
+ "samuelcolvin_dirty_equals_task/task43": {
+  "base_commit": "593bcccf738ab8b724d7cb860881d74344171f5f",
+  "combined_patch_applied": true,
+  "contested_merge": "three_way",
+  "contested_paths": [
+   "dirty_equals/__init__.py",
+   "dirty_equals/_other.py"
+  ],
+  "features": [
+   1,
+   2
+  ],
+  "gate": {
+   "detail": "the arms are indistinguishable on this task; it contributes nothing to the contrasts and would dilute the measured effect",
+   "informed_divergences": 0,
+   "informed_successes": 0,
+   "isolated_divergences": 0,
+   "isolated_successes": 0,
+   "repetitions": 1,
+   "sensitive": false,
+   "task_id": "cb_samuelcolvin_dirty_equals_task_task43_real"
+  },
+  "gate_summary": "cb_samuelcolvin_dirty_equals_task_task43_real: NOT SENSITIVE \u2014 C0 0/1, C2 0/1",
+  "harness_on_base": [
+   "feature1: FAIL",
+   "feature2: FAIL"
+  ],
+  "harness_with_combined_patch": [
+   "feature1: PASS",
+   "feature2: PASS"
+  ],
+  "integrated_workspace_tests_by_arm": {
+   "C0": [
+    "feature1: FAIL",
+    "feature2: FAIL"
+   ],
+   "C2": [
+    "feature1: FAIL",
+    "feature2: FAIL"
+   ]
+  },
+  "merge_conflicts_by_arm": {
+   "C0": [
+    "dirty_equals/__init__.py",
+    "dirty_equals/_other.py"
+   ],
+   "C2": [
+    "dirty_equals/__init__.py",
+    "dirty_equals/_other.py"
+   ]
+  },
+  "structure_issues": [],
+  "structure_valid": true
+ }
+}

@@ -82,6 +82,31 @@ class TaskFamily:
     )
 
 
+class ContestedMerge:
+    """How the integrated workspace resolves a path both agents may have edited.
+
+    A plain namespace, like `TaskFamily`: it is a property of the task's
+    definition of success, not a switch that code elsewhere should branch on.
+
+    `LAST_WRITER` takes the whole file from the agent that last wrote it, per
+    the signed chain. It is the default and the only behaviour before
+    `THREE_WAY` existed, so a task that never mentions the field hashes and
+    scores exactly as it did. It cannot express two agents editing different
+    parts of one file: one of them is always lost.
+
+    `THREE_WAY` merges the agents' files against the fixture they started from
+    (`tasks/merge3.py`). A region both changed differently is a conflict,
+    recorded on the result, and the run does not succeed. Changing a task's
+    merge strategy changes what "success" means for it, so it changes the
+    task's `content_hash` and should come with a `version` bump.
+    """
+
+    LAST_WRITER = "last_writer"
+    THREE_WAY = "three_way"
+
+    ALL = frozenset({LAST_WRITER, THREE_WAY})
+
+
 def _parse_in_design(value: Any, task_id: str) -> bool:
     """A strict boolean: a string like "false" is truthy and would admit the task."""
     if not isinstance(value, bool):
@@ -163,6 +188,8 @@ class TaskDefinition:
     task is then an explicit edit (flip the flag and bump `version`), which
     changes the task's hash and so is visible in the plan.
     """
+    contested_merge: str = ContestedMerge.LAST_WRITER
+    """See `ContestedMerge`. Serialised only when not the default."""
 
     def __post_init__(self) -> None:
         if not self.task_id or not self.task_id.replace("_", "").replace("-", "").isalnum():
@@ -175,6 +202,11 @@ class TaskDefinition:
             raise TaskError(
                 f"{self.task_id}: unknown family {self.family!r}; "
                 f"expected one of {sorted(TaskFamily.ALL)}"
+            )
+        if self.contested_merge not in ContestedMerge.ALL:
+            raise TaskError(
+                f"{self.task_id}: unknown contested_merge {self.contested_merge!r}; "
+                f"expected one of {sorted(ContestedMerge.ALL)}"
             )
         if len(self.roles) < 2:
             raise TaskError(
@@ -222,6 +254,9 @@ class TaskDefinition:
             # Only when False, so a task that never mentions the flag hashes
             # exactly as it did before the flag existed.
             data["in_design"] = False
+        if self.contested_merge != ContestedMerge.LAST_WRITER:
+            # Only when it is not the default, for the same reason.
+            data["contested_merge"] = self.contested_merge
         return data
 
     def content_hash(self) -> str:
@@ -279,6 +314,7 @@ class TaskDefinition:
             success=success,
             contested_paths=frozenset(data.get("contested_paths", ())),
             in_design=_parse_in_design(data.get("in_design", True), data["task_id"]),
+            contested_merge=data.get("contested_merge", ContestedMerge.LAST_WRITER),
         )
 
     @classmethod

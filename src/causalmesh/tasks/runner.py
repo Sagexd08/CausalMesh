@@ -35,7 +35,8 @@ from ..relay import ChainStore, Relay, policy_for_arm
 from ..relevance import AgentInterests
 from ..tools import Toolbox, ToolExecutor
 from ..tools.api import _INHERITED_ENVIRONMENT
-from .definition import TaskDefinition
+from .definition import ContestedMerge, TaskDefinition
+from .merge3 import merge_three_way
 from .outcome import (
     AcceptanceDecision,
     TaskOutcome,
@@ -44,7 +45,7 @@ from .outcome import (
     workspace_digest,
 )
 
-__all__ = ["RunConfig", "RunResult", "execute_task"]
+__all__ = ["RunConfig", "RunResult", "execute_task", "integration_test_preflight"]
 
 DEFAULT_MAX_TURNS = 20
 DEFAULT_TICK_US = 1_000_000
@@ -133,6 +134,10 @@ class RunResult:
     # the half-finished workspace and says nothing about whether the agents
     # would have succeeded.
     interrupted: bool = False
+    # Contested paths the content-level merge could not resolve; `None` when the
+    # task does not merge (`ContestedMerge.LAST_WRITER`), which is "not measured"
+    # and must not be read as "no conflicts".
+    merge_conflicts: list[str] | None = None
 
     @property
     def succeeded(self) -> bool:
@@ -145,7 +150,7 @@ class RunResult:
         )
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        record = {
             "agent_summaries": self.agent_summaries,
             "arm": self.arm,
             "boundary_summaries": self.boundary_summaries,
@@ -166,6 +171,11 @@ class RunResult:
             "task_id": self.task_id,
             "workspace_digests": self.workspace_digests,
         }
+        # Only when the task merges, so a result that never merged serialises
+        # exactly as it did before the field existed.
+        if self.merge_conflicts is not None:
+            record["merge_conflicts"] = list(self.merge_conflicts)
+        return record
 
 
 def _make_channel(
@@ -381,14 +391,20 @@ async def execute_task(
         error = f"{type(exc).__name__}: {exc}"
         summaries = {agent_id: agent.summary() for agent_id, agent in agents.items()}
 
-    integrated = _integrate_workspaces(
+    integrated, merge_conflicts = _integrate_workspaces(
         task,
         workspaces,
         destination=workspace_root / f"{config.run_id}_integrated",
         records=relay.records(),
+        base_root=Path(fixtures_root) / task.fixture,
     )
     exit_code = _run_integration_test(task, integrated)
-    outcome = evaluate_outcome(task.success, workspace=integrated, test_exit_code=exit_code)
+    outcome = evaluate_outcome(
+        task.success,
+        workspace=integrated,
+        test_exit_code=exit_code,
+        merge_conflicts=merge_conflicts,
+    )
 
     post_run_time_us = config.base_time_us + config.max_turns * config.tick_us
 
@@ -561,6 +577,7 @@ async def execute_task(
             },
             error=error,
             interrupted=interrupted,
+            merge_conflicts=merge_conflicts,
         )
     finally:
         store.close()
@@ -576,8 +593,15 @@ def _integrate_workspaces(
     *,
     destination: Path,
     records: list[dict[str, Any]] | None = None,
-) -> Workspace:
+    base_root: Path | None = None,
+) -> tuple[Workspace, list[str] | None]:
     """Merge the agents' workspaces into the shared codebase they represent.
+
+    Returns the integrated workspace and the contested paths the merge could
+    not resolve: `None` under `ContestedMerge.LAST_WRITER` (nothing was merged,
+    so nothing is known about conflicts), a possibly empty sorted list under
+    `THREE_WAY`. `base_root` is the fixture the agents started from and is
+    required for `THREE_WAY`.
 
     Ownership decides: each file comes from the agent whose role declares
     it, since that is the agent the task made responsible for it and the
@@ -608,7 +632,19 @@ def _integrate_workspaces(
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(workspace.resolve(relative).read_bytes())
 
+    three_way = task.contested_merge == ContestedMerge.THREE_WAY
+    if three_way and base_root is None:
+        raise ValueError(
+            f"{task.task_id}: contested_merge=three_way needs the fixture to merge against"
+        )
+    merge_conflicts: list[str] | None = [] if three_way else None
+
     for relative in sorted(contested):
+        if three_way:
+            assert base_root is not None and merge_conflicts is not None
+            if not _merge_contested(relative, workspaces, base_root, merged):
+                merge_conflicts.append(relative)
+            continue
         writer = _last_writer(relative, records or [])
         candidates = [writer] if writer else sorted(workspaces)
         for agent_id in candidates:
@@ -635,7 +671,67 @@ def _integrate_workspaces(
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(origin.read_bytes())
 
-    return merged
+    return merged, merge_conflicts
+
+
+def _merge_contested(
+    relative: str, workspaces: dict[str, Workspace], base_root: Path, merged: Workspace
+) -> bool:
+    """Three-way merge one contested path into `merged`; False if it conflicted.
+
+    Only agents whose file differs from the fixture's take part, so an agent the
+    C3 gate blocked (its file never changed) cannot win or lose anything. One
+    changed side is taken as it is. A file one agent deleted and another edited
+    is a conflict, and so is a file both added differently (empty base).
+    """
+    base_file = base_root / relative
+    base = base_file.read_bytes() if base_file.is_file() else None
+
+    changed: dict[str, bytes | None] = {}
+    for agent_id in sorted(workspaces):
+        workspace = workspaces[agent_id]
+        origin = workspace.resolve(relative) if workspace.contains(relative) else None
+        content = origin.read_bytes() if origin is not None and origin.is_file() else None
+        if content != base:
+            changed[agent_id] = content
+
+    def write(content: bytes) -> None:
+        target = merged.resolve(relative)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(content)
+
+    if not changed:
+        if base is not None:
+            write(base)
+        return True
+    if len(changed) == 1:
+        (only,) = changed.values()
+        if only is not None:
+            write(only)
+        return True
+
+    contents = list(changed.items())
+    if any(content is None for _, content in contents):
+        # Deleted on one side, changed on the other. Keep a surviving side's file so the
+        # integrated workspace still has something to run, and report the conflict.
+        survivors = [content for _, content in contents if content is not None]
+        if survivors:
+            write(survivors[0])
+        return all(content is None for _, content in contents)
+
+    label, accumulated = contents[0]
+    assert accumulated is not None
+    clean = True
+    for agent_id, content in contents[1:]:
+        assert content is not None
+        result = merge_three_way(
+            base or b"", accumulated, content, ours_label=label, theirs_label=agent_id
+        )
+        accumulated = result.content
+        label = f"{label}+{agent_id}"
+        clean = clean and result.clean
+    write(accumulated)
+    return clean
 
 
 def _last_writer(path: str, records: list[dict[str, Any]]) -> str | None:
@@ -662,6 +758,74 @@ def _last_writer(path: str, records: list[dict[str, Any]]) -> str | None:
     return winner
 
 
+def _harness_environment() -> dict[str, str]:
+    """The scrubbed environment the integration test runs under.
+
+    One definition, used by the test itself and by its preflight, so the
+    preflight asks the question of the interpreter the test will really get.
+    """
+    return {
+        **{name: os.environ[name] for name in _INHERITED_ENVIRONMENT if name in os.environ},
+        "PYTHONHASHSEED": "0",
+        "PYTHONDONTWRITEBYTECODE": "1",
+    }
+
+
+def integration_test_preflight(task: TaskDefinition) -> str | None:
+    """Why this task's integration test cannot run here, or `None` if it can.
+
+    Without this a missing test runner is indistinguishable from a task that
+    does not discriminate between arms. `python -m pytest` with no pytest
+    installed exits 1, the same code as "a test failed", so every arm fails
+    identically and the sec 37 gate reports NOT SENSITIVE for a reason that has
+    nothing to do with the task (it happened to `interface_consumer` and
+    `shared_utility_refactor`). Checked against the harness's own environment,
+    not this process's: the test runs under a scrubbed one, and the `python` on
+    its `PATH` need not be the one running the harness.
+
+    Two things are checked: the command's executable resolves, and, for the
+    `<python> -m <module>` form every shipped task uses, that the module is
+    importable by that interpreter. Any other command shape is not probed and
+    is assumed runnable; the check says what it knows, not more.
+    """
+    import shutil
+    import subprocess
+    import tempfile
+
+    argv = list(task.success.integration_test)
+    if not argv:
+        return None
+    env = _harness_environment()
+    executable = shutil.which(argv[0], path=env.get("PATH"))
+    if executable is None:
+        return f"{argv[0]!r} is not found on the harness's PATH, so the integration test cannot run"
+    if len(argv) < 3 or argv[1] != "-m":
+        return None
+    module = argv[2]
+    probe = (
+        "import importlib.util, sys; sys.exit(0 if importlib.util.find_spec(sys.argv[1]) else 3)"
+    )
+    try:
+        with tempfile.TemporaryDirectory() as scratch:
+            completed = subprocess.run(
+                [executable, "-c", probe, module],
+                cwd=scratch,
+                capture_output=True,
+                text=True,
+                timeout=60,
+                env=env,
+                check=False,
+            )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return f"could not start {executable!r} to check for module {module!r}: {exc}"
+    if completed.returncode == 0:
+        return None
+    return (
+        f"the interpreter the harness will use ({executable}) cannot import {module!r}; "
+        f"the integration test would fail in every arm for that reason alone"
+    )
+
+
 def _run_integration_test(task: TaskDefinition, workspace: Workspace) -> int | None:
     """Run the task's integration test in a workspace.
 
@@ -679,11 +843,7 @@ def _run_integration_test(task: TaskDefinition, workspace: Workspace) -> int | N
             capture_output=True,
             text=True,
             timeout=300,
-            env={
-                **{name: os.environ[name] for name in _INHERITED_ENVIRONMENT if name in os.environ},
-                "PYTHONHASHSEED": "0",
-                "PYTHONDONTWRITEBYTECODE": "1",
-            },
+            env=_harness_environment(),
             check=False,
         )
     except (OSError, subprocess.TimeoutExpired):

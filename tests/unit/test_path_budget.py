@@ -154,7 +154,9 @@ class TestBuildingWorkspaces:
         self, tmp_path: Path, fixture_dir: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr(workspace, "_long_paths_enabled", lambda: False)
-        base = tmp_path / ("p" * 300)
+        # Many short components, not one long one: a single component over NAME_MAX
+        # (255) makes `exists()` itself raise on Linux, which is not what is tested.
+        base = tmp_path.joinpath(*["p" * 20] * 15)
         with pytest.raises(WorkspaceError, match="Windows opens at most"):
             build_run_workspaces(
                 base=base, run_id=RUN_ID, agent_ids=["agent_a", "agent_b"], fixture=fixture_dir

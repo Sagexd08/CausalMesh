@@ -108,6 +108,7 @@ class ToolGateway:
         self._gate = gate
         self._tools: dict[str, Tool] = {}
         self._event_counter = 0
+        self._event_counter_lock = threading.Lock()
         # Emission is the one step that must be serial: the event counter and
         # the relay's chain. Reservation and the handler run concurrently.
         self._emit_lock = threading.Lock()

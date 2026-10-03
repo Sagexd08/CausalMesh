@@ -135,7 +135,13 @@ class TestWithoutAnOperatorRing:
 
         assert UNATTRIBUTED.isascii()
         result = invoke("verify", "--evidence", str(honest))
-        prose = [ln for ln in result.output.splitlines() if not set(ln) & set("─│┌┐└┘┬┴├┤┼")]
+        # Rich picks the box weight (light, heavy, double); drop any line that
+        # carries a character from the whole Box Drawing block, U+2500-U+257F.
+        prose = [
+            ln
+            for ln in result.output.splitlines()
+            if not any("\u2500" <= ch <= "\u257f" for ch in ln)
+        ]
         assert all(ln.isascii() for ln in prose), prose
 
     def test_require_keys_refuses_to_run_without_them(self, honest: Path) -> None:

@@ -12,6 +12,21 @@ inside it is in the commit log, and what is deliberately absent is in
 
 ### Added
 
+- **A content-level merge for contested paths, opt-in** (`contested_merge: three_way` in a
+  task file; `--contested-merge three_way` on `scripts/import_cooperbench.py`). Two agents
+  that edit different parts of one file now both survive; edits to the same or adjacent
+  lines are a conflict, recorded as `RunResult.merge_conflicts` and failing the run. Pure
+  Python (`causalmesh.tasks.merge3`), no new dependency. The default is unchanged
+  (`last_writer`), so no existing task, hash or result changes. Checked against
+  `git merge-file` on all 652 real CooperBench pairs: 98.8% of contested files agree, and
+  the pair-level verdict matches CooperBench's own gold report on 97.5%.
+  `python scripts/cooperbench_real.py merge-check` reproduces it. Replaying the gold
+  patches with it solves 142 of 652 pairs under an offline oracle; nothing about agent
+  behaviour is claimed (see `docs/backlog.md`).
+- **The section 37 gate says when it could not run.** `check_sensitivity` now checks that
+  the task's test command can start in the harness's own environment. A missing test runner
+  used to read as NOT SENSITIVE; it is now `COULD NOT RUN` with the reason, and no arm runs.
+
 - **A local CLI demo** (`examples/cli_demo/`): a contract, a gateway that serves one
   tool, an allowed call, a denied call whose handler never runs, and evidence read back
   and verified against the operator's key ring. No key or model needed;
@@ -139,6 +154,16 @@ inside it is in the commit log, and what is deliberately absent is in
 
 ### Fixed
 
+- **An interrupted collection no longer marks its in-flight run `FAILED`.** Ctrl-C used to
+  record a terminal, never-retried failure; the run now stays resumable and finishes on the
+  next start.
+- **Repaired the `main`-into-`dev` merge** that left the SDK, gateway and `verify` command
+  broken (329 failing tests). `persist_to` and `evidence_path` both work and are mutually
+  exclusive; `verify` prefers `--keys`, then a `keyring.json` beside `run.json`, then the
+  embedded keys.
+- `policy/ledger.py` no longer builds SQL with an f-string, and
+  `docs/preregistration-draft.md` now says four tasks are plannable (1920 runs), which is
+  what the planner produces.
 - `LangChainAdapter` tools raised `MissingResourceError` / `ToolNotFoundError` out of the
   caller's loop on a model's bad call; they now return `Action failed: ...`, as the OpenAI
   adapter already did. This is what lets the tools survive inside a LangGraph `ToolNode`.

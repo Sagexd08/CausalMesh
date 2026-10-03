@@ -397,6 +397,14 @@ class ImportOptions:
     #: it is only meaningful when the fixture is the *whole* base repository
     #: (see `cooperbench_base.checkout_base_repo`), not just the touched files.
     hidden_tests: str = "none"
+    #: How the integrated workspace resolves a path both features edit.
+    #: `"last_writer"` (default) keeps whole-file, winner-take-all integration:
+    #: one of two features that edit the same file is always lost, so 652 of
+    #: 652 real pairs are contested and none can succeed on a contested file.
+    #: `"three_way"` merges the two features' files against the base
+    #: (`tasks/merge3.py`), which is the shape CooperBench itself scores: the
+    #: edits must merge cleanly and pass. It changes the task's content hash.
+    contested_merge: str = "last_writer"
 
 
 @dataclass
@@ -750,6 +758,7 @@ def import_task(
         scenario=scenario,
         success=success,
         contested_paths=contested,
+        contested_merge=options.contested_merge,
     )
 
     setup_sh_path = source / "setup.sh"

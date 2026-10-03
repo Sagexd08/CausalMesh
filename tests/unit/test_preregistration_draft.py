@@ -45,12 +45,13 @@ class TestPreregistrationDraft:
         assert confirmatory.run_count(2) == 960
         assert "1920" in PREREG and "960" in PREREG and "120" in PREREG
 
-    def test_the_task_discrepancy_the_draft_reports_is_still_true(self) -> None:
-        """The draft says only two tasks are plannable (imports are excluded).
-        If a task is added, the draft's run count needs revisiting."""
+    def test_the_plannable_task_count_the_draft_states_is_still_true(self) -> None:
+        """The draft says four tasks are plannable (imports are excluded), which is
+        what makes 1920 true. If a task is added or removed, the draft's run count
+        needs revisiting."""
         tasks = load_tasks(ROOT / "tasks")
         eligible = [t for t in tasks if t.family != TaskFamily.COOPERBENCH_IMPORT]
-        assert len(eligible) == 2, (
+        assert len(eligible) == 4, (
             "the number of plannable tasks changed; update docs/preregistration-draft.md 1.1"
         )
         for task in eligible:
