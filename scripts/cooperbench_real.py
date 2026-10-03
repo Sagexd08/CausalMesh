@@ -3,7 +3,8 @@
     python scripts/cooperbench_real.py import --dataset <CooperBench>/dataset \\
         --cache <scratch dir for upstream fetches> [--out summary.json]
     python scripts/cooperbench_real.py gate --dataset ... --cache ... --work <scratch dir> \\
-        --task pallets_click_task/task2800 [--task ...] [--out gate.json]
+        --task pallets_click_task/task2800 [--task ...] [--merge three_way] [--out gate.json]
+    python scripts/cooperbench_real.py merge-check --dataset ... --cache ... [--out merge.json]
 
 `import` imports every feature pair of every task, fetching each task's base
 files from its pinned upstream commit (network on first use, cached after),
@@ -17,6 +18,12 @@ harness discriminates (every feature's tests fail on the base, pass with
 produced. Nothing is tuned; the pair is fixed in advance, not chosen by
 outcome. Python-only: it needs pytest and each repository's own test
 dependencies importable by the `python` on PATH.
+
+`merge-check` validates `tasks/merge3.py` on every pair: for each contested
+file it merges the two features' patched contents against the base with the
+platform's merge and with `git merge-file`, and compares the pair-level verdict
+(any conflict) with CooperBench's own `gold_conflict_report.json`. It writes
+counts and pair ids only, no repository contents.
 
 The output holds no wall-clock times, hostnames or absolute paths, so it is
 reproducible from the same CooperBench commit.
@@ -128,6 +135,114 @@ def run_import(dataset: Path, cache: Path) -> dict[str, Any]:
     }
 
 
+def _gold_pair_conflicts(dataset: Path) -> set[tuple[str, int, int, int]]:
+    report = dataset / "gold_conflict_report.json"
+    items = json.loads(report.read_text(encoding="utf-8")).get("conflict_pairs", [])
+    return {(i["repo"], int(i["task_id"]), int(i["f1"]), int(i["f2"])) for i in items}
+
+
+def _git_merge_file(base: bytes, ours: bytes, theirs: bytes, scratch: Path) -> tuple[int, bytes]:
+    for name, content in (("ours", ours), ("base", base), ("theirs", theirs)):
+        (scratch / name).write_bytes(content)
+    done = subprocess.run(
+        ["git", "merge-file", "-p", "ours", "base", "theirs"],
+        cwd=scratch,
+        capture_output=True,
+        check=False,
+    )
+    return done.returncode, done.stdout
+
+
+def run_merge_check(dataset: Path, cache: Path) -> dict[str, Any]:
+    """Validate the platform's three-way merge against git and against the dataset."""
+    import tempfile
+
+    from causalmesh.tasks.cooperbench import feature_pairs
+    from causalmesh.tasks.merge3 import merge_three_way
+
+    gold = _gold_pair_conflicts(dataset)
+    provider = git_base_files_provider(cache)
+    pairs = paths = 0
+    path_verdict_agrees = clean_bytes_identical = clean_paths = 0
+    pair_vs_git = {"agree": 0, "disagree": 0}
+    pair_vs_dataset = {"agree": 0, "disagree": 0}
+    confusion = {
+        "both_conflict": 0,
+        "both_clean": 0,
+        "we_conflict_dataset_clean": 0,
+        "we_clean_dataset_conflict": 0,
+    }
+    disagreements: list[dict[str, Any]] = []
+    with tempfile.TemporaryDirectory() as raw:
+        scratch = Path(raw)
+        for repo_dir in sorted(
+            p for p in dataset.iterdir() if p.is_dir() and p.name.endswith("_task")
+        ):
+            for task_dir in sorted(p for p in repo_dir.iterdir() if p.is_dir()):
+                task_number = int(task_dir.name.removeprefix("task"))
+                for first, second in feature_pairs(task_dir):
+                    imported = import_task(
+                        task_dir,
+                        features=(first, second),
+                        base_files=provider(task_dir, (first, second)),
+                        options=ImportOptions(contested_merge="three_way"),
+                    )
+                    pairs += 1
+                    ours_conflict = git_conflict = False
+                    for path in sorted(imported.definition.contested_paths):
+                        base = imported.base_files[path].encode("utf-8")
+                        sides = []
+                        for agent in ("agent_a", "agent_b"):
+                            writes = [
+                                a["write"]["content"]
+                                for a in imported.definition.scenario[agent]["actions"]
+                                if "write" in a and a["write"]["path"] == path
+                            ]
+                            sides.append(writes[-1].encode("utf-8") if writes else base)
+                        mine = merge_three_way(base, sides[0], sides[1])
+                        git_rc, git_out = _git_merge_file(base, sides[0], sides[1], scratch)
+                        paths += 1
+                        path_verdict_agrees += int(mine.clean == (git_rc == 0))
+                        if mine.clean and git_rc == 0:
+                            clean_paths += 1
+                            clean_bytes_identical += int(mine.content == git_out)
+                        ours_conflict |= not mine.clean
+                        git_conflict |= git_rc != 0
+                    dataset_conflict = (repo_dir.name, task_number, first, second) in gold
+                    pair_vs_git["agree" if ours_conflict == git_conflict else "disagree"] += 1
+                    agrees = ours_conflict == dataset_conflict
+                    pair_vs_dataset["agree" if agrees else "disagree"] += 1
+                    confusion[
+                        {
+                            (True, True): "both_conflict",
+                            (False, False): "both_clean",
+                            (True, False): "we_conflict_dataset_clean",
+                            (False, True): "we_clean_dataset_conflict",
+                        }[(ours_conflict, dataset_conflict)]
+                    ] += 1
+                    if not agrees or ours_conflict != git_conflict:
+                        disagreements.append(
+                            {
+                                "pair": f"{repo_dir.name}/{task_dir.name}/f{first}-f{second}",
+                                "platform_merge_conflicts": ours_conflict,
+                                "git_merge_file_conflicts": git_conflict,
+                                "cooperbench_gold_conflicts": dataset_conflict,
+                            }
+                        )
+    return {
+        "cooperbench_commit": _upstream_commit(dataset),
+        "pairs": pairs,
+        "contested_files_merged": paths,
+        "file_level_verdict_agrees_with_git_merge_file": path_verdict_agrees,
+        "files_both_clean": clean_paths,
+        "files_both_clean_with_identical_bytes": clean_bytes_identical,
+        "pair_level_vs_git_merge_file": pair_vs_git,
+        "pair_level_vs_cooperbench_gold_report": pair_vs_dataset,
+        "pair_level_confusion_vs_cooperbench_gold_report": confusion,
+        "disagreements": disagreements,
+    }
+
+
 def _labels(text: str) -> list[str]:
     return re.findall(r"feature\d+: (?:PASS|FAIL)", text)
 
@@ -139,7 +254,9 @@ def _harness(root: Path) -> list[str]:
     return _labels(done.stdout)
 
 
-async def run_gate(dataset: Path, cache: Path, work: Path, tasks: list[str]) -> dict[str, Any]:
+async def run_gate(
+    dataset: Path, cache: Path, work: Path, tasks: list[str], merge: str = "last_writer"
+) -> dict[str, Any]:
     shutil.rmtree(work, ignore_errors=True)
     fixtures = work / "fixtures"
     results: dict[str, Any] = {}
@@ -154,7 +271,7 @@ async def run_gate(dataset: Path, cache: Path, work: Path, tasks: list[str]) -> 
             task_dir,
             features=(1, 2),
             base_files=git_base_files_provider(cache)(task_dir, (1, 2)),
-            options=ImportOptions(task_id=task_id, hidden_tests="pytest"),
+            options=ImportOptions(task_id=task_id, hidden_tests="pytest", contested_merge=merge),
         )
         imported.write_fixture(fixture)
 
@@ -179,17 +296,21 @@ async def run_gate(dataset: Path, cache: Path, work: Path, tasks: list[str]) -> 
         # Diagnostic only, not the verdict: which feature's tests each arm's
         # integrated workspace passes, to show *why* the arms agree.
         integrated_tests: dict[str, list[str]] = {}
+        merge_conflicts: dict[str, list[str] | None] = {}
         for arm in ("C0", "C2"):
             run_id = f"diag_{arm}"
-            await execute_task(
+            diag = await execute_task(
                 imported.definition,
                 RunConfig(experiment_id="diag", run_id=run_id, arm=arm, master_seed=SEED),
                 workspace_root=work / "diag" / task / arm,
                 fixtures_root=fixtures,
             )
+            merge_conflicts[arm] = diag.merge_conflicts
             integrated_tests[arm] = _harness(work / "diag" / task / arm / f"{run_id}_integrated")
         results[name] = {
             "integrated_workspace_tests_by_arm": integrated_tests,
+            "merge_conflicts_by_arm": merge_conflicts,
+            "contested_merge": merge,
             "base_commit": spec.base_commit,
             "features": [1, 2],
             "contested_paths": sorted(imported.definition.contested_paths),
@@ -207,7 +328,7 @@ async def run_gate(dataset: Path, cache: Path, work: Path, tasks: list[str]) -> 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("import", "gate"):
+    for name in ("import", "gate", "merge-check"):
         command = sub.add_parser(name)
         command.add_argument("--dataset", type=Path, required=True)
         command.add_argument("--cache", type=Path, required=True)
@@ -215,12 +336,17 @@ def main() -> None:
         if name == "gate":
             command.add_argument("--work", type=Path, required=True)
             command.add_argument("--task", action="append", required=True)
+            command.add_argument(
+                "--merge", choices=("last_writer", "three_way"), default="last_writer"
+            )
     args = parser.parse_args()
 
     if args.command == "import":
         payload = run_import(args.dataset, args.cache)
+    elif args.command == "merge-check":
+        payload = run_merge_check(args.dataset, args.cache)
     else:
-        payload = asyncio.run(run_gate(args.dataset, args.cache, args.work, args.task))
+        payload = asyncio.run(run_gate(args.dataset, args.cache, args.work, args.task, args.merge))
     text = json.dumps(payload, indent=1, sort_keys=True) + "\n"
     if args.out:
         args.out.parent.mkdir(parents=True, exist_ok=True)

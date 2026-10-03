@@ -51,6 +51,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--force", action="store_true", help="redo pairs that already have a terminal result"
     )
     parser.add_argument("--keep-workspaces", action="store_true")
+    parser.add_argument(
+        "--contested-merge",
+        choices=("last_writer", "three_way"),
+        default="last_writer",
+        help="how a path both features edit is integrated (default keeps winner-take-all)",
+    )
     parser.add_argument("--list", action="store_true", help="print the selected pairs and exit")
     return parser
 
@@ -67,6 +73,7 @@ def main(argv: list[str] | None = None) -> int:
         force=args.force,
         keep_workspaces=args.keep_workspaces,
         jobs=max(1, args.jobs),
+        contested_merge=args.contested_merge,
     )
     try:
         pairs = discover_pairs(options)

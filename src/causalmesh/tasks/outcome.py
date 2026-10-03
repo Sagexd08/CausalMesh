@@ -18,6 +18,7 @@ and the one an "either" rule would hide.
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
@@ -71,8 +72,16 @@ def evaluate_outcome(
     *,
     workspace: Workspace,
     test_exit_code: int | None,
+    merge_conflicts: Sequence[str] | None = None,
 ) -> TaskOutcome:
     """Decide a run's outcome from its workspace and its test exit code.
+
+    `merge_conflicts` is the contested paths a content-level merge could not
+    resolve, or `None` when the task does not merge (the default), which is
+    not the same as an empty list. A conflict is a failure whatever the tests
+    say: CooperBench's own criterion is that the two changes merge cleanly *and*
+    pass, and a test that happens not to import the conflicted file must not
+    turn an unmerged result into a pass.
 
     The exit code is supplied rather than obtained here: running the tests
     is a tool call that must pass through the lifecycle boundary and be
@@ -110,10 +119,21 @@ def evaluate_outcome(
     else:
         evidence.append("no_divergence_check_configured")
 
-    succeeded = tests_passed and divergence_absent
+    if merge_conflicts is None:
+        merged_cleanly = True
+    else:
+        merged_cleanly = not merge_conflicts
+        if merge_conflicts:
+            evidence.extend(f"contested_merge_conflict={path}" for path in merge_conflicts)
+        else:
+            evidence.append("contested_merge_clean")
+
+    succeeded = tests_passed and divergence_absent and merged_cleanly
 
     if succeeded:
         detail = "integration tests passed and no induced divergence remains"
+    elif not merged_cleanly:
+        detail = f"the agents' edits to {', '.join(merge_conflicts or ())} did not merge cleanly"
     elif not tests_passed and not divergence_absent:
         detail = "integration tests failed and induced divergence remains"
     elif not tests_passed:

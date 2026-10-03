@@ -413,3 +413,54 @@ class TestIsolation:
                 resolver=resolver,
             )
         assert resolver.calls == []
+
+
+class TestThreeWayMerge:
+    """`contested_merge="three_way"`: the platform's merge stops being winner-take-all."""
+
+    @pytest.fixture(scope="class")
+    def three_way(self, dataset: Path, trees, tmp_path_factory) -> dict:
+        out = tmp_path_factory.mktemp("cb_batch_out_three_way")
+        return run_batch(
+            BatchOptions(dataset_dir=dataset, output_dir=out, contested_merge="three_way"),
+            resolver=FakeResolver(trees),
+        )
+
+    def test_edits_to_different_parts_of_one_file_are_solved_in_both_arms(
+        self, three_way: dict
+    ) -> None:
+        record = _by_pair(three_way)["alpha_task/task1/f1-f2"]
+        assert record["sensitivity"]["isolated_successes"] == 1
+        assert record["sensitivity"]["informed_successes"] == 1
+
+    def test_the_same_pair_is_lost_under_the_default(self, first_run) -> None:
+        """The control: the identical dataset, one option away, is not solved."""
+        _, document, _ = first_run
+        record = _by_pair(document)["alpha_task/task1/f1-f2"]
+        assert record["sensitivity"]["isolated_successes"] == 0
+
+    def test_insertions_at_the_same_place_still_fail(self, three_way: dict) -> None:
+        """tinyrepo's features add a key at the same spot: a real conflict."""
+        record = _by_pair(three_way)["tinyrepo/task1/f1-f2"]
+        assert record["sensitivity"]["isolated_successes"] == 0
+
+    def test_the_arms_still_never_differ(self, three_way: dict) -> None:
+        """Replay agents do not read the channel, so no merge can make the gate sensitive."""
+        assert three_way["summary"]["sensitive"] == 0
+        assert all(
+            record["sensitivity"]["isolated_successes"]
+            == record["sensitivity"]["informed_successes"]
+            for record in three_way["pairs"]
+            if "sensitivity" in record
+        )
+
+    def test_the_summary_counts_the_pairs_the_platform_solved(self, three_way: dict) -> None:
+        assert three_way["summary"]["gated_with_isolated_success"] >= 1
+
+    def test_the_document_says_which_merge_produced_it(self, three_way: dict, first_run) -> None:
+        assert three_way["options"]["contested_merge"] == "three_way"
+        assert "three-way" in three_way["envelope"]["note"]
+        assert "winner-take-all" not in three_way["envelope"]["note"]
+        _, default_document, _ = first_run
+        assert "contested_merge" not in default_document["options"], "a default run keeps its shape"
+        assert "winner-take-all" in default_document["envelope"]["note"]
