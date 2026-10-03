@@ -89,7 +89,10 @@ def test_the_package_reads_no_data_file_a_wheel_would_omit() -> None:
     `importlib.resources`), it has to be added to `package-data` first, and this
     is where that gets noticed instead of on someone's machine.
     """
-    allowed = {"cli/commands_doctor.py"}  # reads the package directory listing only
+    allowed = {
+        "cli/commands_doctor.py",  # reads the package directory listing only
+        "tasks/scaled.py",  # `__file__` is inside the test source it emits, not read by the package
+    }
     reading = re.compile(r"importlib\.resources|importlib_resources|pkg_resources|__file__")
     offenders = [
         rel

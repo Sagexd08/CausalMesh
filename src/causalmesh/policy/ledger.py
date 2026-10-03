@@ -140,6 +140,16 @@ class ReserveOutcome:
         return self.reservation is not None
 
 
+_SUM_QUERIES = {
+    "consumption": (
+        "SELECT amount FROM consumption WHERE run_id = ? AND agent_id = ? AND budget_key = ?"
+    ),
+    "reservation": (
+        "SELECT amount FROM reservation WHERE run_id = ? AND agent_id = ? AND budget_key = ?"
+    ),
+}
+
+
 class Ledger:
     """Consumption for one run, shared across every process in it."""
 
@@ -326,10 +336,10 @@ class Ledger:
 
     def _sum(self, connection: sqlite3.Connection, table: str, agent_id: str, key: str) -> Decimal:
         # Decimal summed in Python: SQL SUM would coerce the string column to a float.
-        rows = connection.execute(
-            f"SELECT amount FROM {table} WHERE run_id = ? AND agent_id = ? AND budget_key = ?",  # noqa: S608 - table is one of two constants
-            (self.run_id, agent_id, key),
-        ).fetchall()
+        # Two whole literal queries, not one with the table spliced in: an unknown
+        # table name is a KeyError here instead of text reaching the database.
+        query = _SUM_QUERIES[table]
+        rows = connection.execute(query, (self.run_id, agent_id, key)).fetchall()
         return sum((Decimal(row["amount"]) for row in rows), Decimal(0))
 
     @staticmethod
