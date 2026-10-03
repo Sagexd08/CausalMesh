@@ -1,0 +1,120 @@
+{
+ "contested_files_merged": 804,
+ "cooperbench_commit": "63b9d44d9f39a02fccf5bf0052db48a917a011fd",
+ "disagreements": [
+  {
+   "cooperbench_gold_conflicts": false,
+   "git_merge_file_conflicts": false,
+   "pair": "dspy_task/task8563/f1-f4",
+   "platform_merge_conflicts": true
+  },
+  {
+   "cooperbench_gold_conflicts": false,
+   "git_merge_file_conflicts": false,
+   "pair": "dspy_task/task8563/f1-f5",
+   "platform_merge_conflicts": true
+  },
+  {
+   "cooperbench_gold_conflicts": true,
+   "git_merge_file_conflicts": true,
+   "pair": "dspy_task/task8563/f2-f5",
+   "platform_merge_conflicts": false
+  },
+  {
+   "cooperbench_gold_conflicts": false,
+   "git_merge_file_conflicts": false,
+   "pair": "dspy_task/task8587/f1-f4",
+   "platform_merge_conflicts": true
+  },
+  {
+   "cooperbench_gold_conflicts": false,
+   "git_merge_file_conflicts": false,
+   "pair": "go_chi_task/task56/f2-f4",
+   "platform_merge_conflicts": true
+  },
+  {
+   "cooperbench_gold_conflicts": true,
+   "git_merge_file_conflicts": true,
+   "pair": "llama_index_task/task17070/f1-f2",
+   "platform_merge_conflicts": false
+  },
+  {
+   "cooperbench_gold_conflicts": true,
+   "git_merge_file_conflicts": true,
+   "pair": "llama_index_task/task17070/f2-f3",
+   "platform_merge_conflicts": false
+  },
+  {
+   "cooperbench_gold_conflicts": false,
+   "git_merge_file_conflicts": false,
+   "pair": "llama_index_task/task18813/f2-f3",
+   "platform_merge_conflicts": true
+  },
+  {
+   "cooperbench_gold_conflicts": true,
+   "git_merge_file_conflicts": true,
+   "pair": "pallets_click_task/task2956/f4-f6",
+   "platform_merge_conflicts": false
+  },
+  {
+   "cooperbench_gold_conflicts": true,
+   "git_merge_file_conflicts": true,
+   "pair": "pallets_jinja_task/task1559/f3-f10",
+   "platform_merge_conflicts": false
+  },
+  {
+   "cooperbench_gold_conflicts": false,
+   "git_merge_file_conflicts": true,
+   "pair": "react_hook_form_task/task85/f2-f3",
+   "platform_merge_conflicts": true
+  },
+  {
+   "cooperbench_gold_conflicts": false,
+   "git_merge_file_conflicts": true,
+   "pair": "react_hook_form_task/task85/f2-f4",
+   "platform_merge_conflicts": true
+  },
+  {
+   "cooperbench_gold_conflicts": false,
+   "git_merge_file_conflicts": true,
+   "pair": "react_hook_form_task/task85/f2-f5",
+   "platform_merge_conflicts": true
+  },
+  {
+   "cooperbench_gold_conflicts": false,
+   "git_merge_file_conflicts": true,
+   "pair": "react_hook_form_task/task85/f3-f4",
+   "platform_merge_conflicts": true
+  },
+  {
+   "cooperbench_gold_conflicts": false,
+   "git_merge_file_conflicts": true,
+   "pair": "react_hook_form_task/task85/f3-f5",
+   "platform_merge_conflicts": true
+  },
+  {
+   "cooperbench_gold_conflicts": false,
+   "git_merge_file_conflicts": true,
+   "pair": "react_hook_form_task/task85/f4-f5",
+   "platform_merge_conflicts": true
+  }
+ ],
+ "file_level_verdict_agrees_with_git_merge_file": 794,
+ "files_both_clean": 174,
+ "files_both_clean_with_identical_bytes": 173,
+ "pair_level_confusion_vs_cooperbench_gold_report": {
+  "both_clean": 142,
+  "both_conflict": 494,
+  "we_clean_dataset_conflict": 5,
+  "we_conflict_dataset_clean": 11
+ },
+ "pair_level_vs_cooperbench_gold_report": {
+  "agree": 636,
+  "disagree": 16
+ },
+ "pair_level_vs_git_merge_file": {
+  "agree": 642,
+  "disagree": 10
+ },
+ "pairs": 652
+}

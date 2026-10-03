@@ -15,10 +15,10 @@ a deliberate scope decision, not a forgotten to-do.
 | Statistics layer | Every inferential claim |
 | Reporting | Generated figures, tables and the written report |
 | `causalmesh report` | Generated figures and tables; the rest of the CLI is built |
-| CooperBench gate on more than 3 pairs | The loader imports all 30 tasks and 652 real pairs with no failures; the real §37 gate ran on 3 pairs only (see `docs/backlog.md`) |
+| CooperBench with real agents | The loader imports all 30 tasks and 652 real pairs with no failures, and a scripted replay with a content-level merge solves 142 of them under an offline oracle. The real pytest harness ran on 3 pairs only, and nothing here is agent behaviour (see `docs/backlog.md`) |
 | Scaling beyond 4 agents (beyond N = 16, other topologies, real interest maps) | Partly built: delivery is selectable and `causalmesh experiment scalability` measures N = 4, 8 and 16 on scripted mock agents; it is not part of `experiment run` |
 | A run against a real hosted model through any framework adapter | Adapters for OpenAI, Anthropic `tool_use`, LangChain, LangGraph and CrewAI exist and are tested with scripted payloads and fakes; CrewAI has never run against the real package |
-| A content-level merge for contested paths | The real CooperBench import works (652 pairs) but the real §37 gate on 3 pairs is NOT SENSITIVE, because a contested path resolves to one last writer |
+| A content-level merge as the default for contested paths | Built and opt-in (`contested_merge: three_way`), checked against `git merge-file` on all 652 pairs. The default is still one last writer, so every earlier result keeps its meaning |
 | Approved checkpoints on the signed chain, per-agent signing keys, a keyring supplied from outside the run | A person's yes leaves no chain record; the server holds every agent's key; `verify` trusts a `keyring.json` beside the run it checks |
 
 ## Built but not executed

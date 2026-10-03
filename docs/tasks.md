@@ -77,6 +77,55 @@ fail, because enforcement correctly refused agent_b's write to a file
 agent_a owned, leaving agent_b's local view inconsistent. The claim
 semantics were right; the judging was wrong.
 
+## Contested paths: last writer, or a three-way merge
+
+A path both agents may edit is `contested`. `contested_merge` in the task file says how
+the integrated workspace resolves it.
+
+- `last_writer` (the default, and the only behaviour before this field existed): the
+  whole file comes from the agent that wrote it last, per the signed chain. One of two
+  agents editing one file is always lost, whatever either was told. A task that never
+  mentions the field hashes and scores exactly as before.
+- `three_way`: the two agents' files are merged against the fixture they started from
+  (`causalmesh.tasks.merge3`, pure Python, no dependency). Edits to different parts of a
+  file both survive. Edits to the same lines, or to adjacent lines, are a conflict, the
+  rule git uses. A conflict is recorded on the result (`merge_conflicts`), the conflicted
+  file carries git-style markers, and **the run does not succeed however its tests
+  score**: CooperBench's own criterion is that the changes merge cleanly *and* pass.
+
+`RunResult.merge_conflicts` is `None` for `last_writer` (nothing was merged, so nothing
+is known) and a possibly empty list for `three_way`. Those are different statements.
+Changing a task's strategy changes what success means for it, so it changes the task's
+`content_hash` and should come with a `version` bump.
+
+The merge is line based. It cannot see that two edits to different lines are
+semantically incompatible, and on the real CooperBench pairs that does happen: click
+`task2800` merges cleanly and then fails feature 2's tests, because one feature closes
+a context on exit and the other fires a callback on close. That is the kind of failure a
+coordination benchmark exists to expose, and it is what the integration test is for.
+
+## Running the real CooperBench dataset
+
+```bash
+git clone --depth 1 https://github.com/cooperbench/CooperBench
+python scripts/import_cooperbench.py --dataset-root CooperBench --cache-dir <dir> \
+    --output-dir <dir> --contested-merge three_way --jobs 4
+```
+
+Imports every feature pair (652), stages each as its own task, fetches only the base
+files its patches touch, and runs the section 37 gate with an **offline** success oracle
+(the merged files must hold both features' line changes; no code from the target
+repository is executed). It needs the network once for the base files and takes about
+a minute and a half with four jobs. `scripts/cooperbench_real.py` is the stricter, slower
+path: a full checkout and the generated pytest harness, for the few pairs whose
+repository can run here (`gate`), plus `merge-check`, which validates the merge against
+`git merge-file` and CooperBench's own gold conflict report on all 652 pairs.
+
+Every run is a scripted mock agent replaying gold patches. The arms cannot differ, so the
+gate says NOT SENSITIVE for every pair whatever the merge; read
+`summary.gated_with_isolated_success` (how many pairs the platform solves) and not the
+verdict. Results: `docs/backlog.md`, "CooperBench import".
+
 ## The two dependency tasks added later
 
 `interface_consumer` (`quote(item)` becomes `quote(item, region)` with no
@@ -92,10 +141,14 @@ confirm the construction is wired correctly, they are not an estimate of how oft
 real agents would break such an interface. See `docs/backlog.md` ("Remaining task
 families").
 
-**A hazard the gate shares:** the integration test runs `python -m pytest` with the
-`python` on `PATH`. If that interpreter has no pytest, the test fails in every arm
-and the gate reports NOT SENSITIVE, which looks like "the arms do not differ". Read
-`tests_passed` and `divergence_absent` separately before believing a NOT SENSITIVE.
+**A hazard the gate used to share, now closed:** the integration test runs
+`python -m pytest` with the `python` on `PATH`, and if that interpreter has no pytest
+the test fails in every arm, which used to read as "the arms do not differ".
+`check_sensitivity` now runs `integration_test_preflight` first, against the harness's
+own scrubbed environment. If the executable or the `-m` module is not there it runs
+no arm and reports `COULD NOT RUN` with the reason (`SensitivityReport.could_not_run`),
+not a verdict. Only the `<python> -m <module>` form is probed; any other command shape
+is assumed runnable, so a task that uses one still needs its runner checked by hand.
 
 ## Generated tasks for N agents
 
