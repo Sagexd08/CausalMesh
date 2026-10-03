@@ -40,24 +40,25 @@ check.
 | Runs implied | `tasks x 4 x 120` | `Profile.run_count(task_count)` |
 | The "1920" figure | `run_count(4) == 1920` | `tests/unit/test_experiments.py::test_the_confirmatory_profile_is_the_1920_run_design` |
 
-**Discrepancy the owner must resolve (see TODO-TASKS).** 1920 assumes four
-tasks. The repository at this commit does not contain four plannable tasks:
+**The 1920 figure matches the repository (checked 2026-10-03).** 1920 assumes
+four plannable tasks, and `tasks/` now has them. `causalmesh experiment plan
+--profile confirmatory --allow-gated` plans `4 x 4 x 120 = 1920` runs, balanced.
+Before `interface_consumer` and `shared_utility_refactor` were authored only two
+tasks were plannable and the same command planned `2 x 4 x 120 = 960`
+(`run_count(2) == 960`, `run_count(3) == 1440`), so any earlier reading of this
+draft that says 960 is describing that state.
 
-- `tasks/` holds three definitions: `schema_handler_widen` (family
-  `schema_handler`), `concurrent_edit_collision` (family
-  `concurrent_edit_collision`) and `cb_tinyrepo_task1` (family
-  `cooperbench_import`).
+- `tasks/` holds five definitions. Four are authored, one per sec 35 family:
+  `schema_handler_widen` (`schema_handler`), `concurrent_edit_collision`
+  (`concurrent_edit_collision`), `interface_consumer` and
+  `shared_utility_refactor`. The fifth, `cb_tinyrepo_task1` (family
+  `cooperbench_import`), is not planned.
 - `_build_plan` in `cli/commands_experiment.py` deliberately drops every
   `COOPERBENCH_IMPORT` task, because an imported task's coordination shape is
   discovered and must pass its own sec 37 gate before joining a preregistered
   design (`docs/backlog.md`, "CooperBench import").
-- So today `experiment plan --profile confirmatory --allow-gated` would plan
-  `2 x 4 x 120 = 960` runs, not 1920. (`run_count(2) == 960`,
-  `run_count(3) == 1440`, `run_count(4) == 1920`; computed from
-  `Profile.run_count`, not by planning.)
 
-The two eligible tasks differ in what enforcement can do, and the task files
-say so:
+The four tasks differ in what enforcement can do, and the task files say so:
 
 - `schema_handler_widen`: ownership is disjoint, so C3 has nothing to block
   (`docs/PLAN.md`, Step 11).
@@ -65,6 +66,8 @@ say so:
   refusal is expected to prevent the clobber and also block legitimate work.
   The header comment of `tasks/concurrent_edit_collision.yaml` calls that "a
   finding, not a defect".
+- `interface_consumer` and `shared_utility_refactor`: see `docs/tasks.md` and
+  the gate verdicts recorded in `docs/backlog.md`, "Remaining task families".
 
 ### 1.2 Arms and factors
 
@@ -268,12 +271,12 @@ equivalence.
 
 ### TODO-TASKS
 
-`TODO(owner):` The exact task set. The 1920-run figure needs four tasks; two
-are plannable today (1.1). Decide which tasks make up the design, and whether an
-imported CooperBench task may join once it passes its own sec 37 gate
+`TODO(owner):` Confirm the task set. The four authored tasks (1.1) make the
+1920-run figure true as it stands. Decide whether those four are the design, and
+whether an imported CooperBench task may join once it passes its own sec 37 gate
 (`tasks/validation.py`, the coordination-sensitivity gate, run under C0 and C2).
-If the set stays at two or three tasks, the run count and the "1920" name change
-and the preregistration must say so.
+If the set changes size, the run count and the "1920" name change and the
+preregistration must say so.
 
 ### TODO-REPS-AND-POWER
 
