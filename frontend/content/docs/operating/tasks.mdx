@@ -38,6 +38,22 @@ a C0-versus-C3 difference could come from either factor.
 Structural validation is cheap and runs on every task. The quality gate is
 expensive, deliberately.
 
+A gate that cannot run says so. `check_sensitivity()` first checks, in the harness's
+own scrubbed environment, that the task's test command can start (the executable
+resolves, and for `python -m <module>` that the module imports). If not it runs no arm
+and reports `COULD NOT RUN` with the reason instead of a NOT SENSITIVE it did not earn.
+
+## Contested paths: last writer or three-way merge
+
+`contested_merge` says how the integrated workspace resolves a path both agents may
+edit. `last_writer` (the default) takes the whole file from whoever wrote it last, so one
+of two agents editing one file is always lost. `three_way` merges both agents' files
+against the fixture, and a region both changed differently is a conflict that fails the
+run whatever its tests say (`RunResult.merge_conflicts`; `None` means nothing was merged,
+which is not the same as no conflicts). The merge is line based, so it cannot see two
+edits to different lines that are semantically incompatible. The integration test is
+for that.
+
 ## The tasks that exist
 
 Four authored tasks, one per family, plus a synthetic CooperBench import. Every verdict

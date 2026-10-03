@@ -1,0 +1,2627 @@
+{
+ "against_cooperbench_gold_conflict_report": {
+  "solved_and_cooperbench_git_merge_clean": 137,
+  "solved_and_cooperbench_git_merge_conflicts": 5,
+  "unsolved_and_cooperbench_git_merge_clean": 16,
+  "unsolved_and_cooperbench_git_merge_conflicts": 494
+ },
+ "cooperbench_commit": "63b9d44d9f39a02fccf5bf0052db48a917a011fd",
+ "explained_gap": "5 pairs merge cleanly but fail the line-multiset oracle: both features make an identical edit, which a merge keeps once and the oracle expects twice (click task2800 f2-f6, f3-f6, f4-f6, f6-f7; jinja task1559 f9-f10).",
+ "failed_or_skipped": 0,
+ "gate_sensitive": 0,
+ "pairs": 652,
+ "pairs_solved_in_C0": 142,
+ "pairs_solved_in_C2": 142,
+ "pairs_where_C0_and_C2_differ": 0,
+ "per_pair_C0_C2_successes": {
+  "dottxt_ai_outlines_task/task1371/f1-f2": [
+   0,
+   0
+  ],
+  "dottxt_ai_outlines_task/task1371/f1-f3": [
+   0,
+   0
+  ],
+  "dottxt_ai_outlines_task/task1371/f1-f4": [
+   0,
+   0
+  ],
+  "dottxt_ai_outlines_task/task1371/f2-f3": [
+   0,
+   0
+  ],
+  "dottxt_ai_outlines_task/task1371/f2-f4": [
+   0,
+   0
+  ],
+  "dottxt_ai_outlines_task/task1371/f3-f4": [
+   0,
+   0
+  ],
+  "dottxt_ai_outlines_task/task1655/f1-f10": [
+   1,
+   1
+  ],
+  "dottxt_ai_outlines_task/task1655/f1-f2": [
+   1,
+   1
+  ],
+  "dottxt_ai_outlines_task/task1655/f1-f3": [
+   1,
+   1
+  ],
+  "dottxt_ai_outlines_task/task1655/f1-f4": [
+   1,
+   1
+  ],
+  "dottxt_ai_outlines_task/task1655/f1-f5": [
+   1,
+   1
+  ],
+  "dottxt_ai_outlines_task/task1655/f1-f6": [
+   1,
+   1
+  ],
+  "dottxt_ai_outlines_task/task1655/f1-f7": [
+   1,
+   1
+  ],
+  "dottxt_ai_outlines_task/task1655/f1-f8": [
+   1,
+   1
+  ],
+  "dottxt_ai_outlines_task/task1655/f1-f9": [
+   1,
+   1
+  ],
+  "dottxt_ai_outlines_task/task1655/f2-f10": [
+   0,
+   0
+  ],
+  "dottxt_ai_outlines_task/task1655/f2-f3": [
+   1,
+   1
+  ],
+  "dottxt_ai_outlines_task/task1655/f2-f4": [
+   0,
+   0
+  ],
+  "dottxt_ai_outlines_task/task1655/f2-f5": [
+   0,
+   0
+  ],
+  "dottxt_ai_outlines_task/task1655/f2-f6": [
+   0,
+   0
+  ],
+  "dottxt_ai_outlines_task/task1655/f2-f7": [
+   0,
+   0
+  ],
+  "dottxt_ai_outlines_task/task1655/f2-f8": [
+   0,
+   0
+  ],
+  "dottxt_ai_outlines_task/task1655/f2-f9": [
+   0,
+   0
+  ],
+  "dottxt_ai_outlines_task/task1655/f3-f10": [
+   1,
+   1
+  ],
+  "dottxt_ai_outlines_task/task1655/f3-f4": [
+   1,
+   1
+  ],
+  "dottxt_ai_outlines_task/task1655/f3-f5": [
+   1,
+   1
+  ],
+  "dottxt_ai_outlines_task/task1655/f3-f6": [
+   1,
+   1
+  ],
+  "dottxt_ai_outlines_task/task1655/f3-f7": [
+   1,
+   1
+  ],
+  "dottxt_ai_outlines_task/task1655/f3-f8": [
+   1,
+   1
+  ],
+  "dottxt_ai_outlines_task/task1655/f3-f9": [
+   1,
+   1
+  ],
+  "dottxt_ai_outlines_task/task1655/f4-f10": [
+   0,
+   0
+  ],
+  "dottxt_ai_outlines_task/task1655/f4-f5": [
+   0,
+   0
+  ],
+  "dottxt_ai_outlines_task/task1655/f4-f6": [
+   0,
+   0
+  ],
+  "dottxt_ai_outlines_task/task1655/f4-f7": [
+   0,
+   0
+  ],
+  "dottxt_ai_outlines_task/task1655/f4-f8": [
+   0,
+   0
+  ],
+  "dottxt_ai_outlines_task/task1655/f4-f9": [
+   0,
+   0
+  ],
+  "dottxt_ai_outlines_task/task1655/f5-f10": [
+   0,
+   0
+  ],
+  "dottxt_ai_outlines_task/task1655/f5-f6": [
+   0,
+   0
+  ],
+  "dottxt_ai_outlines_task/task1655/f5-f7": [
+   0,
+   0
+  ],
+  "dottxt_ai_outlines_task/task1655/f5-f8": [
+   0,
+   0
+  ],
+  "dottxt_ai_outlines_task/task1655/f5-f9": [
+   0,
+   0
+  ],
+  "dottxt_ai_outlines_task/task1655/f6-f10": [
+   0,
+   0
+  ],
+  "dottxt_ai_outlines_task/task1655/f6-f7": [
+   0,
+   0
+  ],
+  "dottxt_ai_outlines_task/task1655/f6-f8": [
+   0,
+   0
+  ],
+  "dottxt_ai_outlines_task/task1655/f6-f9": [
+   0,
+   0
+  ],
+  "dottxt_ai_outlines_task/task1655/f7-f10": [
+   0,
+   0
+  ],
+  "dottxt_ai_outlines_task/task1655/f7-f8": [
+   0,
+   0
+  ],
+  "dottxt_ai_outlines_task/task1655/f7-f9": [
+   0,
+   0
+  ],
+  "dottxt_ai_outlines_task/task1655/f8-f10": [
+   0,
+   0
+  ],
+  "dottxt_ai_outlines_task/task1655/f8-f9": [
+   0,
+   0
+  ],
+  "dottxt_ai_outlines_task/task1655/f9-f10": [
+   0,
+   0
+  ],
+  "dottxt_ai_outlines_task/task1706/f1-f2": [
+   0,
+   0
+  ],
+  "dottxt_ai_outlines_task/task1706/f1-f3": [
+   0,
+   0
+  ],
+  "dottxt_ai_outlines_task/task1706/f1-f4": [
+   0,
+   0
+  ],
+  "dottxt_ai_outlines_task/task1706/f1-f5": [
+   0,
+   0
+  ],
+  "dottxt_ai_outlines_task/task1706/f1-f6": [
+   1,
+   1
+  ],
+  "dottxt_ai_outlines_task/task1706/f1-f7": [
+   0,
+   0
+  ],
+  "dottxt_ai_outlines_task/task1706/f1-f8": [
+   0,
+   0
+  ],
+  "dottxt_ai_outlines_task/task1706/f2-f3": [
+   0,
+   0
+  ],
+  "dottxt_ai_outlines_task/task1706/f2-f4": [
+   0,
+   0
+  ],
+  "dottxt_ai_outlines_task/task1706/f2-f5": [
+   0,
+   0
+  ],
+  "dottxt_ai_outlines_task/task1706/f2-f6": [
+   0,
+   0
+  ],
+  "dottxt_ai_outlines_task/task1706/f2-f7": [
+   0,
+   0
+  ],
+  "dottxt_ai_outlines_task/task1706/f2-f8": [
+   0,
+   0
+  ],
+  "dottxt_ai_outlines_task/task1706/f3-f4": [
+   0,
+   0
+  ],
+  "dottxt_ai_outlines_task/task1706/f3-f5": [
+   0,
+   0
+  ],
+  "dottxt_ai_outlines_task/task1706/f3-f6": [
+   0,
+   0
+  ],
+  "dottxt_ai_outlines_task/task1706/f3-f7": [
+   0,
+   0
+  ],
+  "dottxt_ai_outlines_task/task1706/f3-f8": [
+   0,
+   0
+  ],
+  "dottxt_ai_outlines_task/task1706/f4-f5": [
+   0,
+   0
+  ],
+  "dottxt_ai_outlines_task/task1706/f4-f6": [
+   0,
+   0
+  ],
+  "dottxt_ai_outlines_task/task1706/f4-f7": [
+   0,
+   0
+  ],
+  "dottxt_ai_outlines_task/task1706/f4-f8": [
+   0,
+   0
+  ],
+  "dottxt_ai_outlines_task/task1706/f5-f6": [
+   0,
+   0
+  ],
+  "dottxt_ai_outlines_task/task1706/f5-f7": [
+   0,
+   0
+  ],
+  "dottxt_ai_outlines_task/task1706/f5-f8": [
+   0,
+   0
+  ],
+  "dottxt_ai_outlines_task/task1706/f6-f7": [
+   0,
+   0
+  ],
+  "dottxt_ai_outlines_task/task1706/f6-f8": [
+   0,
+   0
+  ],
+  "dottxt_ai_outlines_task/task1706/f7-f8": [
+   0,
+   0
+  ],
+  "dspy_task/task8394/f1-f2": [
+   0,
+   0
+  ],
+  "dspy_task/task8394/f1-f3": [
+   1,
+   1
+  ],
+  "dspy_task/task8394/f1-f4": [
+   0,
+   0
+  ],
+  "dspy_task/task8394/f1-f5": [
+   0,
+   0
+  ],
+  "dspy_task/task8394/f2-f3": [
+   0,
+   0
+  ],
+  "dspy_task/task8394/f2-f4": [
+   0,
+   0
+  ],
+  "dspy_task/task8394/f2-f5": [
+   0,
+   0
+  ],
+  "dspy_task/task8394/f3-f4": [
+   0,
+   0
+  ],
+  "dspy_task/task8394/f3-f5": [
+   0,
+   0
+  ],
+  "dspy_task/task8394/f4-f5": [
+   0,
+   0
+  ],
+  "dspy_task/task8563/f1-f2": [
+   1,
+   1
+  ],
+  "dspy_task/task8563/f1-f3": [
+   1,
+   1
+  ],
+  "dspy_task/task8563/f1-f4": [
+   0,
+   0
+  ],
+  "dspy_task/task8563/f1-f5": [
+   0,
+   0
+  ],
+  "dspy_task/task8563/f1-f6": [
+   1,
+   1
+  ],
+  "dspy_task/task8563/f2-f3": [
+   1,
+   1
+  ],
+  "dspy_task/task8563/f2-f4": [
+   0,
+   0
+  ],
+  "dspy_task/task8563/f2-f5": [
+   1,
+   1
+  ],
+  "dspy_task/task8563/f2-f6": [
+   1,
+   1
+  ],
+  "dspy_task/task8563/f3-f4": [
+   0,
+   0
+  ],
+  "dspy_task/task8563/f3-f5": [
+   1,
+   1
+  ],
+  "dspy_task/task8563/f3-f6": [
+   0,
+   0
+  ],
+  "dspy_task/task8563/f4-f5": [
+   0,
+   0
+  ],
+  "dspy_task/task8563/f4-f6": [
+   0,
+   0
+  ],
+  "dspy_task/task8563/f5-f6": [
+   0,
+   0
+  ],
+  "dspy_task/task8587/f1-f2": [
+   0,
+   0
+  ],
+  "dspy_task/task8587/f1-f3": [
+   0,
+   0
+  ],
+  "dspy_task/task8587/f1-f4": [
+   0,
+   0
+  ],
+  "dspy_task/task8587/f1-f5": [
+   0,
+   0
+  ],
+  "dspy_task/task8587/f1-f6": [
+   0,
+   0
+  ],
+  "dspy_task/task8587/f2-f3": [
+   0,
+   0
+  ],
+  "dspy_task/task8587/f2-f4": [
+   0,
+   0
+  ],
+  "dspy_task/task8587/f2-f5": [
+   0,
+   0
+  ],
+  "dspy_task/task8587/f2-f6": [
+   0,
+   0
+  ],
+  "dspy_task/task8587/f3-f4": [
+   0,
+   0
+  ],
+  "dspy_task/task8587/f3-f5": [
+   0,
+   0
+  ],
+  "dspy_task/task8587/f3-f6": [
+   0,
+   0
+  ],
+  "dspy_task/task8587/f4-f5": [
+   0,
+   0
+  ],
+  "dspy_task/task8587/f4-f6": [
+   0,
+   0
+  ],
+  "dspy_task/task8587/f5-f6": [
+   0,
+   0
+  ],
+  "dspy_task/task8635/f1-f2": [
+   1,
+   1
+  ],
+  "dspy_task/task8635/f1-f3": [
+   0,
+   0
+  ],
+  "dspy_task/task8635/f1-f4": [
+   0,
+   0
+  ],
+  "dspy_task/task8635/f1-f5": [
+   1,
+   1
+  ],
+  "dspy_task/task8635/f1-f6": [
+   1,
+   1
+  ],
+  "dspy_task/task8635/f2-f3": [
+   0,
+   0
+  ],
+  "dspy_task/task8635/f2-f4": [
+   0,
+   0
+  ],
+  "dspy_task/task8635/f2-f5": [
+   1,
+   1
+  ],
+  "dspy_task/task8635/f2-f6": [
+   0,
+   0
+  ],
+  "dspy_task/task8635/f3-f4": [
+   0,
+   0
+  ],
+  "dspy_task/task8635/f3-f5": [
+   1,
+   1
+  ],
+  "dspy_task/task8635/f3-f6": [
+   0,
+   0
+  ],
+  "dspy_task/task8635/f4-f5": [
+   1,
+   1
+  ],
+  "dspy_task/task8635/f4-f6": [
+   0,
+   0
+  ],
+  "dspy_task/task8635/f5-f6": [
+   1,
+   1
+  ],
+  "go_chi_task/task26/f1-f2": [
+   0,
+   0
+  ],
+  "go_chi_task/task26/f1-f3": [
+   0,
+   0
+  ],
+  "go_chi_task/task26/f1-f4": [
+   0,
+   0
+  ],
+  "go_chi_task/task26/f2-f3": [
+   0,
+   0
+  ],
+  "go_chi_task/task26/f2-f4": [
+   0,
+   0
+  ],
+  "go_chi_task/task26/f3-f4": [
+   0,
+   0
+  ],
+  "go_chi_task/task27/f1-f2": [
+   0,
+   0
+  ],
+  "go_chi_task/task27/f1-f3": [
+   0,
+   0
+  ],
+  "go_chi_task/task27/f1-f4": [
+   0,
+   0
+  ],
+  "go_chi_task/task27/f2-f3": [
+   0,
+   0
+  ],
+  "go_chi_task/task27/f2-f4": [
+   0,
+   0
+  ],
+  "go_chi_task/task27/f3-f4": [
+   0,
+   0
+  ],
+  "go_chi_task/task56/f1-f2": [
+   0,
+   0
+  ],
+  "go_chi_task/task56/f1-f3": [
+   0,
+   0
+  ],
+  "go_chi_task/task56/f1-f4": [
+   0,
+   0
+  ],
+  "go_chi_task/task56/f1-f5": [
+   0,
+   0
+  ],
+  "go_chi_task/task56/f2-f3": [
+   0,
+   0
+  ],
+  "go_chi_task/task56/f2-f4": [
+   0,
+   0
+  ],
+  "go_chi_task/task56/f2-f5": [
+   0,
+   0
+  ],
+  "go_chi_task/task56/f3-f4": [
+   1,
+   1
+  ],
+  "go_chi_task/task56/f3-f5": [
+   0,
+   0
+  ],
+  "go_chi_task/task56/f4-f5": [
+   0,
+   0
+  ],
+  "huggingface_datasets_task/task3997/f1-f2": [
+   0,
+   0
+  ],
+  "huggingface_datasets_task/task3997/f1-f3": [
+   0,
+   0
+  ],
+  "huggingface_datasets_task/task3997/f1-f4": [
+   0,
+   0
+  ],
+  "huggingface_datasets_task/task3997/f1-f5": [
+   0,
+   0
+  ],
+  "huggingface_datasets_task/task3997/f2-f3": [
+   0,
+   0
+  ],
+  "huggingface_datasets_task/task3997/f2-f4": [
+   1,
+   1
+  ],
+  "huggingface_datasets_task/task3997/f2-f5": [
+   0,
+   0
+  ],
+  "huggingface_datasets_task/task3997/f3-f4": [
+   1,
+   1
+  ],
+  "huggingface_datasets_task/task3997/f3-f5": [
+   0,
+   0
+  ],
+  "huggingface_datasets_task/task3997/f4-f5": [
+   0,
+   0
+  ],
+  "huggingface_datasets_task/task6252/f1-f2": [
+   0,
+   0
+  ],
+  "huggingface_datasets_task/task6252/f1-f3": [
+   1,
+   1
+  ],
+  "huggingface_datasets_task/task6252/f1-f4": [
+   1,
+   1
+  ],
+  "huggingface_datasets_task/task6252/f1-f5": [
+   1,
+   1
+  ],
+  "huggingface_datasets_task/task6252/f1-f6": [
+   0,
+   0
+  ],
+  "huggingface_datasets_task/task6252/f2-f3": [
+   0,
+   0
+  ],
+  "huggingface_datasets_task/task6252/f2-f4": [
+   0,
+   0
+  ],
+  "huggingface_datasets_task/task6252/f2-f5": [
+   1,
+   1
+  ],
+  "huggingface_datasets_task/task6252/f2-f6": [
+   0,
+   0
+  ],
+  "huggingface_datasets_task/task6252/f3-f4": [
+   0,
+   0
+  ],
+  "huggingface_datasets_task/task6252/f3-f5": [
+   0,
+   0
+  ],
+  "huggingface_datasets_task/task6252/f3-f6": [
+   1,
+   1
+  ],
+  "huggingface_datasets_task/task6252/f4-f5": [
+   0,
+   0
+  ],
+  "huggingface_datasets_task/task6252/f4-f6": [
+   1,
+   1
+  ],
+  "huggingface_datasets_task/task6252/f5-f6": [
+   1,
+   1
+  ],
+  "huggingface_datasets_task/task7309/f1-f2": [
+   0,
+   0
+  ],
+  "llama_index_task/task17070/f1-f2": [
+   1,
+   1
+  ],
+  "llama_index_task/task17070/f1-f3": [
+   0,
+   0
+  ],
+  "llama_index_task/task17070/f2-f3": [
+   1,
+   1
+  ],
+  "llama_index_task/task17244/f1-f2": [
+   0,
+   0
+  ],
+  "llama_index_task/task17244/f1-f3": [
+   0,
+   0
+  ],
+  "llama_index_task/task17244/f1-f4": [
+   1,
+   1
+  ],
+  "llama_index_task/task17244/f1-f5": [
+   0,
+   0
+  ],
+  "llama_index_task/task17244/f1-f6": [
+   0,
+   0
+  ],
+  "llama_index_task/task17244/f1-f7": [
+   1,
+   1
+  ],
+  "llama_index_task/task17244/f2-f3": [
+   0,
+   0
+  ],
+  "llama_index_task/task17244/f2-f4": [
+   1,
+   1
+  ],
+  "llama_index_task/task17244/f2-f5": [
+   0,
+   0
+  ],
+  "llama_index_task/task17244/f2-f6": [
+   0,
+   0
+  ],
+  "llama_index_task/task17244/f2-f7": [
+   0,
+   0
+  ],
+  "llama_index_task/task17244/f3-f4": [
+   1,
+   1
+  ],
+  "llama_index_task/task17244/f3-f5": [
+   0,
+   0
+  ],
+  "llama_index_task/task17244/f3-f6": [
+   0,
+   0
+  ],
+  "llama_index_task/task17244/f3-f7": [
+   1,
+   1
+  ],
+  "llama_index_task/task17244/f4-f5": [
+   1,
+   1
+  ],
+  "llama_index_task/task17244/f4-f6": [
+   0,
+   0
+  ],
+  "llama_index_task/task17244/f4-f7": [
+   1,
+   1
+  ],
+  "llama_index_task/task17244/f5-f6": [
+   1,
+   1
+  ],
+  "llama_index_task/task17244/f5-f7": [
+   1,
+   1
+  ],
+  "llama_index_task/task17244/f6-f7": [
+   0,
+   0
+  ],
+  "llama_index_task/task18813/f1-f2": [
+   0,
+   0
+  ],
+  "llama_index_task/task18813/f1-f3": [
+   0,
+   0
+  ],
+  "llama_index_task/task18813/f1-f4": [
+   0,
+   0
+  ],
+  "llama_index_task/task18813/f1-f5": [
+   0,
+   0
+  ],
+  "llama_index_task/task18813/f1-f6": [
+   0,
+   0
+  ],
+  "llama_index_task/task18813/f2-f3": [
+   0,
+   0
+  ],
+  "llama_index_task/task18813/f2-f4": [
+   0,
+   0
+  ],
+  "llama_index_task/task18813/f2-f5": [
+   0,
+   0
+  ],
+  "llama_index_task/task18813/f2-f6": [
+   0,
+   0
+  ],
+  "llama_index_task/task18813/f3-f4": [
+   0,
+   0
+  ],
+  "llama_index_task/task18813/f3-f5": [
+   0,
+   0
+  ],
+  "llama_index_task/task18813/f3-f6": [
+   1,
+   1
+  ],
+  "llama_index_task/task18813/f4-f5": [
+   0,
+   0
+  ],
+  "llama_index_task/task18813/f4-f6": [
+   0,
+   0
+  ],
+  "llama_index_task/task18813/f5-f6": [
+   0,
+   0
+  ],
+  "openai_tiktoken_task/task0/f1-f10": [
+   0,
+   0
+  ],
+  "openai_tiktoken_task/task0/f1-f2": [
+   0,
+   0
+  ],
+  "openai_tiktoken_task/task0/f1-f3": [
+   0,
+   0
+  ],
+  "openai_tiktoken_task/task0/f1-f4": [
+   0,
+   0
+  ],
+  "openai_tiktoken_task/task0/f1-f5": [
+   0,
+   0
+  ],
+  "openai_tiktoken_task/task0/f1-f6": [
+   0,
+   0
+  ],
+  "openai_tiktoken_task/task0/f1-f7": [
+   0,
+   0
+  ],
+  "openai_tiktoken_task/task0/f1-f8": [
+   0,
+   0
+  ],
+  "openai_tiktoken_task/task0/f1-f9": [
+   0,
+   0
+  ],
+  "openai_tiktoken_task/task0/f2-f10": [
+   0,
+   0
+  ],
+  "openai_tiktoken_task/task0/f2-f3": [
+   0,
+   0
+  ],
+  "openai_tiktoken_task/task0/f2-f4": [
+   0,
+   0
+  ],
+  "openai_tiktoken_task/task0/f2-f5": [
+   0,
+   0
+  ],
+  "openai_tiktoken_task/task0/f2-f6": [
+   0,
+   0
+  ],
+  "openai_tiktoken_task/task0/f2-f7": [
+   0,
+   0
+  ],
+  "openai_tiktoken_task/task0/f2-f8": [
+   0,
+   0
+  ],
+  "openai_tiktoken_task/task0/f2-f9": [
+   0,
+   0
+  ],
+  "openai_tiktoken_task/task0/f3-f10": [
+   0,
+   0
+  ],
+  "openai_tiktoken_task/task0/f3-f4": [
+   0,
+   0
+  ],
+  "openai_tiktoken_task/task0/f3-f5": [
+   0,
+   0
+  ],
+  "openai_tiktoken_task/task0/f3-f6": [
+   0,
+   0
+  ],
+  "openai_tiktoken_task/task0/f3-f7": [
+   0,
+   0
+  ],
+  "openai_tiktoken_task/task0/f3-f8": [
+   0,
+   0
+  ],
+  "openai_tiktoken_task/task0/f3-f9": [
+   0,
+   0
+  ],
+  "openai_tiktoken_task/task0/f4-f10": [
+   0,
+   0
+  ],
+  "openai_tiktoken_task/task0/f4-f5": [
+   0,
+   0
+  ],
+  "openai_tiktoken_task/task0/f4-f6": [
+   0,
+   0
+  ],
+  "openai_tiktoken_task/task0/f4-f7": [
+   0,
+   0
+  ],
+  "openai_tiktoken_task/task0/f4-f8": [
+   0,
+   0
+  ],
+  "openai_tiktoken_task/task0/f4-f9": [
+   0,
+   0
+  ],
+  "openai_tiktoken_task/task0/f5-f10": [
+   0,
+   0
+  ],
+  "openai_tiktoken_task/task0/f5-f6": [
+   0,
+   0
+  ],
+  "openai_tiktoken_task/task0/f5-f7": [
+   0,
+   0
+  ],
+  "openai_tiktoken_task/task0/f5-f8": [
+   0,
+   0
+  ],
+  "openai_tiktoken_task/task0/f5-f9": [
+   0,
+   0
+  ],
+  "openai_tiktoken_task/task0/f6-f10": [
+   0,
+   0
+  ],
+  "openai_tiktoken_task/task0/f6-f7": [
+   0,
+   0
+  ],
+  "openai_tiktoken_task/task0/f6-f8": [
+   0,
+   0
+  ],
+  "openai_tiktoken_task/task0/f6-f9": [
+   0,
+   0
+  ],
+  "openai_tiktoken_task/task0/f7-f10": [
+   0,
+   0
+  ],
+  "openai_tiktoken_task/task0/f7-f8": [
+   0,
+   0
+  ],
+  "openai_tiktoken_task/task0/f7-f9": [
+   0,
+   0
+  ],
+  "openai_tiktoken_task/task0/f8-f10": [
+   0,
+   0
+  ],
+  "openai_tiktoken_task/task0/f8-f9": [
+   0,
+   0
+  ],
+  "openai_tiktoken_task/task0/f9-f10": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f1-f10": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f1-f11": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f1-f12": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f1-f2": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f1-f3": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f1-f4": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f1-f5": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f1-f6": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f1-f7": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f1-f8": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f1-f9": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f10-f11": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f10-f12": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f11-f12": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f2-f10": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f2-f11": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f2-f12": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f2-f3": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f2-f4": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f2-f5": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f2-f6": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f2-f7": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f2-f8": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f2-f9": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f3-f10": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f3-f11": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f3-f12": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f3-f4": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f3-f5": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f3-f6": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f3-f7": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f3-f8": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f3-f9": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f4-f10": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f4-f11": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f4-f12": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f4-f5": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f4-f6": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f4-f7": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f4-f8": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f4-f9": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f5-f10": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f5-f11": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f5-f12": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f5-f6": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f5-f7": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f5-f8": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f5-f9": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f6-f10": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f6-f11": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f6-f12": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f6-f7": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f6-f8": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f6-f9": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f7-f10": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f7-f11": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f7-f12": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f7-f8": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f7-f9": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f8-f10": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f8-f11": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f8-f12": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f8-f9": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f9-f10": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f9-f11": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2068/f9-f12": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2800/f1-f2": [
+   1,
+   1
+  ],
+  "pallets_click_task/task2800/f1-f3": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2800/f1-f4": [
+   1,
+   1
+  ],
+  "pallets_click_task/task2800/f1-f5": [
+   1,
+   1
+  ],
+  "pallets_click_task/task2800/f1-f6": [
+   1,
+   1
+  ],
+  "pallets_click_task/task2800/f1-f7": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2800/f2-f3": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2800/f2-f4": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2800/f2-f5": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2800/f2-f6": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2800/f2-f7": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2800/f3-f4": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2800/f3-f5": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2800/f3-f6": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2800/f3-f7": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2800/f4-f5": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2800/f4-f6": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2800/f4-f7": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2800/f5-f6": [
+   1,
+   1
+  ],
+  "pallets_click_task/task2800/f5-f7": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2800/f6-f7": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2956/f1-f2": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2956/f1-f3": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2956/f1-f4": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2956/f1-f5": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2956/f1-f6": [
+   1,
+   1
+  ],
+  "pallets_click_task/task2956/f1-f7": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2956/f1-f8": [
+   1,
+   1
+  ],
+  "pallets_click_task/task2956/f2-f3": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2956/f2-f4": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2956/f2-f5": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2956/f2-f6": [
+   1,
+   1
+  ],
+  "pallets_click_task/task2956/f2-f7": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2956/f2-f8": [
+   1,
+   1
+  ],
+  "pallets_click_task/task2956/f3-f4": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2956/f3-f5": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2956/f3-f6": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2956/f3-f7": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2956/f3-f8": [
+   1,
+   1
+  ],
+  "pallets_click_task/task2956/f4-f5": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2956/f4-f6": [
+   1,
+   1
+  ],
+  "pallets_click_task/task2956/f4-f7": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2956/f4-f8": [
+   1,
+   1
+  ],
+  "pallets_click_task/task2956/f5-f6": [
+   1,
+   1
+  ],
+  "pallets_click_task/task2956/f5-f7": [
+   0,
+   0
+  ],
+  "pallets_click_task/task2956/f5-f8": [
+   1,
+   1
+  ],
+  "pallets_click_task/task2956/f6-f7": [
+   1,
+   1
+  ],
+  "pallets_click_task/task2956/f6-f8": [
+   1,
+   1
+  ],
+  "pallets_click_task/task2956/f7-f8": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1465/f1-f10": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1465/f1-f2": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1465/f1-f3": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1465/f1-f4": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1465/f1-f5": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1465/f1-f6": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1465/f1-f7": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1465/f1-f8": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1465/f1-f9": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1465/f2-f10": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1465/f2-f3": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1465/f2-f4": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1465/f2-f5": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1465/f2-f6": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1465/f2-f7": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1465/f2-f8": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1465/f2-f9": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1465/f3-f10": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1465/f3-f4": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1465/f3-f5": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1465/f3-f6": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1465/f3-f7": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1465/f3-f8": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1465/f3-f9": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1465/f4-f10": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1465/f4-f5": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1465/f4-f6": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1465/f4-f7": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1465/f4-f8": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1465/f4-f9": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1465/f5-f10": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1465/f5-f6": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1465/f5-f7": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1465/f5-f8": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1465/f5-f9": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1465/f6-f10": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1465/f6-f7": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1465/f6-f8": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1465/f6-f9": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1465/f7-f10": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1465/f7-f8": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1465/f7-f9": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1465/f8-f10": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1465/f8-f9": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1465/f9-f10": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1559/f1-f10": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1559/f1-f2": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1559/f1-f3": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1559/f1-f4": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1559/f1-f5": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1559/f1-f6": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1559/f1-f7": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1559/f1-f8": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1559/f1-f9": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1559/f2-f10": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1559/f2-f3": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1559/f2-f4": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1559/f2-f5": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1559/f2-f6": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1559/f2-f7": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1559/f2-f8": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1559/f2-f9": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1559/f3-f10": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1559/f3-f4": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1559/f3-f5": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1559/f3-f6": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1559/f3-f7": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1559/f3-f8": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1559/f3-f9": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1559/f4-f10": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1559/f4-f5": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1559/f4-f6": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1559/f4-f7": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1559/f4-f8": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1559/f4-f9": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1559/f5-f10": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1559/f5-f6": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1559/f5-f7": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1559/f5-f8": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1559/f5-f9": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1559/f6-f10": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1559/f6-f7": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1559/f6-f8": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1559/f6-f9": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1559/f7-f10": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1559/f7-f8": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1559/f7-f9": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1559/f8-f10": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1559/f8-f9": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1559/f9-f10": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1621/f1-f10": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1621/f1-f2": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1621/f1-f3": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1621/f1-f4": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1621/f1-f5": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1621/f1-f6": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1621/f1-f7": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1621/f1-f8": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1621/f1-f9": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1621/f2-f10": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1621/f2-f3": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1621/f2-f4": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1621/f2-f5": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1621/f2-f6": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1621/f2-f7": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1621/f2-f8": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1621/f2-f9": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1621/f3-f10": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1621/f3-f4": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1621/f3-f5": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1621/f3-f6": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1621/f3-f7": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1621/f3-f8": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1621/f3-f9": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1621/f4-f10": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1621/f4-f5": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1621/f4-f6": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1621/f4-f7": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1621/f4-f8": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1621/f4-f9": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1621/f5-f10": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1621/f5-f6": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1621/f5-f7": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1621/f5-f8": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1621/f5-f9": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1621/f6-f10": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1621/f6-f7": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1621/f6-f8": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1621/f6-f9": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1621/f7-f10": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1621/f7-f8": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1621/f7-f9": [
+   1,
+   1
+  ],
+  "pallets_jinja_task/task1621/f8-f10": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1621/f8-f9": [
+   0,
+   0
+  ],
+  "pallets_jinja_task/task1621/f9-f10": [
+   0,
+   0
+  ],
+  "pillow_task/task25/f1-f2": [
+   0,
+   0
+  ],
+  "pillow_task/task25/f1-f3": [
+   1,
+   1
+  ],
+  "pillow_task/task25/f1-f4": [
+   1,
+   1
+  ],
+  "pillow_task/task25/f1-f5": [
+   1,
+   1
+  ],
+  "pillow_task/task25/f2-f3": [
+   0,
+   0
+  ],
+  "pillow_task/task25/f2-f4": [
+   0,
+   0
+  ],
+  "pillow_task/task25/f2-f5": [
+   0,
+   0
+  ],
+  "pillow_task/task25/f3-f4": [
+   0,
+   0
+  ],
+  "pillow_task/task25/f3-f5": [
+   0,
+   0
+  ],
+  "pillow_task/task25/f4-f5": [
+   0,
+   0
+  ],
+  "pillow_task/task290/f1-f2": [
+   1,
+   1
+  ],
+  "pillow_task/task290/f1-f3": [
+   0,
+   0
+  ],
+  "pillow_task/task290/f1-f4": [
+   1,
+   1
+  ],
+  "pillow_task/task290/f1-f5": [
+   0,
+   0
+  ],
+  "pillow_task/task290/f2-f3": [
+   0,
+   0
+  ],
+  "pillow_task/task290/f2-f4": [
+   0,
+   0
+  ],
+  "pillow_task/task290/f2-f5": [
+   0,
+   0
+  ],
+  "pillow_task/task290/f3-f4": [
+   0,
+   0
+  ],
+  "pillow_task/task290/f3-f5": [
+   0,
+   0
+  ],
+  "pillow_task/task290/f4-f5": [
+   0,
+   0
+  ],
+  "pillow_task/task68/f1-f2": [
+   0,
+   0
+  ],
+  "pillow_task/task68/f1-f3": [
+   1,
+   1
+  ],
+  "pillow_task/task68/f1-f4": [
+   0,
+   0
+  ],
+  "pillow_task/task68/f1-f5": [
+   0,
+   0
+  ],
+  "pillow_task/task68/f2-f3": [
+   0,
+   0
+  ],
+  "pillow_task/task68/f2-f4": [
+   0,
+   0
+  ],
+  "pillow_task/task68/f2-f5": [
+   0,
+   0
+  ],
+  "pillow_task/task68/f3-f4": [
+   0,
+   0
+  ],
+  "pillow_task/task68/f3-f5": [
+   0,
+   0
+  ],
+  "pillow_task/task68/f4-f5": [
+   0,
+   0
+  ],
+  "react_hook_form_task/task153/f1-f2": [
+   0,
+   0
+  ],
+  "react_hook_form_task/task153/f1-f3": [
+   0,
+   0
+  ],
+  "react_hook_form_task/task153/f1-f4": [
+   0,
+   0
+  ],
+  "react_hook_form_task/task153/f1-f5": [
+   0,
+   0
+  ],
+  "react_hook_form_task/task153/f1-f6": [
+   0,
+   0
+  ],
+  "react_hook_form_task/task153/f2-f3": [
+   0,
+   0
+  ],
+  "react_hook_form_task/task153/f2-f4": [
+   0,
+   0
+  ],
+  "react_hook_form_task/task153/f2-f5": [
+   0,
+   0
+  ],
+  "react_hook_form_task/task153/f2-f6": [
+   0,
+   0
+  ],
+  "react_hook_form_task/task153/f3-f4": [
+   0,
+   0
+  ],
+  "react_hook_form_task/task153/f3-f5": [
+   0,
+   0
+  ],
+  "react_hook_form_task/task153/f3-f6": [
+   0,
+   0
+  ],
+  "react_hook_form_task/task153/f4-f5": [
+   0,
+   0
+  ],
+  "react_hook_form_task/task153/f4-f6": [
+   0,
+   0
+  ],
+  "react_hook_form_task/task153/f5-f6": [
+   0,
+   0
+  ],
+  "react_hook_form_task/task85/f1-f2": [
+   0,
+   0
+  ],
+  "react_hook_form_task/task85/f1-f3": [
+   0,
+   0
+  ],
+  "react_hook_form_task/task85/f1-f4": [
+   0,
+   0
+  ],
+  "react_hook_form_task/task85/f1-f5": [
+   0,
+   0
+  ],
+  "react_hook_form_task/task85/f2-f3": [
+   0,
+   0
+  ],
+  "react_hook_form_task/task85/f2-f4": [
+   0,
+   0
+  ],
+  "react_hook_form_task/task85/f2-f5": [
+   0,
+   0
+  ],
+  "react_hook_form_task/task85/f3-f4": [
+   0,
+   0
+  ],
+  "react_hook_form_task/task85/f3-f5": [
+   0,
+   0
+  ],
+  "react_hook_form_task/task85/f4-f5": [
+   0,
+   0
+  ],
+  "samuelcolvin_dirty_equals_task/task43/f1-f2": [
+   0,
+   0
+  ],
+  "samuelcolvin_dirty_equals_task/task43/f1-f3": [
+   0,
+   0
+  ],
+  "samuelcolvin_dirty_equals_task/task43/f1-f4": [
+   0,
+   0
+  ],
+  "samuelcolvin_dirty_equals_task/task43/f1-f5": [
+   0,
+   0
+  ],
+  "samuelcolvin_dirty_equals_task/task43/f1-f6": [
+   0,
+   0
+  ],
+  "samuelcolvin_dirty_equals_task/task43/f1-f7": [
+   0,
+   0
+  ],
+  "samuelcolvin_dirty_equals_task/task43/f1-f8": [
+   0,
+   0
+  ],
+  "samuelcolvin_dirty_equals_task/task43/f1-f9": [
+   0,
+   0
+  ],
+  "samuelcolvin_dirty_equals_task/task43/f2-f3": [
+   0,
+   0
+  ],
+  "samuelcolvin_dirty_equals_task/task43/f2-f4": [
+   0,
+   0
+  ],
+  "samuelcolvin_dirty_equals_task/task43/f2-f5": [
+   0,
+   0
+  ],
+  "samuelcolvin_dirty_equals_task/task43/f2-f6": [
+   0,
+   0
+  ],
+  "samuelcolvin_dirty_equals_task/task43/f2-f7": [
+   0,
+   0
+  ],
+  "samuelcolvin_dirty_equals_task/task43/f2-f8": [
+   0,
+   0
+  ],
+  "samuelcolvin_dirty_equals_task/task43/f2-f9": [
+   0,
+   0
+  ],
+  "samuelcolvin_dirty_equals_task/task43/f3-f4": [
+   0,
+   0
+  ],
+  "samuelcolvin_dirty_equals_task/task43/f3-f5": [
+   0,
+   0
+  ],
+  "samuelcolvin_dirty_equals_task/task43/f3-f6": [
+   0,
+   0
+  ],
+  "samuelcolvin_dirty_equals_task/task43/f3-f7": [
+   0,
+   0
+  ],
+  "samuelcolvin_dirty_equals_task/task43/f3-f8": [
+   0,
+   0
+  ],
+  "samuelcolvin_dirty_equals_task/task43/f3-f9": [
+   0,
+   0
+  ],
+  "samuelcolvin_dirty_equals_task/task43/f4-f5": [
+   0,
+   0
+  ],
+  "samuelcolvin_dirty_equals_task/task43/f4-f6": [
+   0,
+   0
+  ],
+  "samuelcolvin_dirty_equals_task/task43/f4-f7": [
+   0,
+   0
+  ],
+  "samuelcolvin_dirty_equals_task/task43/f4-f8": [
+   0,
+   0
+  ],
+  "samuelcolvin_dirty_equals_task/task43/f4-f9": [
+   0,
+   0
+  ],
+  "samuelcolvin_dirty_equals_task/task43/f5-f6": [
+   0,
+   0
+  ],
+  "samuelcolvin_dirty_equals_task/task43/f5-f7": [
+   0,
+   0
+  ],
+  "samuelcolvin_dirty_equals_task/task43/f5-f8": [
+   0,
+   0
+  ],
+  "samuelcolvin_dirty_equals_task/task43/f5-f9": [
+   0,
+   0
+  ],
+  "samuelcolvin_dirty_equals_task/task43/f6-f7": [
+   0,
+   0
+  ],
+  "samuelcolvin_dirty_equals_task/task43/f6-f8": [
+   0,
+   0
+  ],
+  "samuelcolvin_dirty_equals_task/task43/f6-f9": [
+   0,
+   0
+  ],
+  "samuelcolvin_dirty_equals_task/task43/f7-f8": [
+   0,
+   0
+  ],
+  "samuelcolvin_dirty_equals_task/task43/f7-f9": [
+   0,
+   0
+  ],
+  "samuelcolvin_dirty_equals_task/task43/f8-f9": [
+   0,
+   0
+  ],
+  "typst_task/task6554/f1-f10": [
+   0,
+   0
+  ],
+  "typst_task/task6554/f1-f2": [
+   0,
+   0
+  ],
+  "typst_task/task6554/f1-f3": [
+   0,
+   0
+  ],
+  "typst_task/task6554/f1-f4": [
+   0,
+   0
+  ],
+  "typst_task/task6554/f1-f5": [
+   0,
+   0
+  ],
+  "typst_task/task6554/f1-f6": [
+   0,
+   0
+  ],
+  "typst_task/task6554/f1-f7": [
+   0,
+   0
+  ],
+  "typst_task/task6554/f1-f8": [
+   0,
+   0
+  ],
+  "typst_task/task6554/f1-f9": [
+   0,
+   0
+  ],
+  "typst_task/task6554/f2-f10": [
+   0,
+   0
+  ],
+  "typst_task/task6554/f2-f3": [
+   0,
+   0
+  ],
+  "typst_task/task6554/f2-f4": [
+   0,
+   0
+  ],
+  "typst_task/task6554/f2-f5": [
+   0,
+   0
+  ],
+  "typst_task/task6554/f2-f6": [
+   0,
+   0
+  ],
+  "typst_task/task6554/f2-f7": [
+   0,
+   0
+  ],
+  "typst_task/task6554/f2-f8": [
+   0,
+   0
+  ],
+  "typst_task/task6554/f2-f9": [
+   0,
+   0
+  ],
+  "typst_task/task6554/f3-f10": [
+   0,
+   0
+  ],
+  "typst_task/task6554/f3-f4": [
+   0,
+   0
+  ],
+  "typst_task/task6554/f3-f5": [
+   0,
+   0
+  ],
+  "typst_task/task6554/f3-f6": [
+   0,
+   0
+  ],
+  "typst_task/task6554/f3-f7": [
+   0,
+   0
+  ],
+  "typst_task/task6554/f3-f8": [
+   0,
+   0
+  ],
+  "typst_task/task6554/f3-f9": [
+   0,
+   0
+  ],
+  "typst_task/task6554/f4-f10": [
+   0,
+   0
+  ],
+  "typst_task/task6554/f4-f5": [
+   0,
+   0
+  ],
+  "typst_task/task6554/f4-f6": [
+   0,
+   0
+  ],
+  "typst_task/task6554/f4-f7": [
+   0,
+   0
+  ],
+  "typst_task/task6554/f4-f8": [
+   0,
+   0
+  ],
+  "typst_task/task6554/f4-f9": [
+   0,
+   0
+  ],
+  "typst_task/task6554/f5-f10": [
+   0,
+   0
+  ],
+  "typst_task/task6554/f5-f6": [
+   0,
+   0
+  ],
+  "typst_task/task6554/f5-f7": [
+   0,
+   0
+  ],
+  "typst_task/task6554/f5-f8": [
+   0,
+   0
+  ],
+  "typst_task/task6554/f5-f9": [
+   0,
+   0
+  ],
+  "typst_task/task6554/f6-f10": [
+   0,
+   0
+  ],
+  "typst_task/task6554/f6-f7": [
+   0,
+   0
+  ],
+  "typst_task/task6554/f6-f8": [
+   0,
+   0
+  ],
+  "typst_task/task6554/f6-f9": [
+   0,
+   0
+  ],
+  "typst_task/task6554/f7-f10": [
+   0,
+   0
+  ],
+  "typst_task/task6554/f7-f8": [
+   0,
+   0
+  ],
+  "typst_task/task6554/f7-f9": [
+   0,
+   0
+  ],
+  "typst_task/task6554/f8-f10": [
+   0,
+   0
+  ],
+  "typst_task/task6554/f8-f9": [
+   0,
+   0
+  ],
+  "typst_task/task6554/f9-f10": [
+   0,
+   0
+  ]
+ },
+ "what": "scripts/import_cooperbench.py --contested-merge three_way over every CooperBench feature pair. Scripted mock agents replay each feature's patch; the success test is the offline line-multiset oracle; nothing here is agent behaviour."
+}

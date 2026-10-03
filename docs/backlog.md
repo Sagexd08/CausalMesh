@@ -50,7 +50,11 @@ happened, which is a different property from being able to repeat it.
 **Status: the loader has been run over the real CooperBench dataset. All 30
 tasks, 199 features and 652 feature pairs import with 0 failures. The real
 §37 gate was run on 3 pairs and returned NOT SENSITIVE for all 3, by the
-same winner-take-all merge mechanism the synthetic example showed. Nothing
+same winner-take-all merge mechanism the synthetic example showed. A
+content-level merge now exists as an opt-in (2026-10-03, "Content-level merge
+for contested paths" below): with it a scripted replay solves 142 of the 652
+pairs, and the three pairs above separate into three different, explained
+outcomes. Nothing
 about any agent's behaviour is claimed: every run used deterministic mock
 agents replaying the dataset's own gold patches.** (Earlier status: proven on
 one synthetic worked example only, because no network was available then.)
@@ -152,10 +156,48 @@ Diagnostic, not the verdict: in each arm's integrated workspace one feature's te
 **What it would still take.**
 
 - The gate on the other Python pairs. It costs a full checkout and a working test environment per task; `dspy`, `llama_index` and `datasets` need heavy dependencies that were not installed. 24 of 30 tasks are Python; Go (3), JavaScript (2) and Rust (1) have no harness (import works for them, the gate does not).
-- A content-level merge for contested paths (a real 3-way merge of the two features' patches); otherwise 499 of 652 pairs cannot succeed and the other 153 cannot be told apart from them. That is a platform decision (it changes what "success" means for every task), not a loader change.
+- ~~A content-level merge for contested paths~~: built as an opt-in, see below. Making it the default is still a platform decision (it changes what "success" means for every task and invalidates comparison with every earlier result), so it was not made.
 - Move hidden tests out of the workspace before any real agent runs.
 - Pair selection for a real experiment (`subsets/lite.json` has 100 pairs); none was made.
-- One suite failure was seen on Linux while this was built and is not from this change: `tests/unit/test_path_budget.py::test_a_run_that_cannot_fit_is_refused_before_anything_is_created` (`File name too long`). Not investigated here.
+- ~~One suite failure seen on Linux (`test_path_budget`, `File name too long`)~~: a test bug, fixed 2026-10-03. The test built a single 300-character path component, which exceeds `NAME_MAX` (255) on Linux, so the test's own `exists()` raised. The product's refusal was correct.
+
+**Content-level merge for contested paths (built 2026-10-03, opt-in).**
+
+`TaskDefinition.contested_merge` is `last_writer` (default, unchanged) or `three_way`. `three_way` merges the two agents' files against the fixture with `src/causalmesh/tasks/merge3.py`: a pure-Python diff3 over `difflib`, no dependency and no run-time dependence on the machine's `git` (the objection that rejected `ActionKind.PATCH` above). A region both sides changed differently, or touched adjacently, is a conflict (git's rule); it is recorded on `RunResult.merge_conflicts` (`None` when nothing was merged, which is not zero) and fails the run whatever the tests say. The field is serialised only when not the default, so no existing task's hash, YAML or evidence changed. `ImportOptions(contested_merge=...)`, `BatchOptions.contested_merge` and `--contested-merge` carry it. Tests: `tests/unit/test_merge3.py` (including a Hypothesis check against `git merge-file`), `tests/unit/test_contested_outcome.py`, `tests/integration/test_contested_merge.py` (the same two edits fail under `last_writer` and pass under `three_way`), and `TestThreeWayMerge` in `tests/integration/test_cooperbench_batch_run.py`.
+
+*Validated against git, not trusted.* `python scripts/cooperbench_real.py merge-check` merges every contested file of all 652 real pairs with this code and with `git merge-file`, and compares the pair-level verdict with CooperBench's own `gold_conflict_report.json` (evidence: `docs/evidence/cooperbench-merge-check.json`, pair ids and counts only).
+
+| Check, CooperBench `63b9d44` | Result |
+|---|---|
+| Contested files merged | 804 |
+| File-level verdict agrees with `git merge-file` | 794 of 804 (98.8%) |
+| Files both call clean whose merged bytes are identical | 173 of 174 |
+| Pair-level verdict agrees with `git merge-file` | 642 of 652 (98.5%) |
+| Pair-level verdict agrees with CooperBench's gold report | 636 of 652 (97.5%): 494 both conflict, 142 both clean, 11 we conflict and it is clean, 5 we are clean and it conflicts |
+| Hypothesis fuzz against `git merge-file`, distinct lines | 0 disagreements in 400 generated cases per run (and 3000 in a one-off probe) |
+
+The 10 file-level disagreements (5 stricter than git, 5 looser) were read, not averaged away. The one inspected (jinja `task1559` f3-f10) is two edits that meet at the boundary of a large rewrite: one side rewrites base lines 528-573 and the other inserts directly after line 573. The likely cause is that `difflib` and git's `xdiff` place the edge of that rewrite differently, so one sees the edits as adjacent and the other does not. That is inferred from the shape of the edits; the exact alignment was not traced, and the other nine were not inspected. It is consistent with the limitation `merge3.py`'s docstring states, and it is not a logic error in the general case (the distinct-line fuzz agrees completely). It is rare, but the five looser ones mean this merge can call something clean that git calls a conflict; the integration test, not the merge, is what decides whether the combination is right.
+
+*What it does on the real pairs.* `scripts/import_cooperbench.py --contested-merge three_way` over all 652 pairs (evidence: `docs/evidence/cooperbench-batch-three-way.json`; 0 failed, 0 skipped, 83 s with 4 jobs): gold-patch replay solves **142 of 652 pairs (21.8%)** under the offline oracle, identically in C0 and C2 (the arms differ on 0 pairs, so the gate is NOT SENSITIVE for all 652, as it must be for agents that do not read the channel). Against CooperBench's git result: 137 solved and git-clean, 5 solved and git-conflicting, 16 unsolved and git-clean, 494 unsolved and git-conflicting. The 16 are the 11 where this merge is stricter than git, plus 5 that merge cleanly but fail the oracle because both features make an *identical* edit (click `task2800` f2-f6, f3-f6, f4-f6, f6-f7; jinja `task1559` f9-f10): a merge keeps one copy and the line-multiset oracle expects two. That is an oracle artifact, not a merge error.
+
+*The three recorded pairs, re-run with the merge* (`docs/evidence/cooperbench-real-gate-three-way.json`; the `last_writer` re-run reproduced the recorded verdicts and per-feature results exactly, with the new preflight in place):
+
+| Pair | Merge | Integrated workspace, real pytest harness | Reading |
+|---|---|---|---|
+| jinja `task1621` f1,f2 | clean | both features pass, C0 1/1 and C2 1/1 | the first real imported pair the platform solves; the dataset agrees it merges |
+| click `task2800` f1,f2 | clean | feature 1 passes, feature 2 fails | a **semantic** conflict with no textual one: feature 1 makes `_resolve_context` close its context on exit, feature 2 adds an `on_exit` callback fired on close and a test that it must not fire during completion. Each passes alone (checked by running the harness in each agent's own workspace); the merge is correct (integrated `core.py` is base plus both edits, 4 + 37 = 41 changed lines) |
+| dirty-equals `task43` f1,f2 | 2 files conflict | both fail | a textual conflict; the dataset's gold report also says conflict |
+
+Winner-take-all had shown all three as one identical accident. The merge separates a pair it solves, a pair whose features are semantically incompatible, and a pair that conflicts textually, which is the distinction a coordination benchmark needs.
+
+**What this does not claim.**
+
+- Nothing about agent behaviour. Every run is a scripted replay of gold patches; the arms cannot differ, so no merge could make the gate SENSITIVE. A SENSITIVE verdict on an imported pair needs an agent whose behaviour depends on what the channel told it.
+- Not CooperBench's evaluation. The oracle is offline line-multiset equality for the 652-pair run and a generated pytest harness for the 3; neither is CooperBench's own tests. 142 of 652 is "pairs this platform's replay-and-merge solves under that oracle", not a CooperBench score.
+- The merge is line based and cannot detect semantic incompatibility (click above). It does not follow renames. It is not byte-identical to git on repeated-line files (the 10 files above).
+- `three_way` applies only to paths declared `contested`. A path both agents change that the task did not declare is still taken by ownership.
+
+**What it would still take.** The gate with pytest on the other 21 Python tasks (heavy per-task environments: `dspy`, `llama_index`, `datasets`); a harness for Go (3), JavaScript (2) and Rust (1); moving hidden tests out of the workspace before any real agent runs (unchanged); and an agent whose behaviour depends on the channel, which is the only thing that can make an arm difference appear.
 
 ### Multi-rater kappa coding (§53)
 
@@ -1286,11 +1328,11 @@ Each of these was reported by the implementer who hit it, or found by reading th
 
 ### The section 37 gate cannot tell a missing test runner from no effect
 
-**Status: open, hazard.** The harness runs each task's integration test as `python -m pytest -q tests/` (`integration_test` in `tasks/*.yaml`, run by `_run_integration_test` with the scrubbed environment) using whatever `python` is on `PATH`. If that interpreter has no pytest, the test exits non-zero in every arm, `check_sensitivity` sees C0 0/n and C2 0/n, and reports NOT SENSITIVE. It happened when `interface_consumer` and `shared_utility_refactor` were first gated: with the virtual environment first on `PATH` the same code returned SENSITIVE, with nothing in the task definitions changed. A missing test runner is indistinguishable from "the arms do not differ" unless someone reads `tests_passed` and `divergence_absent` separately (the divergence counts still separated the arms, 2 versus 0). The existing tasks share the hazard. The same scrubbed-environment mechanism produced the earlier `APPDATA` defect on Windows (`docs/tasks.md`). **What it would take:** the gate reporting "could not run" (a `None` exit code or a preflight that imports pytest) instead of a failed arm.
+**Status: fixed (2026-10-03).** `python -m pytest` with no pytest installed exits 1, the same code as a failed test, so every arm failed identically and `check_sensitivity` reported NOT SENSITIVE for a reason unrelated to the task; it happened when `interface_consumer` and `shared_utility_refactor` were first gated, and the existing tasks shared the hazard. `integration_test_preflight` (`tasks/runner.py`) now asks the harness's own scrubbed environment, the one the test will really run under, whether the executable resolves and, for the `<python> -m <module>` form every shipped task uses, whether the module imports. `check_sensitivity` runs it first, runs no arm when it fails, and returns a `SensitivityReport` with `could_not_run` set (`sensitive` False, summary "COULD NOT RUN - <reason>"). `could_not_run` is added to `to_dict` only when set, so existing evidence keeps its shape; the CooperBench batch records such a pair as `failed` at stage `sensitivity` with `gate_could_not_run`, not `not_sensitive`. `tests/unit/test_gate_preflight.py` covers a missing module, a missing executable, the harness-versus-this-process environment distinction, and that no arm runs. **What remains:** only the `-m <module>` form is probed. A task whose command is any other shape is assumed runnable, and a runner that exists but is broken (a half-installed pytest, say) is not detected.
 
 ### `_execute_one` catches `BaseException`
 
-**Status: open, pre-existing, recorded from the timeout work.** `ExperimentRunner._execute_one` (`scheduler/loop.py`) catches `BaseException`, so a cancelled collection (Ctrl-C reaches it as `CancelledError`) records the in-flight run `FAILED` ("harness raised"), with a traceback, rather than leaving it `RUNNING` for the next startup to abandon and resume. `FAILED` is terminal and never retried, so an operator's interrupt can turn a run that would have been resumed into a permanent failure in the denominator. Not changed because it alters behaviour with no timeout configured. **What it would take:** letting cancellation and `KeyboardInterrupt` propagate out of that handler after recording nothing, and a test that a cancelled collection resumes the run.
+**Status: fixed (2026-10-03).** `ExperimentRunner._execute_one` (`scheduler/loop.py`) caught `BaseException`, so a cancelled collection (Ctrl-C reaches it as `CancelledError`) recorded the in-flight run `FAILED` ("harness raised"), which is terminal and never retried, turning an operator's interrupt into a permanent failure in the denominator. `CancelledError`, `KeyboardInterrupt` and `SystemExit` now propagate with nothing recorded: the run stays `RUNNING`, the next startup marks it `ABANDONED`, and it resumes. The watchdog's own cancellation is unaffected (it yields `None`, not an exception, so the timeout path is unchanged). `tests/integration/test_scheduler_interrupt.py` cancels a real collection, checks the run is still `RUNNING` with no artifact, then resumes and completes it (`attempts == 2`); against the old handler it fails (`DID NOT RAISE`). Ordinary exceptions still become `FAILED` as before.
 
 ### The watchdog is cooperative only
 
@@ -1303,3 +1345,12 @@ Recorded in full under "Timeout as a distinct run state": cancellation lands whe
 ### Ad-hoc scripts can import the wrong checkout
 
 **Status: open, environmental.** With an editable install, `python -c "import causalmesh"` from a git worktree can resolve to the main checkout's `src` (this happened during the scaling work). `pytest` is unaffected because `pyproject.toml` sets `pythonpath = src`; ad-hoc scripts need `PYTHONPATH=src`.
+
+### The main-into-dev merge left the head broken, and nothing ran the gate on it (2026-10-03)
+
+**Status: repaired; the process gap is open.** `d710942` ("Merge branch 'main' ... into dev") kept one side's constructor and the other side's methods in `sdk/mesh.py`, `cli/commands_verify.py` and `gateway/gateway.py` (two parallel implementations of SDK persistence and of `verify` key handling had landed independently). The merged tree failed 329 tests and errored 141 more, and `ruff` reported undefined names (`records`, `threading`, `EvidenceStore`, `verify_chain`); the full suite had not been run on it. Repaired in `c82c202` by reconciling both designs rather than choosing one: `persist_to` and `evidence_path` both stay and are mutually exclusive per session (passing both is a `ConfigurationError`, since two writers to two files would be two chains); `verify` prefers the operator's `--keys` ring, then a `keyring.json` beside `run.json` (a broken one fails the run), then the embedded keys, and only `--keys` counts as attribution checked. The full gate then passed (2804 passed, none skipped for a missing extra). **What remains:** there is no CI (see "CI was removed"), so a merge is only as safe as someone remembering to run `python scripts/check.py` on the result. Two persistence mechanisms for one chain is also real surface area to carry; unifying them (one store, two views) is the cleaner end state and was not attempted inside a repair.
+
+### Two bugs found in tests while getting the gate green (2026-10-03)
+
+**Status: fixed.** `test_cli_verify_attribution`'s ASCII check excluded only light box-drawing characters, so it failed wherever Rich draws a heavy box (it now excludes the whole Box Drawing block). `policy/ledger.py` built a `SELECT` with an f-string (flagged by bandit at medium; ruff's `noqa` does not silence bandit), now a lookup of two whole literal queries. `docs/preregistration-draft.md` said two tasks were plannable and 960 runs; there are four and `experiment plan --profile confirmatory --allow-gated` plans exactly 1920 (checked), so the draft's "discrepancy" is resolved and says so.
+
