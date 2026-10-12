@@ -33,3 +33,7 @@ jobs:
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          # A version already on PyPI (0.1.0 was uploaded by hand with twine
+          # before this workflow could run) is skipped instead of failing the job.
+          skip-existing: true
