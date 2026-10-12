@@ -93,9 +93,11 @@ the audit installed software or changed product code.
    - 9 of those failures reproduced in isolation; all are fixed in the working tree (two
      causes: a stale editable install path and Windows path/`bash` resolution).
    - 10 failures passed in isolation but failed in the full run: adoption_hook x3,
-     cooperbench hidden x3, welcome palette x4. The cause is unexplained and may depend on
-     test order or load. A clean re-run was started afterwards; its result is recorded in
-     the launch checklist, not here.
+     cooperbench hidden x3, welcome palette x4. At the time of the audit the cause was
+     unexplained. **Update 2026-10-12:** they were environment-dependent, not order- or
+     load-dependent (the PowerShell tool's `bash` resolved to the WSL relay, `NO_COLOR=1`
+     and `PYTHONIOENCODING` were set). They are fixed, and the full gate then passed
+     (2918 passed, 15 skipped). See `docs/backlog.md` and `docs/ship-log/PHASE-A.md`.
    - Linux/macOS have never been run, CI is absent and Actions are disabled by billing.
 5. **Determinism claim.** One intermittent determinism-test failure is unexplained
    (docs/backlog.md), and the chat path signed wall-clock time until the 2026-10-12 fix in
@@ -243,5 +245,5 @@ MIT/Apache-compatible. Readiness is not justification.
    ownership-only, or must wait for B1.
 4. **Hook latency budget**, which feeds the Section 5 Rust condition.
 5. **CI funding.** Re-enable Actions billing, or accept a manual multi-OS gate.
-6. **Order-dependent failures.** Whether the 10 unexplained full-run failures block 0.1.0 or
-   ship as recorded backlog items.
+6. **Order-dependent failures.** Resolved 2026-10-12: the 10 were environment-dependent and
+   are fixed; the full gate passes. No longer a release decision.

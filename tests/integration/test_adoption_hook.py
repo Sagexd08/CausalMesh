@@ -77,10 +77,13 @@ class TestClaudeCodeHookAdapter:
             {"tool_name": "Edit", "tool_input": {"file_path": "src/someone_elses.py"}},
             cwd=contract_dir,
         )
-        assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
-        assert "reason" not in output["hookSpecificOutput"] or output["hookSpecificOutput"].get(
-            "permissionDecisionReason"
-        )
+        hook_output = output["hookSpecificOutput"]
+        assert hook_output["permissionDecision"] == "deny"
+        # A refusal must say why: the path and whose it is, not an empty string.
+        reason = hook_output.get("permissionDecisionReason")
+        assert isinstance(reason, str) and reason
+        assert "src/someone_elses.py" in reason
+        assert "someone-else" in reason
 
     def test_a_non_write_tool_is_allowed_without_consulting_the_gate(
         self, contract_dir: Path

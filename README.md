@@ -144,13 +144,13 @@ That last row is a real limitation, documented rather than hidden.
 ## Status
 
 **Substrate complete and exercised; statistics and reporting are not built.** On 2026-09-30, `pytest --collect-only` found
-1751 tests, and a full `pytest` run (slow tests included) on one Windows 11,
-Python 3.12 machine gave 1710 passed, 0 failed and 41 skipped: 35 need pilot
-artifacts that are not in the checkout, 3 need `bash` and `jq`, 2 need symlink
-privilege, 1 needs `TYPESAFE_API_KEY`. That is one machine on one day, and
-there is no CI to corroborate it: the workflow was removed rather than paid
-for (see `docs/backlog.md`). Re-run `python scripts/check.py` rather than
-trust this line.
+1751 tests. On 2026-10-12, `python scripts/check.py` (lint, format, types on the
+enforced modules, the security scan and the whole suite) passed on one Windows 11,
+Python 3.13.5 machine: 2918 passed, 0 failed, 15 skipped. The skips need a POSIX
+file system, an optional package such as CrewAI, or an API key. That is one machine
+on one day, and there is no CI to corroborate it: the workflow was removed rather
+than paid for (see `docs/backlog.md`). Linux and macOS have not been run. Re-run
+`python scripts/check.py` rather than trust this line.
 
 The build follows a vertical slice first: a single scenario driven end-to-end
 through every subsystem, executed under all four arms, before breadth is
@@ -162,7 +162,7 @@ executable path.
 | Event protocol, canonicalization | ✅ property-tested |
 | Ed25519 identity, hash chain | ✅ |
 | Offline verifier + adversarial battery | ✅ 8 attack classes |
-| Claim registry, leases | ✅ concurrency-tested across threads |
+| Claim registry, leases | ✅ exclusivity tested across threads and processes on one filesystem; no fencing, no automatic renewal, no multi-path acquire (see backlog) |
 | Relay: sequence, sign, chain, fan-out | ✅ |
 | Isolation, 11 tools, lifecycle hooks | ✅ leakage-tested |
 | Channels, relevance, information window | ✅ |
@@ -183,6 +183,13 @@ coded a run, no real CooperBench task has been run with anything but a mock
 agent replaying gold patches, and there is no inferential statistics or
 reporting layer. See [`docs/backlog.md`](docs/backlog.md),
 which records every gap as a tracked item with its reason.
+
+**What is and is not enforced today** (2026-10-12; per-claim evidence in [`docs/claims-ledger.md`](docs/claims-ledger.md)):
+
+- Ownership refusals: the example Claude Code hook refuses `Write` and `Edit` on a path another role owns. It has been run only against synthesized input, never a real `claude` session.
+- Lease (claim) refusals: SDK sessions given `claims=`, and experiment runs without a `causalmesh.yaml` (in contract-gated runs the lease key does not match; see backlog), on one filesystem. The example hook does **not** consult leases.
+- Not covered: `Bash`, `MultiEdit`, `NotebookEdit`; agents on different machines; fencing tokens and automatic lease renewal (a lease that lapses mid-write is not stopped).
+- Evidence: a deterministic mock agent only, on Windows only, with no CI.
 
 ## Measured results
 

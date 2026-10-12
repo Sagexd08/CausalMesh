@@ -159,6 +159,15 @@ what is built and what is not.
 
 ### Fixed
 
+- **`causalmesh verify --keyring PATH`** is accepted as an alias of `--keys`, and the note
+  printed when a chain is checked only against keys embedded in the artifact now says so
+  plainly. Exit codes and PASS/FAIL semantics are unchanged.
+- **`causalmesh doctor` outside a checkout** reports the missing repository as a warning
+  ("not a checkout; the experiment harness is unavailable") rather than a failure, so a
+  `pip install` user's first diagnostic no longer exits 1. Real install defects still do.
+- **Windows: CooperBench base-file fetches** run git with `core.longpaths`, and the
+  integration-test runner resolves `bash` past the WSL relay in `System32` (a relay-only
+  `PATH` now reports `COULD NOT RUN` instead of identical arm failures).
 - **`/v1/chat/completions` no longer signs the wall clock.** Chat events take the session's
   logical clock and a gateway-counter event id (`sdk_<agent>_<n>`), so two `serve` sessions
   making the same chat calls share a head hash; the wall time is in

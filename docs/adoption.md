@@ -7,8 +7,9 @@ CausalMesh's experiment harness (`causalmesh doctor`, `experiment run`,
 The policy plane does not. `Contract.load(...)` and `Gate(...).check(...)`
 work in any directory, and so do the CLI commands built on them:
 `causalmesh init`, `causalmesh policy check`, and `causalmesh serve`. This
-page shows two ways to actually gate a real agent's actions in your own
-project, using nothing but those.
+page shows two ways to check a real agent's actions against your contract
+in your own project, using nothing but those. Read "What this does and does
+not cover" in section 2 before relying on either.
 
 ## 1. Declare a contract
 
@@ -59,6 +60,27 @@ Wire it into `.claude/settings.json`:
   }
 }
 ```
+
+**What this does and does not cover (checked 2026-10-12).**
+
+- It refuses a `Write` or `Edit` on a path your contract assigns to another
+  role. That is the whole of what it enforces.
+- It never consults write leases: `policy check --stdin` builds its gate
+  without a claim registry (`src/causalmesh/cli/commands_policy.py:179`), so
+  another session's live claim does not change its answer. It does not
+  "prevent conflicting writes between Claude Code agents".
+- `MultiEdit`, `NotebookEdit` and `Bash` are not gated; the hook allows
+  them without asking the gate (`docs/examples/claude-pretooluse.sh:19-22`).
+- Every session is the one agent `claude-code` to the gate
+  (`docs/examples/claude-pretooluse.sh:28`).
+- It needs `jq` on `PATH`. Without it the script exits 127 with no output;
+  what Claude Code then does with the tool call is UNKNOWN (not verified).
+- It has been run against synthesized JSON in a bash subprocess
+  (`tests/integration/test_adoption_hook.py`) on Windows, never against a
+  real `claude` session, and no agent behaviour has been observed.
+
+Each of these is a tracked item in `docs/backlog.md` under "Claim
+enforcement: what the audit of 2026-10-12 found missing".
 
 This is purely ephemeral: no chain, no ledger, no run. It answers one
 question and exits, the same as `causalmesh policy check` always has.

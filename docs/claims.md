@@ -7,7 +7,17 @@ mechanism is what makes the C2→C3 contrast measure enforcement rather than
 noise.
 
 Status: describes the registry as implemented (Step 4 of `docs/PLAN.md`).
-Integration with the write gate in the tool layer arrives in Step 6.
+The write gate in the tool layer consults it through the claim rule
+(`Gate._rule_claim`, `src/causalmesh/policy/gate.py:373-397`), but only when
+the `Gate` is built with a `ClaimRegistry`. The SDK does so when the session
+is given `claims=` (`src/causalmesh/sdk/mesh.py:770`); `causalmesh policy
+check --stdin`, and so the Claude Code example hook, builds its `Gate`
+without one (`src/causalmesh/cli/commands_policy.py:179`), so that path
+refuses on declared ownership only. What is and is not built around leases
+(fencing, heartbeat, atomic multi-path acquire, cross-machine) is tracked in
+`docs/backlog.md` under "Claim enforcement: what the audit of 2026-10-12
+found missing"; the status of each claim made for this mechanism is in
+`docs/claims-ledger.md`.
 
 ## The invariant
 
@@ -137,6 +147,20 @@ lease:
 - **No queueing or fairness.** A denied agent is told who holds the path and
   until when; it is not placed in a queue. Lease-wait time is therefore a
   property of agent retry behaviour, and is measured rather than designed.
+- **No configuration is read from the `lease:` block above.** Nothing in
+  `src/` reads `duration_seconds` or `renewal_interval_seconds` (a search of
+  `src/` for `renewal_interval` finds nothing); the experiment runner takes
+  its duration from `RunConfig.lease_us` (`src/causalmesh/tasks/runner.py:72`).
+  The block documents the intended §21 defaults, not behaviour.
+- **No automatic renewal.** Nothing calls `ClaimRegistry.renew` on a timer
+  or on activity (a search of `src/` finds no caller), so a holder that
+  works longer than its lease loses the path unless it renews by hand.
+- **No fencing tokens.** A holder whose lease lapsed mid-write is not
+  stopped at the resource; the registry has no per-resource token that a
+  write could be checked against.
+- **No atomic multi-path acquire.** `acquire` takes one path. A caller that
+  needs several takes them one at a time and can end up holding some.
+  Handoff is a `release` followed by an `acquire`, not one transaction.
 - **No deadlock detection.** Leases expire, which bounds any wait, but a
   cyclic wait among agents is not detected as such.
 - **No cross-machine coordination.** SQLite serializes within one filesystem.

@@ -36,9 +36,14 @@ def guarded_write(
 ) -> bool:
     """Write only if the claim gate allows it — the C3 write path.
 
-    This mirrors what the tool layer will do in Step 6: consult the gate, and
-    perform the write only on a grant. The check happens *before* the file is
-    opened, so a denial cannot truncate the target as a side effect.
+    This mirrors what the tool layer does when it is given a registry
+    (`Gate._rule_claim`, `src/causalmesh/policy/gate.py:373-397`): consult
+    the gate, and perform the write only on a grant. This helper calls
+    `ClaimRegistry.may_write` directly and does not go through `Gate`, so it
+    tests the decision and the file consequence, not the wiring; the gate's
+    claim rule is covered by `TestClaims` in `tests/unit/test_policy.py`.
+    The check happens *before* the file is opened, so a denial cannot
+    truncate the target as a side effect.
     """
     if not registry.may_write(path=target.name, agent_id=agent, run_id=RUN, now_us=now_us).granted:
         return False
