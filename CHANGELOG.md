@@ -159,6 +159,12 @@ what is built and what is not.
 
 ### Fixed
 
+- **The Claude Code hook example fails closed** (`docs/examples/claude-pretooluse.sh`).
+  Unreadable JSON, a missing `jq`, a missing `causalmesh` CLI, a missing or invalid
+  `causalmesh.yaml`, and a `Write`/`Edit` with no `file_path` each print a `deny` with a
+  reason and exit 0; before, the first two exited 5 and 127 with no output and the last
+  two denied with an empty reason. Whether a real Claude Code session honours the deny is
+  still unverified.
 - **`causalmesh verify --keyring PATH`** is accepted as an alias of `--keys`, and the note
   printed when a chain is checked only against keys embedded in the artifact now says so
   plainly. Exit codes and PASS/FAIL semantics are unchanged.

@@ -70,11 +70,17 @@ Wire it into `.claude/settings.json`:
   another session's live claim does not change its answer. It does not
   "prevent conflicting writes between Claude Code agents".
 - `MultiEdit`, `NotebookEdit` and `Bash` are not gated; the hook allows
-  them without asking the gate (`docs/examples/claude-pretooluse.sh:19-22`).
+  them without asking the gate (`docs/examples/claude-pretooluse.sh:44-47`).
 - Every session is the one agent `claude-code` to the gate
-  (`docs/examples/claude-pretooluse.sh:28`).
-- It needs `jq` on `PATH`. Without it the script exits 127 with no output;
-  what Claude Code then does with the tool call is UNKNOWN (not verified).
+  (`docs/examples/claude-pretooluse.sh:57`).
+- It needs `jq` and `causalmesh` on `PATH`, and a valid `causalmesh.yaml`
+  at or above the hook's working directory. When any of those is missing, or
+  the payload is not a JSON object with a `tool_name`, or a `Write`/`Edit`
+  carries no `file_path`, the script prints a `deny` with a reason and exits
+  0 (`tests/integration/test_adoption_hook.py::TestHookFailsClosed`). Without
+  `jq` it denies every tool call it is given, so keep the `Write|Edit`
+  matcher above. Whether a real Claude Code session honours that deny is
+  still UNKNOWN (backlog entry (g)).
 - It has been run against synthesized JSON in a bash subprocess
   (`tests/integration/test_adoption_hook.py`) on Windows, never against a
   real `claude` session, and no agent behaviour has been observed.
