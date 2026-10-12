@@ -238,7 +238,11 @@ class TestPalette:
         import re
 
         buffer = io.StringIO()
-        console = Console(file=buffer, force_terminal=True, color_system="windows", width=120)
+        # `no_color=False` is pinned: rich reads NO_COLOR from the environment
+        # and would strip every colour, and the harness shell sets it.
+        console = Console(
+            file=buffer, force_terminal=True, color_system="windows", width=120, no_color=False
+        )
         from rich.text import Text
 
         text = Text()

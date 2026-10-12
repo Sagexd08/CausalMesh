@@ -13,19 +13,21 @@ from pathlib import Path
 
 import pytest
 
+from causalmesh.tasks.runner import resolve_executable
+
 pytestmark = [pytest.mark.integration]
 
 REPO = Path(__file__).resolve().parents[2]
 HOOK_SCRIPT = REPO / "docs" / "examples" / "claude-pretooluse.sh"
 
 # Resolved once, by absolute path, rather than passing the bare name "bash"
-# to subprocess. On Windows, CreateProcess's own search order can land on
-# the WSL launcher stub at System32\bash.exe ahead of Git Bash even when
-# PATH (and `where bash`) puts Git Bash first -- that stub exits non-zero
-# with no WSL distro installed. Resolving up front, with shutil.which
-# (which does respect PATH order), sidesteps that and gives a clear skip
-# reason when neither bash nor jq is on the machine at all.
-BASH = shutil.which("bash")
+# to subprocess. On Windows the WSL launcher stub at System32\bash.exe can
+# come first, through CreateProcess's own search order or because the
+# invoking shell's PATH carries only `Git\cmd` (a PowerShell session does);
+# the stub exits non-zero with no WSL distro installed. `resolve_executable`
+# skips a bash that does not run, finds Git for Windows beside `git`, and
+# gives a clear skip reason when neither bash nor jq is on the machine at all.
+BASH = resolve_executable("bash")
 JQ = shutil.which("jq")
 
 

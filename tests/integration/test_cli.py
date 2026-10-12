@@ -129,11 +129,15 @@ class TestModuleEntryPoint:
         import subprocess
         import sys
 
-        env = {**os.environ, "PYTHONPATH": str(REPO / "src")}
+        # The child's stdout encoding and this decode are pinned together: an
+        # inherited PYTHONIOENCODING=utf-8 makes rich draw UTF-8 box glyphs
+        # that a locale (cp1252) decode of the pipe cannot read.
+        env = {**os.environ, "PYTHONPATH": str(REPO / "src"), "PYTHONIOENCODING": "utf-8"}
         done = subprocess.run(
             [sys.executable, "-m", "causalmesh", "--help"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
             env=env,
             timeout=120,
             check=False,

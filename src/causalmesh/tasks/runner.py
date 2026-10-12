@@ -16,6 +16,7 @@ noticed.
 from __future__ import annotations
 
 import asyncio
+import functools
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -771,6 +772,41 @@ def _harness_environment() -> dict[str, str]:
     }
 
 
+@functools.cache
+def resolve_executable(name: str, path: str | None = None) -> str | None:
+    """`shutil.which`, except that on Windows a `bash` that cannot run is no answer.
+
+    A shell whose `PATH` carries only `Git\\cmd` finds the WSL relay at
+    System32 first. With no distro it exits 1 ("execvpe(/bin/bash) failed"),
+    the same code as a failed test, so every arm would fail identically and
+    nothing would say why. A `bash` that does not run is therefore skipped, and
+    the one beside `git` (Git for Windows: `<root>\\bin\\bash.exe`) is tried.
+    Returns `None` when no working `bash` exists, so the preflight can say so.
+    """
+    import shutil
+    import subprocess
+    import sys
+
+    found = shutil.which(name, path=path)
+    if name != "bash" or sys.platform != "win32":
+        return found
+    git = shutil.which("git", path=path)
+    candidates = [found] if found else []
+    if git:
+        for root in Path(git).parents[1:3]:
+            candidates += [str(root / "bin" / "bash.exe"), str(root / "usr" / "bin" / "bash.exe")]
+    for candidate in candidates:
+        try:
+            ran = subprocess.run(
+                [candidate, "-c", "exit 0"], capture_output=True, timeout=30, check=False
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+        if ran.returncode == 0:
+            return candidate
+    return None
+
+
 def integration_test_preflight(task: TaskDefinition) -> str | None:
     """Why this task's integration test cannot run here, or `None` if it can.
 
@@ -788,7 +824,6 @@ def integration_test_preflight(task: TaskDefinition) -> str | None:
     importable by that interpreter. Any other command shape is not probed and
     is assumed runnable; the check says what it knows, not more.
     """
-    import shutil
     import subprocess
     import tempfile
 
@@ -796,9 +831,12 @@ def integration_test_preflight(task: TaskDefinition) -> str | None:
     if not argv:
         return None
     env = _harness_environment()
-    executable = shutil.which(argv[0], path=env.get("PATH"))
+    executable = resolve_executable(argv[0], env.get("PATH"))
     if executable is None:
-        return f"{argv[0]!r} is not found on the harness's PATH, so the integration test cannot run"
+        return (
+            f"{argv[0]!r} is not found on the harness's PATH (or is a stub that cannot run), "
+            "so the integration test cannot run"
+        )
     if len(argv) < 3 or argv[1] != "-m":
         return None
     module = argv[2]
@@ -834,7 +872,6 @@ def _run_integration_test(task: TaskDefinition, workspace: Workspace) -> int | N
     liked. Deliberately outside the tool boundary — this is the
     experimenter measuring the result, not the agent acting.
     """
-    import shutil
     import subprocess
 
     env = _harness_environment()
@@ -843,7 +880,7 @@ def _run_integration_test(task: TaskDefinition, workspace: Workspace) -> int | N
     # looks in System32 before PATH, so a bare `bash` runs WSL's relay (which
     # exits 1 with no distro) instead of the Git Bash the preflight just found,
     # and every arm fails identically.
-    if argv and (resolved := shutil.which(argv[0], path=env.get("PATH"))):
+    if argv and (resolved := resolve_executable(argv[0], env.get("PATH"))):
         argv[0] = resolved
     try:
         completed = subprocess.run(

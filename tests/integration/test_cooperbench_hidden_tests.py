@@ -29,6 +29,7 @@ from pathlib import Path
 import pytest
 
 from causalmesh.tasks.cooperbench import ImportOptions, import_task
+from causalmesh.tasks.runner import resolve_executable
 
 pytestmark = [pytest.mark.integration, pytest.mark.slow]
 
@@ -125,7 +126,7 @@ def _run_harness(workspace: Path) -> tuple[int, list[str]]:
     done = subprocess.run(
         # Absolute path: a bare "bash" can resolve to the WSL launcher at System32 on
         # Windows (see test_adoption_hook.py).
-        [shutil.which("bash") or "bash", "run_tests.sh"],
+        [resolve_executable("bash") or "bash", "run_tests.sh"],
         cwd=workspace,
         capture_output=True,
         text=True,
