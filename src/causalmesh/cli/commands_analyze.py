@@ -1,8 +1,8 @@
 """`causalmesh analyze` — read a collection's costs and contrasts (§44, §46).
 
 Descriptive only. The command reports what the runs did; it makes no claim
-that any difference is distinguishable from noise, because the statistics
-layer (Step 13) is not built. Every table it prints is labelled PILOT or
+that any difference is distinguishable from noise; intervals and exact tests
+are `causalmesh report`'s. Every table it prints is labelled PILOT or
 DERIVED in the §68 sense rather than presented as a result.
 
 The per-task view is the default for the contrasts because the pooled one
@@ -261,8 +261,6 @@ def analyze_command(
             out_console.print(rendered)
             note("pooled figures average across tasks whose enforcement behaviour differs")
 
-        note(
-            "descriptive only: no interval, no significance test; the statistics layer is not built"
-        )
+        note("descriptive only: no interval, no significance test; see `causalmesh report`")
 
     raise typer.Exit(Exit.OK)

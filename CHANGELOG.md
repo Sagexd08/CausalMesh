@@ -10,6 +10,18 @@ inside it is in the commit log, and what is deliberately absent is in
 
 ## [Unreleased]
 
+### Added
+
+- **`causalmesh report`, and the inference primitives under it.** Per-arm counts with Wilson
+  intervals, and the four planned contrasts with Newcombe intervals, Fisher exact p-values, a
+  Holm adjustment and (only when `--margin` is given) an interval-based equivalence verdict.
+  `--alpha` and `--confidence` are required with no default, because none is preregistered;
+  every table is labelled `PILOT` or `DERIVED`, every number carries the run ids it came from,
+  and an outcome that was never recorded is `unknown`, never a failure. Standard library only
+  (`causalmesh.analysis.inference`, `causalmesh.reporting`). Not built: the mixed-effects model,
+  a preregistered analysis, a confirmatory run, and the Step 12 analytical estimators (all in
+  `docs/backlog.md`). Nothing about agent behaviour is claimed.
+
 ## [0.1.0] - 2026-10-12
 
 First public release. Pre-alpha; see `README.md` Status and `docs/backlog.md` for

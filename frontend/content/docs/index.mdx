@@ -63,10 +63,10 @@ nobody can make it on evidence.
 | Tests | **1,425 collected** (2026-09-30); 1,384 passed, 0 failed, 41 skipped in one full local run (see the README) |
 | Pilot collection | 24 runs, 2 tasks, 4 arms, executed by a deterministic mock agent |
 | Chains verified offline | 24 / 24 when the pilot was run; the raw runs are not in git |
-| Command line | `doctor`, `task`, `experiment`, `verify`, `analyze`, `manifest`, `audit`, `watch`, `connectors`, `policy`, `serve`, `quickstart` |
+| Command line | `doctor`, `task`, `experiment`, `verify`, `analyze`, `report`, `manifest`, `audit`, `watch`, `connectors`, `policy`, `serve`, `quickstart` |
 | Real agent connectors | `claude`, `codex` drivable; such runs are **not reproducible** |
 | Hosted model runs | **none measured** — see [Limitations](/docs/limitations) |
-| Statistics and reporting layer | **not built** — no significance test, no `report` |
+| Statistics and reporting | **primitives and a PILOT/DERIVED `report` only** — no preregistered analysis, no mixed-effects model, no confirmatory run |
 
 <Callout type="warn" title="This documentation does not overclaim">
 Where something is unbuilt, untested or unproven, these pages say so in the

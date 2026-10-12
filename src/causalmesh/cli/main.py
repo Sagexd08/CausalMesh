@@ -31,6 +31,7 @@ from causalmesh.cli.commands_audit import audit_command
 from causalmesh.cli.commands_doctor import doctor_command
 from causalmesh.cli.commands_policy import init_command
 from causalmesh.cli.commands_quickstart import quickstart_command
+from causalmesh.cli.commands_report import report_command
 from causalmesh.cli.commands_watch import watch_command, welcome_command
 
 app = typer.Typer(
@@ -79,6 +80,10 @@ app.add_typer(commands_task.app, name="task")
 app.add_typer(commands_experiment.app, name="experiment")
 app.command("verify")(commands_verify.verify_command)
 app.command("analyze")(analyze_command)
+app.command(
+    "report",
+    help="Intervals, exact tests and Holm-adjusted contrasts over a collection (PILOT/DERIVED).",
+)(report_command)
 app.command(
     "agreement",
     help="Compute inter-rater kappa (S53) over a judgement file an operator supplies.",

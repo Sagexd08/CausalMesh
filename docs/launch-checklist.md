@@ -39,8 +39,8 @@ agent and no hosted model has driven anything (`AGENTS.md`, `docs/backlog.md`).
 - Every number resolves to something in the repo (`frontend/lib/landing/results.json`
   comes from `data/raw/pilot_landing/`, which is **24 runs of a mock agent**).
 - No sentence says or implies a hosted model drove a run.
-- `frontend/content/docs/limitations.mdx` lists what is not built: `report`, the
-  staleness estimators, a hosted-model run, the 1920-run collection.
+- `frontend/content/docs/limitations.mdx` lists what is not built: the mixed-effects model and
+  preregistered analysis, the staleness estimators, a hosted-model run, the 1920-run collection.
 - `README.md` has a `pip install causalmesh` path as well as the `pip install -e .`
   contributor path, and says plainly that the harness needs a clone.
 

@@ -139,13 +139,17 @@ An absent outcome is counted as `unknown`, never as a failure — a crashed run 
 
 **Not built:** the staleness estimators. λ̂, δ̂ and Δ̂ are named here and defined nowhere in this repository; they come from §23 and §45, which are not checked in. The per-turn observations would support *an* estimator, but one derived from its own inputs would carry the specified symbol while possibly measuring something else. Recorded in `docs/backlog.md` rather than guessed.
 
-### Step 12 — Analytical module (§46, §47) — **not built**
+### Step 12 — Analytical module (§46, §47) — **not built** (re-checked 2026-10-13: still no estimator code; inputs undefined in the repo, see `docs/backlog.md`)
 Pure mathematics with zero storage dependency, unit-tested against hand-computed values: `C_tr`, `C_md`, `ρ(T)`, `T*`, `P_stale`, `P_floor`.
 
-### Step 13 — Statistics (§48–50) — **not built**
+### Step 13 — Statistics (§48–50) — **partially built: primitives only**
 The preregistered mixed-effects logistic model with task random intercepts, the four primary contrasts, Holm–Bonferroni correction, 95% confidence intervals, TOST at ±10 percentage points (a non-significant difference is explicitly *not* an equivalence result), and configurable power analysis that states its assumptions.
 
-### Step 14 — Provenance, manifests and reporting (§30–33, §60, §66–69) — **partially done**
+**Built (primitives only):** `analysis/inference.py` has the Wilson interval, the Newcombe (1998, method 10) difference interval, Fisher's exact test, Holm–Bonferroni, an interval-based TOST read-off whose docstring states that a non-significant difference is not an equivalence result, and normal-approximation power and sample size that return the assumptions they used. Stdlib only, unit-tested against hand-derived values and Newcombe's published example (`tests/unit/test_inference.py`). Every assumption (`alpha`, `confidence`, `margin`, `power`) is a required argument: `docs/preregistration-draft.md` is an unsigned draft and none is decided, so nothing here is preregistered or confirmatory.
+
+**Not built:** the mixed-effects logistic model with task random intercepts (model class, alpha, margin and unit of analysis are undecided in the draft; the confirmatory run is gated), and the preregistered analysis itself. Recorded in `docs/backlog.md`.
+
+### Step 14 — Provenance, manifests and reporting (§30–33, §60, §66–69) — **built; reporting as PILOT/DERIVED labelling only**
 Manifests carrying SHA-256 hashes of every artifact, environment capture and a configuration freeze hash. The report generator ensures every number carries a traceable source reference and every figure and table is labeled ANALYTICAL, PILOT, CONFIRMATORY, EXPLORATORY or DERIVED.
 
 **Built:** `provenance/` captures the environment (§30, §32) and writes manifests (§31, §33). `causalmesh manifest write` records a SHA-256 over every artifact plus a configuration freeze hash; `causalmesh audit` checks the record against what is on disk and **re-verifies every chain**, because a manifest proves the bytes are unchanged and says nothing about whether they were ever valid.
@@ -156,14 +160,16 @@ Three `RunConfig` fields — `git_commit`, `machine_id`, `operator_id` — exist
 
 A manifest recorded from a dirty working tree reports itself as not attributable to a commit, rather than implying the tree matched the hash it names.
 
-**Not built:** the report generator, and the §68 figure labelling it would apply. `causalmesh analyze` labels its own tables PILOT and DERIVED in the meantime.
+**Built (2026-10-13):** `reporting/report.py` and `causalmesh report`. Per-arm counts (successes, failures and unknown kept apart) with Wilson intervals, and the four primary contrasts with Newcombe intervals, Fisher exact p-values, a Holm adjustment across the contrasts and an equivalence verdict only when a margin is given. Every number carries the run ids it was computed from, every table carries a label, and the report states the assumptions it was given and that they are not preregistered. A contrast with no usable run in either arm is `unknown`, not 0.
+
+**Only `PILOT` and `DERIVED` are emitted.** `CONFIRMATORY` is gated until a preregistration is signed; the builder refuses to emit it. `ANALYTICAL` and `EXPLORATORY` are not applied by anything yet. Figures (as opposed to tables) are not generated.
 
 ### Step 15 — CLI, doctor, audit and docs (§61, §62, §83, §94) — **partially done**
 All §62 commands with `--help` and meaningful exit codes. `doctor` reports PASS/WARN/FAIL with actionable diagnostics. `audit` detects untested modules, missing provenance, unverified runs, dirty raw data and configuration mismatches. All ten `docs/*.md` files describe **actual** behavior.
 
 **Partially done.** Built and exercised: `doctor`, `task list`, `task validate`, `experiment plan`, `experiment run`, `experiment status`, `verify` (including `--run` for the §82 clean-room case). Every command takes `--json`; exit codes are 0 success, 1 negative result, 2 bad invocation, 3 could not run. A failed *run* exits 0, because §81 makes a failed run evidence.
 
-Later built and exercised (this paragraph previously said otherwise): `analyze` (descriptive, on `metrics/`), `manifest write` and `audit` (on `provenance/`), `watch`, `connectors list`, `policy`, `serve`, `quickstart` and `agreement`. Not built: `report`. It waits on `reporting/`, which is empty. `causalmesh doctor` names the unbuilt subsystems rather than leaving them to be discovered by use.
+Later built and exercised (this paragraph previously said otherwise): `analyze` (descriptive, on `metrics/`), `manifest write` and `audit` (on `provenance/`), `watch`, `connectors list`, `policy`, `serve`, `quickstart` and `agreement`. Built since: `report` (PILOT/DERIVED tables over `reporting/`; see Step 14). `causalmesh doctor` names the unbuilt subsystems rather than leaving them to be discovered by use.
 
 `analysis/` is no longer empty: `agreement.py` (multi-rater kappa coding, §53 — see `docs/backlog.md`) is built and exposed as `causalmesh agreement`. It computes over an operator-supplied judgement file only; no run in this repository has been coded by a real rater.
 

@@ -6,7 +6,8 @@ particular collection. This module only applies them to data.
 
 **These are descriptive differences, not inferential results.** No interval,
 no p-value, no claim that a difference is distinguishable from noise — that
-is Step 13, and the statistics layer is not built. A difference reported
+is `causalmesh report`'s (Step 13 primitives), under assumptions the caller
+states, and the mixed-effects model is not built. A difference reported
 here says what the runs did, not what the population does. §50 requires a
 non-significant difference to be stated as such rather than as equivalence;
 the honest position before the statistics exist is to make no significance

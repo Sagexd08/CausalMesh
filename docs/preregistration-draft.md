@@ -178,8 +178,9 @@ From `experiments/randomization.py`:
 | Per-arm and per-task cost and success aggregation | built, descriptive, labelled PILOT | `metrics/accounting.py`, `cli/commands_analyze.py` |
 | The four contrast differences (success delta, bytes delta, bytes ratio) | built, descriptive, labelled DERIVED | `metrics/contrasts.py` (`measure`) |
 | Multi-rater kappa coding (sec 53) | built; operator-supplied judgements only | `analysis/agreement.py` |
-| Inferential model, correction, intervals, equivalence, power analysis | **not built** | `docs/PLAN.md`, Step 13 "not built"; no code found |
-| Report generator and figure labelling (sec 68) | **not built** | `docs/PLAN.md`, Step 14 |
+| Intervals, exact test, Holm correction, equivalence read-off, power (primitives) | built 2026-10-13; every assumption is a required argument, none is preregistered | `analysis/inference.py`, `docs/PLAN.md` Step 13 |
+| Inferential model (mixed-effects logistic, task random intercepts) | **not built** | `docs/backlog.md`; model class, alpha, margin and unit of analysis are TODO here |
+| Report generator and figure labelling (sec 68) | built as PILOT/DERIVED only; `CONFIRMATORY` refused; no figures | `reporting/report.py`, `cli/commands_report.py`, `docs/PLAN.md` Step 14 |
 | Staleness estimators | **not built**, definitions absent | `docs/backlog.md`; `docs/staleness-estimators-needed.md` |
 
 `metrics/contrasts.py` says of itself: "These are descriptive differences, not
@@ -343,8 +344,8 @@ why not.
 `TODO(owner):` Where and when the preregistration is deposited and
 timestamped; who signs it; how deviations are recorded; the analysis-code freeze
 point (a commit); and which results will be labelled CONFIRMATORY versus
-EXPLORATORY under sec 67/68 (the report generator that would apply the labels
-is not built).
+EXPLORATORY under sec 67/68 (the report generator emits only PILOT and DERIVED;
+it refuses CONFIRMATORY until this is signed).
 
 ---
 

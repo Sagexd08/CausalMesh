@@ -64,21 +64,20 @@ class TestDoctor:
         assert report["verdict"] in {"PASS", "WARN"}
         assert report["failed"] == 0
 
-    def test_doctor_reports_the_unbuilt_subsystems(self) -> None:
-        """The honest half of the health check.
+    def test_doctor_no_longer_lists_reporting_as_unbuilt(self) -> None:
+        """The honest half of the health check, read from the package directory.
 
-        A CLI that offers commands without saying which ones have no
-        implementation behind them leaves the user to discover the gaps by
-        hitting them. `reporting` is asserted rather than `analysis`
-        because `analysis/agreement.py` (kappa coding, §53) shipped: the
-        mechanism that names subsystems here reads the package directory
-        directly, so a module landing in `analysis/` is exactly what is
-        supposed to remove it from this list.
+        The mechanism that names unbuilt subsystems reads the package
+        directory directly, so `reporting/report.py` landing is exactly what
+        removes `reporting`, and the `report` command it gated, from the
+        list. The command is invoked here so the claim "it exists" is
+        exercised rather than inferred from a file being present.
         """
         result = invoke("doctor", "--root", str(REPO), "--json")
         coverage = next(c for c in payload(result)["checks"] if c["check"] == "coverage")
-        assert coverage["status"] == "WARN"
-        assert "reporting" in coverage["detail"]
+        assert "reporting" not in coverage["detail"]
+        assert "`report`" not in coverage.get("hint", "")
+        assert invoke("report", "--help").exit_code == 0
 
     def test_doctor_fails_for_an_explicit_root_that_is_not_a_checkout(self, tmp_path: Path) -> None:
         """`--root` names a checkout, so a root with no fixtures or tasks is broken.

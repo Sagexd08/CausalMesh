@@ -143,7 +143,7 @@ That last row is a real limitation, documented rather than hidden.
 
 ## Status
 
-**Substrate complete and exercised; statistics and reporting are not built.** On 2026-09-30, `pytest --collect-only` found
+**Substrate complete and exercised; inference primitives and a PILOT/DERIVED report exist, the preregistered analysis does not.** On 2026-09-30, `pytest --collect-only` found
 1751 tests. On 2026-10-12, `python scripts/check.py` (lint, format, types on the
 enforced modules, the security scan and the whole suite) passed on one Windows 11,
 Python 3.13.5 machine: 2918 passed, 0 failed, 15 skipped. The skips need a POSIX
@@ -175,13 +175,15 @@ executable path.
 | Framework adapters: Generic, OpenAI function calling, Anthropic `tool_use`, LangChain, LangGraph, CrewAI | ✅ tested with scripted payloads and fakes; no hosted model has driven any of them, and CrewAI has not run against the real package |
 | Metrics (cost accounting, four contrasts), provenance, manifests, CLI | ✅ descriptive only |
 | Multi-rater kappa (`causalmesh agreement`), CooperBench loader | ✅ the loader imports all 652 real CooperBench pairs (the real §37 gate on 3 pairs: NOT SENSITIVE, mock agents); the kappa code is tested on synthetic fixtures only and no human has coded a run |
-| Statistics (inference), analytical module, reporting | ⬜ not built (`src/causalmesh/reporting` is empty; `analysis/` holds only `agreement.py`) |
+| Inference primitives (`analysis/inference.py`), report generator (`reporting/`), `causalmesh report` | 🟡 built as primitives and a PILOT/DERIVED report only: Wilson and Newcombe intervals, Fisher exact, Holm, a TOST-style equivalence read-off, normal-approximation power; every assumption (alpha, confidence, margin) is a required argument and none is preregistered. **Not built:** the mixed-effects logistic model with task random intercepts, a preregistered analysis, a confirmatory run (gated), and the analytical C_tr / C_md / T* / P_stale estimators of Step 12 |
 
 Not yet done, and stated plainly: **no hosted model has been run** (no key was
 available, and spending money is the operator's decision), no human rater has
 coded a run, no real CooperBench task has been run with anything but a mock
-agent replaying gold patches, and there is no inferential statistics or
-reporting layer. See [`docs/backlog.md`](docs/backlog.md),
+agent replaying gold patches, and there is no preregistered analysis, no
+mixed-effects model and no confirmatory run (`causalmesh report` computes
+intervals and exact tests under assumptions the operator states, labelled
+PILOT/DERIVED, and nothing more). See [`docs/backlog.md`](docs/backlog.md),
 which records every gap as a tracked item with its reason.
 
 **What is and is not enforced today** (2026-10-12; per-claim evidence in [`docs/claims-ledger.md`](docs/claims-ledger.md)):
@@ -363,7 +365,12 @@ repository and no relay present, which is the §82 clean-room check.
 
 `analyze` is descriptive: it reports what the runs did, per arm and per
 task, and makes no claim that a difference is distinguishable from noise.
-The statistics layer that would support such a claim is not built.
+`causalmesh report` adds Wilson and Newcombe intervals, Fisher exact
+p-values and a Holm adjustment under assumptions the operator states
+(`--alpha`, `--confidence`, optional `--margin`; none is preregistered, and
+every table is labelled PILOT or DERIVED). It treats runs as independent
+trials: the mixed-effects model with task random intercepts that would
+support a claim about noise is not built.
 
 `audit` is what makes the traceability commitment checkable rather than
 asserted: it confirms every recorded artifact is present and unchanged, and

@@ -1446,3 +1446,68 @@ Found by the read-only audit in `docs/SHIP-AUDIT.md` (section 3) and re-read aga
 ### (j) The hook gives every session the same identity
 
 **Status: open. Severity: high for (a) and for ownership between sessions.** The adapter hard-codes `agent_id` as `claude-code` (`docs/examples/claude-pretooluse.sh:57`). **User impact:** every Claude Code session is one agent to the gate, so a contract that gives two roles different paths cannot tell two sessions apart, and once (a) is fixed a second session would be treated as the holder of the first session's lease and allowed. Whether Claude Code's hook payload carries a stable per-session identifier that could be used is UNKNOWN (not verified). **Acceptance test:** the adapter takes the agent id from a source the operator controls, not from the tool input the agent writes; a test runs it with two ids against a contract with two roles and gets different verdicts for the same path.
+
+## Inference and reporting (built 2026-10-13, as primitives and PILOT/DERIVED tables)
+
+`analysis/inference.py` and `reporting/` exist (`causalmesh report`). What follows is what they
+are not. Appended here rather than beside "The 1920-run confirmatory execution" so the line
+numbers `docs/claims-ledger.md` cites in this file stay valid.
+
+### Mixed-effects logistic model with task random intercepts (Step 13, §48)
+
+**Status:** not built.
+
+**Why:** the model class, alpha, the equivalence margin and the unit of
+analysis are all still TODO in `docs/preregistration-draft.md`, and the
+confirmatory run it would analyse is gated ("The 1920-run confirmatory
+execution", above). Writing a fitter
+now would fix those choices by implementation rather than by decision.
+There is also no stdlib route to it: a mixed-effects logistic fit needs
+numerical optimisation and a Laplace or quadrature integral, i.e. the
+`analysis` extra (statsmodels), and AGENTS.md's bar for a new dependency is
+a reason that survives the question "what does this cost a person installing
+the package".
+
+**What is built instead:** `analysis/inference.py` (Wilson and Newcombe
+intervals, Fisher exact, Holm, an interval-based equivalence read-off,
+normal-approximation power) and `causalmesh report`, which applies them to a
+collection under assumptions the caller states. They treat runs as
+independent trials. Runs sharing a task are not independent, so a Fisher p
+or a Newcombe interval over pooled runs is **not** a substitute for this
+model: it is a descriptive tabulation, labelled PILOT or DERIVED, and the
+report says so.
+
+**What it would take:** a signed preregistration that fixes the model, alpha,
+the margin and the unit of analysis; then a fitter (statsmodels behind the
+`analysis` extra) tested against a published worked example.
+
+### Analytical estimators: C_tr, C_md, rho(T), T*, P_stale, P_floor (Step 12, §46, §47)
+
+**Status:** not built (re-checked 2026-10-13).
+
+**Why:** the inputs are undefined in this repository. The estimators take the
+staleness quantities (lambda-hat, delta-hat, Delta-hat) of §23 and §45, which
+are not checked in; `docs/staleness-estimators-needed.md` and "Staleness
+estimation (§23, §45)" above record the same gap. A closed form derived from
+this repository's own per-turn observations would carry the specified
+symbol while possibly measuring something else.
+
+**What it would take:** the §23 and §45 definitions, then pure functions
+unit-tested against hand-computed values, as Step 12 specifies.
+
+### CONFIRMATORY labelling
+
+**Status:** gated; deliberately refused in code.
+
+**Why:** a table is CONFIRMATORY only if the analysis that produced it was
+fixed in a signed preregistration before the confirmatory data existed.
+There is none: `docs/preregistration-draft.md` is a draft and the 1920-run
+collection has not been executed. `reporting.build_report` emits only
+`PILOT` and `DERIVED`, and `Report` raises `ReportError` for any other label,
+so a confirmatory-looking table cannot be produced by accident. `ANALYTICAL`
+and `EXPLORATORY` are defined but applied by nothing yet.
+
+**What it would take:** the preregistration signed and timestamped, the
+analysis code frozen at a commit, and the confirmatory collection run; then
+the gate in `reporting/report.py` lifted for tables computed from that
+collection and that code only.
