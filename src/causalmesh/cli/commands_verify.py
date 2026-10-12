@@ -6,7 +6,7 @@ produced them: hashes link, signatures hold, ordering is sound.
 
 **What is trusted for attribution.** Two modes, and the output says which.
 
-- With `--keys PATH` the key ring is the operator's own (see
+- With `--keys PATH` (alias `--keyring`) the key ring is the operator's own (see
   `causalmesh.crypto.keyring` for the file format). A record signed by any
   key other than the one the ring holds for that actor fails, so a log
   re-signed with an attacker's key is rejected. This is the mode that proves
@@ -41,8 +41,9 @@ from causalmesh.cli._output import Exit, emit, fail, note, out_console, table
 
 UNATTRIBUTED = (
     "attribution NOT checked: signatures were verified against the public keys carried "
-    "inside the records, so a log re-signed with someone else's key would pass too. "
-    "Pass --keys DIR (public keys you hold independently of the log) to check who signed."
+    "inside the records (embedded in the artifact, not pinned), so a log re-signed with "
+    "someone else's key would pass too. Pass --keyring PATH (public keys you hold "
+    "independently of the log; --keys is the same option) to pin them and check who signed."
 )
 
 
@@ -228,6 +229,7 @@ def verify_command(
         Path | None,
         typer.Option(
             "--keys",
+            "--keyring",
             help=(
                 "Directory of the operator's own keys (<agent>.pub hex, <agent>.key seed, or "
                 "keyring.json), or one keyring.json. Without it attribution is NOT checked."

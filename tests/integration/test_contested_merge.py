@@ -94,9 +94,11 @@ def fixtures(tmp_path: Path) -> Path:
     root = tmp_path / "fixtures" / "contested_merge_probe"
     (root / "src").mkdir(parents=True)
     (root / "tests").mkdir()
-    (root / "src" / "__init__.py").write_text("", encoding="utf-8")
-    (root / "src" / "shared.py").write_text(BASE, encoding="utf-8")
-    (root / "tests" / "test_shared.py").write_text(TESTS, encoding="utf-8")
+    # newline="\n": on Windows `write_text` would write CRLF while the scripted agents
+    # write LF, so the fixture would differ from both sides on every line.
+    (root / "src" / "__init__.py").write_text("", encoding="utf-8", newline="\n")
+    (root / "src" / "shared.py").write_text(BASE, encoding="utf-8", newline="\n")
+    (root / "tests" / "test_shared.py").write_text(TESTS, encoding="utf-8", newline="\n")
     return tmp_path / "fixtures"
 
 

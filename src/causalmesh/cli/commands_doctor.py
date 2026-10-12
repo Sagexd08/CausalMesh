@@ -64,12 +64,15 @@ def _dependency_check(module: str, *, label: str, optional: bool, hint: str) -> 
 
 def _root_check(root: Path | None) -> Check:
     if root is None:
+        # Not a defect: a pip-installed package has no checkout, and the SDK,
+        # `serve`, `policy` and `verify` do not need one. A WARN keeps the
+        # first diagnostic a new user runs from exiting 1 for a healthy install.
         return Check(
             "repository",
-            "FAIL",
-            "no CausalMesh checkout found",
-            "Run from inside the repository, or pass --root. A pip-installed package "
-            "has no experiment harness; the policy and SDK commands do not need one.",
+            "WARN",
+            "not a checkout (experiment harness unavailable; SDK, serve and verify "
+            "do not need one)",
+            "Run from inside the repository, or pass --root, to check the experiment harness.",
         )
     return Check("repository", "PASS", str(root))
 

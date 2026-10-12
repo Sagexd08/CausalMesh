@@ -12,7 +12,7 @@ import asyncio
 from pathlib import Path
 
 import pytest
-from tests.integration.test_scheduler_loop import FIXTURES, SEED, TASK_PATH, build_runner
+from test_scheduler_loop import FIXTURES, SEED, TASK_PATH, build_runner
 
 from causalmesh.scheduler import ExperimentRunner, RunEnvironment, RunState, loop as scheduler_loop
 from causalmesh.tasks import TaskDefinition

@@ -61,6 +61,10 @@ def apply(name, a, b):
 def _run(args: list[str], cwd: Path) -> str:
     # Bytes, decoded by hand: `text=True` would translate CRLF to LF and hide
     # exactly the line endings the CRLF tests are about.
+    # autocrlf=false: Git for Windows defaults to `true`, which rewrites the tree these
+    # patches are made from and then rejects its own diff on `git apply`.
+    if args[0] == "git":
+        args = ["git", "-c", "core.autocrlf=false", *args[1:]]
     done = subprocess.run(args, cwd=cwd, capture_output=True, check=True)
     return done.stdout.decode("utf-8")
 
@@ -116,12 +120,15 @@ def _make_dataset(root: Path, *, features: int = 3) -> tuple[Path, Path]:
         feature = task / f"feature{number}"
         feature.mkdir()
         (feature / "feature.md").write_text(f"# {name}\n\nAdd {name}.\n", encoding="utf-8")
-        (feature / "feature.patch").write_text(_diff(repo, {"src/calc.py": edited}))
-        (feature / "tests.patch").write_text(
+        # write_bytes: `write_text` would turn the patch's LF into CRLF on Windows.
+        (feature / "feature.patch").write_bytes(
+            _diff(repo, {"src/calc.py": edited}).encode("utf-8")
+        )
+        (feature / "tests.patch").write_bytes(
             _diff(
                 repo,
                 {f"tests/test_{name}.py": f"def test_{name}():\n    assert True\n"},
-            )
+            ).encode("utf-8")
         )
     return dataset, task
 
@@ -473,8 +480,8 @@ class TestHiddenTestHarnessGeneration:
 
     def test_a_tests_patch_with_no_python_test_is_refused(self, tmp_path: Path) -> None:
         _, task = _make_dataset(tmp_path)
-        (task / "feature1" / "tests.patch").write_text(
-            "--- /dev/null\n+++ b/notes.txt\n@@ -0,0 +1 @@\n+x\n", encoding="utf-8"
+        (task / "feature1" / "tests.patch").write_bytes(
+            b"--- /dev/null\n+++ b/notes.txt\n@@ -0,0 +1 @@\n+x\n"
         )
         with pytest.raises(CooperBenchImportError, match="no Python test file"):
             import_task(task, base_files=_base(), options=ImportOptions(hidden_tests="pytest"))

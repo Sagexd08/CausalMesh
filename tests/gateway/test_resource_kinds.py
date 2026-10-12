@@ -20,6 +20,7 @@ Also covered here, because they are the same property from the other side:
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from collections.abc import Iterator
@@ -734,6 +735,10 @@ class TestTheImportOrderThatOnlyAFreshInterpreterSees:
         # module-level import of the SDK's errors there is circular. pytest has
         # usually imported `causalmesh` already, which hides it; a fresh
         # interpreter does not.
+        # `pythonpath = src` is not inherited by the subprocess; point it at this tree.
+        src = str(Path(__file__).resolve().parents[2] / "src")
+        paths = [src, *filter(None, [os.environ.get("PYTHONPATH")])]
+        env = {**os.environ, "PYTHONPATH": os.pathsep.join(paths)}
         for module in (
             "causalmesh.gateway.resolver",
             "causalmesh.gateway.tool",
@@ -741,6 +746,9 @@ class TestTheImportOrderThatOnlyAFreshInterpreterSees:
             "causalmesh.hooks.policy_gate",
         ):
             done = subprocess.run(
-                [sys.executable, "-c", f"import {module}"], capture_output=True, text=True
+                [sys.executable, "-c", f"import {module}"],
+                capture_output=True,
+                text=True,
+                env=env,
             )
             assert done.returncode == 0, f"{module}: {done.stderr[-300:]}"

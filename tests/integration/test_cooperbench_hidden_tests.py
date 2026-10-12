@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -47,15 +48,24 @@ FEATURES = ((1, "sub", "a - b", 2), (2, "mul", "a * b", 15))
 
 
 def _git(args: list[str], cwd: Path) -> str:
-    done = subprocess.run(["git", *args], cwd=cwd, capture_output=True, check=True)
+    # autocrlf=false: with Windows' default of `true` git rewrites the tree and the
+    # patches made from it, and `git apply` then rejects its own diff.
+    done = subprocess.run(
+        ["git", "-c", "core.autocrlf=false", *args], cwd=cwd, capture_output=True, check=True
+    )
     return done.stdout.decode("utf-8")
+
+
+def _put(path: Path, text: str) -> None:
+    """Write exactly these characters; `Path.write_text` would turn LF into CRLF on Windows."""
+    path.write_bytes(text.encode("utf-8"))
 
 
 def _edit_diff(repo: Path, edits: dict[str, str]) -> str:
     for relative, content in edits.items():
         target = repo / relative
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(content, encoding="utf-8")
+        _put(target, content)
     _git(["add", "-N", "-A"], repo)
     text = _git(["diff"], repo)
     # Drop the intent-to-add entries first: otherwise `checkout` restores the
@@ -80,29 +90,25 @@ def built(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Path]:
     repo.mkdir()
     _git(["init", "-q"], repo)
     (repo / "src").mkdir()
-    (repo / "src" / "calc.py").write_text(BASE_CALC, encoding="utf-8")
+    _put(repo / "src" / "calc.py", BASE_CALC)
     _git(["add", "-A"], repo)
     _git(["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "base"], repo)
 
     task = root / "dataset" / "calc_task" / "task1"
     task.mkdir(parents=True)
-    (task / "setup.sh").write_text("#!/bin/bash\n", encoding="utf-8")
+    _put(task / "setup.sh", "#!/bin/bash\n")
     for number, name, expr, expected in FEATURES:
         feature = task / f"feature{number}"
         feature.mkdir()
-        (feature / "feature.md").write_text(f"# {name}\n\nAdd {name}.\n", encoding="utf-8")
-        (feature / "feature.patch").write_text(
-            _edit_diff(repo, {"src/calc.py": _with_ops((name, expr))}), encoding="utf-8"
-        )
+        _put(feature / "feature.md", f"# {name}\n\nAdd {name}.\n")
+        _put(feature / "feature.patch", _edit_diff(repo, {"src/calc.py": _with_ops((name, expr))}))
         test = (
             "from calc import apply\n\n\n"
             f'def test_{name}():\n    assert apply("{name}", 5, 3) == {expected}\n'
         )
-        (feature / "tests.patch").write_text(
-            _edit_diff(repo, {f"tests/test_{name}.py": test}), encoding="utf-8"
-        )
+        _put(feature / "tests.patch", _edit_diff(repo, {f"tests/test_{name}.py": test}))
     combined = _edit_diff(repo, {"src/calc.py": _with_ops(*((n, e) for _, n, e, _ in FEATURES))})
-    (task / "combined.patch").write_text(combined, encoding="utf-8")
+    _put(task / "combined.patch", combined)
 
     imported = import_task(
         task,
@@ -117,7 +123,9 @@ def _run_harness(workspace: Path) -> tuple[int, list[str]]:
     env = dict(os.environ)
     env["PATH"] = str(Path(sys.executable).parent) + os.pathsep + env.get("PATH", "")
     done = subprocess.run(
-        ["bash", "run_tests.sh"],
+        # Absolute path: a bare "bash" can resolve to the WSL launcher at System32 on
+        # Windows (see test_adoption_hook.py).
+        [shutil.which("bash") or "bash", "run_tests.sh"],
         cwd=workspace,
         capture_output=True,
         text=True,
@@ -128,8 +136,6 @@ def _run_harness(workspace: Path) -> tuple[int, list[str]]:
 
 
 def _copy(source: Path, destination: Path) -> Path:
-    import shutil
-
     shutil.copytree(source, destination)
     return destination
 

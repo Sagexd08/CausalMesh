@@ -834,16 +834,25 @@ def _run_integration_test(task: TaskDefinition, workspace: Workspace) -> int | N
     liked. Deliberately outside the tool boundary — this is the
     experimenter measuring the result, not the agent acting.
     """
+    import shutil
     import subprocess
 
+    env = _harness_environment()
+    argv = list(task.success.integration_test)
+    # Resolve the executable on the harness's own PATH. On Windows CreateProcess
+    # looks in System32 before PATH, so a bare `bash` runs WSL's relay (which
+    # exits 1 with no distro) instead of the Git Bash the preflight just found,
+    # and every arm fails identically.
+    if argv and (resolved := shutil.which(argv[0], path=env.get("PATH"))):
+        argv[0] = resolved
     try:
         completed = subprocess.run(
-            list(task.success.integration_test),
+            argv,
             cwd=workspace.root,
             capture_output=True,
             text=True,
             timeout=300,
-            env=_harness_environment(),
+            env=env,
             check=False,
         )
     except (OSError, subprocess.TimeoutExpired):

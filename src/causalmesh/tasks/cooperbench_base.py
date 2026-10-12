@@ -126,11 +126,17 @@ def _git_env() -> dict[str, str]:
     return env
 
 
-def _git(args: list[str], *, cwd: Path, timeout: int = 600) -> subprocess.CompletedProcess[bytes]:
+def _git(
+    args: list[str], *, cwd: Path, timeout: int = 600, stdin: bytes | None = None
+) -> subprocess.CompletedProcess[bytes]:
+    # core.longpaths: a promisor fetch of a deeply nested cache repo otherwise
+    # fails on Windows with "Filename too long" (MAX_PATH), and a lazy blob
+    # fetch inside `cat-file` fails the same way and reads as "missing".
     try:
         return subprocess.run(
-            ["git", *args],
+            ["git", "-c", "core.longpaths=true", *args],
             cwd=cwd,
+            input=stdin,
             capture_output=True,
             check=False,
             timeout=timeout,
@@ -193,18 +199,7 @@ def base_files_for_paths(
     if not wanted:
         return {}
     request = "".join(f"{spec.base_commit}:{path}\n" for path in wanted).encode("utf-8")
-    try:
-        completed = subprocess.run(
-            ["git", "cat-file", "--batch"],
-            cwd=repo,
-            input=request,
-            capture_output=True,
-            check=False,
-            timeout=900,
-            env=_git_env(),
-        )
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        raise BaseRepoError(f"git cat-file could not run: {exc}") from exc
+    completed = _git(["cat-file", "--batch"], cwd=repo, timeout=900, stdin=request)
     if completed.returncode != 0:
         raise BaseRepoError(
             f"git cat-file failed: {completed.stderr.decode(errors='replace').strip()[:300]}"

@@ -326,7 +326,8 @@ class GitBaseResolver:
         env = _git_env()
         try:
             completed = subprocess.run(
-                ["git", *args],
+                # core.longpaths: see cooperbench_base._git (Windows MAX_PATH).
+                ["git", "-c", "core.longpaths=true", *args],
                 cwd=repo,
                 input=input_bytes,
                 capture_output=True,

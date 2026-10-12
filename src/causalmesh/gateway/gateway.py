@@ -228,7 +228,7 @@ class ToolGateway:
         # which uses the MUTATING_TOOLS frozenset.  For SDK tools we need
         # to honour the Tool.mutating flag instead.
         # Wrap the tool call so the boundary respects the Tool's mutating flag.
-        aware_call: ToolCall = _MutatingAwareCall(  # type: ignore[assignment]
+        aware_call: Any = _MutatingAwareCall(  # duck-typed ToolCall; see its docstring
             tool=tool_name,
             agent_id=agent_id,
             paths=paths,
@@ -342,7 +342,7 @@ class ToolGateway:
             paths = self._resolver.resolve(tool_obj, args)
         resources = self._resolver.resolve_resources(tool_obj, args)
 
-        aware_call: ToolCall = _MutatingAwareCall(  # type: ignore[assignment]
+        aware_call: Any = _MutatingAwareCall(  # duck-typed ToolCall; see its docstring
             tool=tool,
             agent_id=agent_id,
             paths=paths,

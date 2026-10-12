@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import functools
 import inspect
-import itertools
 import json
 import logging
 import os
@@ -250,7 +249,6 @@ def create_app(
     # calls interleaving on that state. Executions are therefore serial, which
     # is also what keeps the chain in one order.
     exec_lock = asyncio.Lock()
-    chat_sequence = itertools.count(1)
 
     def _require_agent(principal: Principal, requested: str | None) -> None:
         """A token bound to an agent cannot be used to act as another."""
@@ -435,7 +433,9 @@ def create_app(
         # Gate and record under the lock, so this cannot interleave with a tool
         # call mutating the same chain. The upstream call is made after it.
         async with exec_lock:
-            now_us = time.time_ns() // 1_000
+            # The session's logical clock, the one `/execute` is stamped on.
+            # The wall time is kept for the unsigned envelope only.
+            now_us, wall_us = m._gateway._stamp(None)
             if not upstream_url:
                 allowed = True
                 reason = "no upstream configured; recorded only"
@@ -461,11 +461,11 @@ def create_app(
                 agent_id=agent_id,
                 arm=m._contract.arm,
             )
-            # The id carries a sequence number, not just the clock: two requests in
-            # one clock tick (Windows ticks are coarse) would share an id, and the
-            # relay refuses a duplicate id, so the second call would go unrecorded.
+            # The id is the gateway's own counter, so it is reproducible, cannot
+            # collide with a tool call's id, and resumes with a persisted chain.
+            event_id = m._gateway.reserve_event_id(agent_id)
             ingested = m._relay.ingest(
-                event_id=f"serve-{agent_id}-{now_us}-{next(chat_sequence)}",
+                event_id=event_id,
                 agent_id=agent_id,
                 event_type=EventType.INTENT if allowed else EventType.FAILURE,
                 identity=identity,
@@ -480,6 +480,8 @@ def create_app(
                     **_identity_fields(principal),
                 },
             )
+            if ingested.accepted:
+                m._gateway._wall_times[event_id] = wall_us
 
         if allowed and not ingested.accepted:
             # Gated and recorded is the promise. A call that could not be recorded

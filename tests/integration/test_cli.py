@@ -80,10 +80,66 @@ class TestDoctor:
         assert coverage["status"] == "WARN"
         assert "reporting" in coverage["detail"]
 
-    def test_doctor_fails_outside_a_checkout(self, tmp_path: Path) -> None:
+    def test_doctor_fails_for_an_explicit_root_that_is_not_a_checkout(self, tmp_path: Path) -> None:
+        """`--root` names a checkout, so a root with no fixtures or tasks is broken.
+
+        Renamed from `..._outside_a_checkout`: that name now belongs to the case
+        with no root at all, which is a healthy pip install (next test).
+        """
         result = invoke("doctor", "--root", str(tmp_path), "--json")
         assert result.exit_code == 1
         assert payload(result)["verdict"] == "FAIL"
+
+    def test_doctor_warns_and_exits_zero_with_no_checkout_at_all(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A pip-installed user has no checkout; their first diagnostic must not fail.
+
+        Previously the `repository` row was FAIL and the exit code 1, so a healthy
+        install reported itself broken. Real defects (a missing hard dependency,
+        an unsupported Python, a broken checkout) still exit 1.
+        """
+        monkeypatch.setattr("causalmesh.cli.commands_doctor.find_root", lambda: None)
+        result = invoke("doctor", "--json")
+        assert result.exit_code == 0, result.stdout
+        report = payload(result)
+        assert report["failed"] == 0
+        assert report["verdict"] == "WARN"
+        repository = next(c for c in report["checks"] if c["check"] == "repository")
+        assert repository["status"] == "WARN"
+        assert "not a checkout" in repository["detail"]
+        assert repository["detail"].isascii()
+
+    def test_doctor_still_fails_on_a_missing_hard_dependency(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import sys
+
+        monkeypatch.setattr("causalmesh.cli.commands_doctor.find_root", lambda: None)
+        monkeypatch.setitem(sys.modules, "cryptography", None)  # import raises ImportError
+        result = invoke("doctor", "--json")
+        assert result.exit_code == 1
+        assert payload(result)["verdict"] == "FAIL"
+
+
+class TestModuleEntryPoint:
+    def test_python_dash_m_causalmesh_runs_the_cli(self) -> None:
+        """`python -m causalmesh` is the fallback when the script is not on PATH."""
+        import os
+        import subprocess
+        import sys
+
+        env = {**os.environ, "PYTHONPATH": str(REPO / "src")}
+        done = subprocess.run(
+            [sys.executable, "-m", "causalmesh", "--help"],
+            capture_output=True,
+            text=True,
+            env=env,
+            timeout=120,
+            check=False,
+        )
+        assert done.returncode == 0, done.stderr
+        assert "doctor" in done.stdout
 
 
 class TestCheckStdin:

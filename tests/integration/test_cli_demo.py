@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import copy
 import importlib
+import os
 import subprocess
 import sys
 from collections.abc import Iterator
@@ -34,7 +35,8 @@ from causalmesh.verifier import verify_chain
 
 pytestmark = [pytest.mark.integration]
 
-DEMO = Path(__file__).resolve().parents[2] / "examples" / "cli_demo"
+REPO = Path(__file__).resolve().parents[2]
+DEMO = REPO / "examples" / "cli_demo"
 TOKEN = "cm-demo-token-0001-abcdef"
 _MODULES = ("gateway", "client", "verify_evidence", "run_demo")
 
@@ -200,9 +202,13 @@ class TestTheEvidence:
 
 class TestTheJourney:
     def test_the_whole_journey_runs_unattended(self) -> None:
+        # pytest's `pythonpath = src` is not inherited by a subprocess, so without this the
+        # demo imports whatever `causalmesh` the editable install points at.
+        paths = [str(REPO / "src"), *filter(None, [os.environ.get("PYTHONPATH")])]
         done = subprocess.run(  # noqa: S603
             [sys.executable, str(DEMO / "run_demo.py")],
             cwd=DEMO,
+            env={**os.environ, "PYTHONPATH": os.pathsep.join(paths)},
             capture_output=True,
             text=True,
             timeout=120,

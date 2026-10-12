@@ -1,9 +1,11 @@
-"""`serve` signs `/execute` events on the gateway's logical clock.
+"""`serve` signs `/execute` and `/v1/chat/completions` events on one logical clock.
 
 `/v1/tools/{name}/execute` goes through `CausalMesh.execute`, so it inherits
-the logical timestamp. `/v1/chat/completions` does not go through the gateway
-and still stamps the wall clock; `docs/backlog.md` ("The chat path still signs the wall clock")
-records that, and the last test here pins it so the gap is executable.
+the logical timestamp. `/v1/chat/completions` calls the gate and the relay
+itself, and used to stamp `time.time_ns()`; the last test here used to pin
+that gap. It now pins the fix (`docs/backlog.md`, "The chat path signed the
+wall clock"): chat takes its timestamp from the same gateway clock, and its
+wall time is kept outside the signature.
 """
 
 from __future__ import annotations
@@ -73,10 +75,11 @@ def test_two_servers_with_one_seed_and_one_sequence_share_a_head_hash(tmp_path: 
     assert a._relay.sequence == 3
 
 
-def test_chat_events_still_carry_the_wall_clock(tmp_path: Path) -> None:
-    """A known gap, stated as a test: chat completions bypass the gateway."""
+def test_chat_events_are_signed_on_the_logical_clock(tmp_path: Path) -> None:
+    """Chat completions share the gateway's clock; the wall time stays unsigned."""
     client, mesh = _client(tmp_path)
     response = client.post("/v1/chat/completions", json={"model": "m", "messages": []})
     assert response.status_code == 200
     (record,) = mesh.audit_events()
-    assert record["event"]["timestamp_us"] > WALL_FLOOR_US
+    assert record["event"]["timestamp_us"] < WALL_FLOOR_US
+    assert mesh._gateway.wall_times()[record["event"]["event_id"]] > WALL_FLOOR_US
