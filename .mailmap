@@ -1,0 +1,7 @@
+# Canonical identities for `git shortlog` and `git blame`. Folds duplicate
+# names and addresses into one person; it does not rewrite history.
+Sohom Chatterjee <sohomchatterjee07@gmail.com> Sagexd08 <sohomchatterjee07@gmail.com>
+Sohom Chatterjee <sohomchatterjee07@gmail.com> <sohom.000840@snuindia.in>
+Rohit Kumar Kundu <kundurohit53@gmail.com> ROHIT8759 <kundurohit53@gmail.com>
+Rohit Kumar Kundu <kundurohit53@gmail.com> <154599854+ROHIT8759@users.noreply.github.com>
+Claude <noreply@anthropic.com> <lumeohq@gmail.com>

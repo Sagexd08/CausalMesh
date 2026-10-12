@@ -228,9 +228,10 @@ Not protected:
   contract (the `tools:` section names tools and imports nothing) or from a request.
   Every tool it registers is still gated and recorded, but nothing sandboxes the code,
   and anyone who can change the spec or the file can run code as the server.
-- **Chat-path timestamps.** `/v1/chat/completions` still signs the wall clock and puts
-  it in the event id, so chat events in a `serve` chain are not reproducible; the
-  gateway's calls sign a logical clock (see `docs/backlog.md`).
+- **Chat-path timestamps are logical, not dates.** `/v1/chat/completions` signs the
+  session's logical clock, as the gateway's calls do, so a chat event's `timestamp_us`
+  is a position in the session; the wall time is kept outside the signature (see
+  `docs/backlog.md`, "The chat path signed the wall clock").
 - **An exported SDK session's keyring sits beside the run.** `verify` prefers the
   `keyring.json` that `CausalMesh.export` writes beside `run.json`, which catches a chain
   re-signed under a foreign key; whoever can replace both files together can forge

@@ -1,0 +1,18 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "CausalMesh"
+type: software
+abstract: >-
+  A research-grade experimental platform for separating information from
+  enforcement in distributed LLM coding agents. Pre-alpha: every run so far
+  used a deterministic mock agent, so nothing here says how real coding
+  agents behave.
+authors:
+  - family-names: Chatterjee
+    given-names: Sohom
+  - family-names: Kundu
+    given-names: Rohit Kumar
+license: MIT
+version: 0.1.0
+date-released: 2026-10-12
+repository-code: "https://github.com/Sagexd08/CausalMesh"

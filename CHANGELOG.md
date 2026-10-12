@@ -10,6 +10,11 @@ inside it is in the commit log, and what is deliberately absent is in
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-12
+
+First public release. Pre-alpha; see `README.md` Status and `docs/backlog.md` for
+what is built and what is not.
+
 ### Added
 
 - **A content-level merge for contested paths, opt-in** (`contested_merge: three_way` in a
@@ -88,7 +93,7 @@ inside it is in the commit log, and what is deliberately absent is in
 - **A logical clock in the signed chain.** `ToolGateway` signs `base_us + n * tick_us`
   (`clock_base_us`, `clock_tick_us`), so two sessions with one seed and one call sequence
   share a head hash. The wall-clock time of each call is in the unsigned
-  `envelope.wall_time_us_by_event`. `/v1/chat/completions` still signs the wall clock.
+  `envelope.wall_time_us_by_event`. (`/v1/chat/completions` was fixed later; see Fixed.)
 - `CausalMesh(claims=ClaimRegistry)`: exclusive leases apply to SDK sessions.
   `mesh.claim()`, `mesh.release()`, `mesh.denials()`, `mesh.claim_registry`. Off by default.
   Both default `now_us` to the session's logical time, so a lease expires on the clock the gate reads.
@@ -154,6 +159,10 @@ inside it is in the commit log, and what is deliberately absent is in
 
 ### Fixed
 
+- **`/v1/chat/completions` no longer signs the wall clock.** Chat events take the session's
+  logical clock and a gateway-counter event id (`sdk_<agent>_<n>`), so two `serve` sessions
+  making the same chat calls share a head hash; the wall time is in
+  `ToolGateway.wall_times()`, outside the signature.
 - **An interrupted collection no longer marks its in-flight run `FAILED`.** Ctrl-C used to
   record a terminal, never-retried failure; the run now stays resumable and finishes on the
   next start.

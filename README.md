@@ -7,6 +7,39 @@
 
 ---
 
+## Install
+
+```bash
+pip install causalmesh               # SDK, policy gate, CLI, offline verifier
+pip install 'causalmesh[server]'     # adds `causalmesh serve`
+
+causalmesh init                      # write a starter causalmesh.yaml (one role, agent_a)
+causalmesh policy check --agent agent_a --kind path --name src/app.py
+```
+
+Put the gate in front of your own agent's tools:
+
+```python
+from causalmesh import CausalMesh, Tool
+
+mesh = CausalMesh.from_config("causalmesh.yaml")
+mesh.register_tool(Tool(name="write_file", handler=write_file, mutating=True,
+                        resource_args=["path"]))
+result = mesh.execute(agent_id="agent_a", tool="write_file",
+                      arguments={"path": "src/app.py", "content": "..."})
+```
+
+A refused call never reaches the handler, and the refusal is signed evidence that
+`causalmesh verify` checks offline. The full local journey, with no key and no model,
+is [`examples/cli_demo/`](examples/cli_demo/README.md).
+
+The experiment harness (four arms, the task suite, `experiment run`) is not in the
+wheel: `git clone` the repository for it. **Pre-alpha.** Every run so far used a
+deterministic mock agent; nothing here has been run against a hosted model, so nothing
+here says how real coding agents behave. See [`docs/backlog.md`](docs/backlog.md).
+
+---
+
 ## The research question
 
 > How much of the coordination benefit in distributed LLM coding agents comes from **information**, and how much comes from **enforcement**?
@@ -110,7 +143,7 @@ That last row is a real limitation, documented rather than hidden.
 
 ## Status
 
-**Substrate complete and exercised.** On 2026-09-30, `pytest --collect-only` found
+**Substrate complete and exercised; statistics and reporting are not built.** On 2026-09-30, `pytest --collect-only` found
 1751 tests, and a full `pytest` run (slow tests included) on one Windows 11,
 Python 3.12 machine gave 1710 passed, 0 failed and 41 skipped: 35 need pilot
 artifacts that are not in the checkout, 3 need `bash` and `jq`, 2 need symlink
@@ -136,7 +169,7 @@ executable path.
 | Script-driven agent | ✅ |
 | Task system + empirical §37 gate | ✅ 4 authored tasks, one per §35 family; verdicts come from scripted mock agents |
 | Scheduler, state machine, run index | ✅ resume-tested |
-| Model adapters (OpenAI, Anthropic, local) | ✅ tested over real HTTP |
+| Model adapters (OpenAI, Anthropic, local) | ✅ tested over real HTTP against a local stand-in server; no hosted model has been called |
 | Policy plane (contract, gate, ledger), checkpoints, identity keys | ✅ unit and integration tested |
 | Developer SDK, tool gateway, `causalmesh serve` (FastAPI) | ✅ tested; Docker path re-verified 2026-09-30 |
 | Framework adapters: Generic, OpenAI function calling, Anthropic `tool_use`, LangChain, LangGraph, CrewAI | ✅ tested with scripted payloads and fakes; no hosted model has driven any of them, and CrewAI has not run against the real package |
@@ -340,7 +373,8 @@ infrastructure. Every probe invokes the tool rather than trusting `PATH`,
 and reports one of three outcomes — `available`, `degraded` (installed,
 executable, not answering) or `absent`.
 
-This build can drive `claude` and `codex` headlessly. A run driven by a real
+This build includes headless drivers for `claude` and `codex`; neither has been
+run against a real hosted model yet (see Status). A run driven by a real
 agent is stamped **`reproducible: false`** in its artifact: hosted models
 are nondeterministic and the agent's own version moves under it. The chain
 still signs and verifies — it records what happened, which is a different

@@ -167,3 +167,7 @@ frontend/.source/
 # /brag rendered output -- generated video artifacts, not source.
 brag-output/
 brag-output-*/
+
+# Rendered media is not tracked (stripped from history 2026-10-12; composition sources stay).
+videos/**/*.mp4
+videos/**/*.mp3

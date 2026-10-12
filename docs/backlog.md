@@ -932,7 +932,7 @@ mutation-checked: reverting the fix makes a test there fail.
 - **Human-in-the-loop approval from the SDK: built.** `CausalMesh(checkpoint_handler=...)` forwards a handler to the gate, and `TerminalCheckpointHandler` is a human-attached one. Without a handler a matched checkpoint still refuses by default. Gaps are listed under "SDK claims and a human checkpoint handler" below.
 - **Claims: built, opt-in.** `CausalMesh(claims=ClaimRegistry(...))` and explicit `mesh.claim()`; the default is still off (`registry=None`), and there is no acquire-on-first-call. See the same entry.
 - **Persistence: built for the SDK session, not for `serve`.** `CausalMesh.export(directory)` writes `run.json` and `keyring.json` for `causalmesh verify --run`, and `persist_to=` appends the chain as it goes. See "SDK export and verification" below.
-- **Wall-clock timestamps in the signed chain: fixed for the gateway, not for the chat path.** The gateway signs a per-session logical clock and keeps the wall clock in the unsigned envelope, so the SDK and `serve`'s `/v1/tools/{name}/execute` are reproducible. `/v1/chat/completions` still signs the wall clock. See "A logical clock in the signed chain" below and "The chat path still signs the wall clock".
+- **Wall-clock timestamps in the signed chain: fixed for the gateway and, from 2026-10-12, for the chat path.** The gateway signs a per-session logical clock and keeps the wall clock in the unsigned envelope, so the SDK and `serve`'s `/v1/tools/{name}/execute` are reproducible, and `/v1/chat/completions` now stamps on the same clock. See "A logical clock in the signed chain" below and "The chat path signed the wall clock".
 - **Reads are not gated.** `mutating=False` tools go around the gate, as
   §20 defines for the experiment. An operator who wants reads checked has
   to declare those tools mutating.
@@ -978,7 +978,7 @@ Pinned by `tests/integration/test_adapter_gate.py` (one set of safety properties
 
 ### A logical clock in the signed chain: built for the gateway, not the chat path
 
-**Status: built for `ToolGateway`, so for the SDK and for `serve`'s `/execute` (2026-09-30).** This closes the "Wall-clock timestamps in the signed chain" item under "Developer SDK".
+**Status: built for `ToolGateway`, so for the SDK and for `serve`'s `/execute` (2026-09-30); the chat path followed on 2026-10-12 (see "The chat path signed the wall clock").** This closes the "Wall-clock timestamps in the signed chain" item under "Developer SDK".
 
 - `ToolGateway` stamps each call with a per-session `LogicalClock`: `base_us + n * tick_us`, constant defaults (`0` and `1_000_000`), overridable as `clock_base_us`/`clock_tick_us` on `CausalMesh`, `from_config` and `ToolGateway`. That one value is the signed `timestamp_us`, the time the gate is asked about and the ledger row's `timestamp_us`, so a verdict, a ledger row and an event describe one moment and carry the same number.
 - The wall-clock time of each call is kept in `ToolGateway.wall_times()` (event id to microseconds) and written to `run.json`'s unsigned `envelope.wall_time_us_by_event`, with the export time and the clock parameters. It never reaches the chain.
@@ -1028,9 +1028,19 @@ Pinned by `tests/integration/test_adapter_gate.py` (one set of safety properties
 
 **Status: fixed.** `claim()` and `release()` now default `now_us` to `mesh.now_us`, the logical time the gate reads, so a lease lasts `duration_us` of it and then expires. `tests/sdk/test_claims.py::TestTheDefaultClockIsTheSessionsLogicalClock` takes a lease with no `now_us` and sees the holder block a second agent and then release it; reverting the default makes it fail. A caller who passes a wall-clock `now_us` to `execute()` must still pass the same clock to `claim()`. What follows is the original finding. The SDK claims work and the logical-clock work landed separately and each note is right about its own half. `mesh.claim()` and `mesh.release()` default `now_us` to `utc_now_micros()` (`sdk/mesh.py`), while `ToolGateway` asks the gate about a per-session logical clock that starts at `clock_base_us` (0). The registry's liveness test is only `now_us < expires_at_us`, so a lease granted with the default `now_us` expires at roughly the wall clock plus its duration, a moment the logical clock never reaches: it blocks every other agent for the life of the session and never expires as the gate sees it. That fails closed, but it is not what `duration_us` says. `tests/sdk/test_clock.py::test_a_lease_granted_on_the_wall_clock_never_expires_in_logical_time` pins the hazard with a registry wired in by hand; every `mesh.claim()` call in `tests/sdk/test_claims.py` passes an explicit `now_us`, so no test exercises the default. **What it took:** defaulting `now_us` to `mesh.now_us` in `claim()` and `release()`.
 
-### The chat path still signs the wall clock
+### The chat path signed the wall clock
 
-**Status: open, pinned by a test.** `/v1/chat/completions` does not go through `ToolGateway`: it calls `m._gate.policy.check` and `m._relay.ingest` itself with `time.time_ns()`, and puts that value in the event id too (`serve-<agent>-<now_us>-<n>`), so chat events in a `serve` chain are not reproducible and two `serve` sessions making the same chat calls do not share a head hash. `tests/server/test_logical_clock.py` pins this so it stays visible. **What it would take:** moving that path onto the gateway's clock and a sequence-only event id. It was left alone because `server/` was under separate edit.
+**Status: fixed (2026-10-12).** `/v1/chat/completions` still does not go through `ToolGateway.execute` (it calls `m._gate.policy.check` and `m._relay.ingest` itself, `server/app.py`), but it now takes its timestamp from the gateway's logical clock (`ToolGateway._stamp`, the clock `/execute` uses), so the verdict, the signed `timestamp_us` and the event describe one logical moment. The event id is drawn from the gateway's own counter (`reserve_event_id`, `sdk_<agent>_<n>`) instead of `serve-<agent>-<wall us>-<n>`, so it is reproducible, cannot collide with a tool call's id and continues numbering on a resumed chain. The wall time of each chat call is recorded in `ToolGateway.wall_times()`, which the export writes to the unsigned `envelope.wall_time_us_by_event`. `tests/server/test_chat_reproducible.py` (marked `reproducibility`): two identical chat sessions (same seed, contract, requests; allowed and refused) have equal signed records and head hash, and no signed timestamp is a wall time; reintroducing `time.time_ns()` for the timestamp fails all three tests that cover it. `tests/server/test_logical_clock.py` now pins the fix rather than the gap.
+
+**What is still not covered.**
+
+- **Chat events share the tool-call counter, so ids in a mixed session shifted.** A tool call made after a chat call now gets the next `sdk_<agent>_<n>`, not `n` counted over tool calls only. Sessions that mixed both were never reproducible before, so no reproducible hash changed; chat-only and tool-only sessions are numbered as a tool-only session always was.
+- **Not a date, and call count, not elapsed time.** The same limits as the logical clock entry above: a chat event's `timestamp_us` of `0` or `1000000` is a position in the session, and a window or lease measured in seconds lasts that many calls.
+- **Out-of-order stamps are possible and unverified.** The stamp is issued under `serve`'s lock, so chat and `/execute` serialise; a caller driving the mesh from other threads while serving can still be signed out of chain order, as for any gateway call. The verifier checks no timestamp ordering.
+- **The unsigned wall times are in memory only.** `serve` has no export endpoint (see "Developer SDK"), so `wall_times()` is reachable from the process, not from the wire.
+- **The chat path still bypasses `ToolGateway.execute`, and reaches into its privates** (`_stamp`, `_wall_times`) rather than a public method. A chat call writes no ledger row and does not go through the boundary's hooks; unchanged and not part of this fix.
+- **Other wall-clock uses in `server/` are unrelated to the chain:** credential expiry and request timing (`credentials.py`, `observability.py`) read the wall clock on purpose and are not signed. Not audited again beyond a grep for `time.time`/`datetime` in `server/`.
+- **Verified here by `tests/server` only** (and the reproducibility marker); the full suite was not run in this change.
 
 ## CI was removed (2026-09-30)
 
@@ -1232,6 +1242,36 @@ few dozen characters of the limit, and would fail as it always did. A margin for
 was tried and refused checkouts whose runs all completed. Enabling Windows long
 paths removes the limit.
 
+**2026-10-12: the CooperBench base-repo cache hit the same limit, and a second bug hid
+behind it.** On a Windows 11 / git 2.52 machine with `core.longpaths` unset, eight
+tests failed on a clean HEAD: six in `TestFetchingBaseFiles` and two in
+`TestThreeWayMerge`. Two causes, neither a test problem:
+
+- *`Filename too long`.* `cooperbench_base._ensure_commit` names the cache repository
+  after the whole upstream URL, so under a deep pytest temp directory the pack's
+  `.git/objects/pack/pack-<sha>.promisor` exceeded 259 characters and `git fetch
+  --filter=blob:none` died with `fatal: cannot write promisor file ... Filename too
+  long`. The `UTF-8` assertion in `test_a_non_utf8_file_is_refused...` was a side effect
+  of that fetch failure, not a second cause. Fixed: every git call in
+  `cooperbench_base._git` runs with `-c core.longpaths=true`, and the one call that
+  bypassed that helper (`cat-file --batch`, where a lazy blob fetch hit the same limit
+  and surfaced as `missing`, an empty result) now goes through it. `cooperbench_batch.GitBaseResolver._git` had the same gap and got the same
+  flag; its test (`test_cooperbench_batch.py::...test_reads_text_exactly...`) was *skipping* on this
+  machine, and now runs.
+- *Bare `bash` resolved to WSL.* `runner._run_integration_test` passed `bash` straight
+  to `subprocess.run`. On Windows CreateProcess searches System32 before `PATH`, so it
+  ran `C:\Windows\System32\bash.exe` (the WSL relay, exit 1 with no distro installed)
+  although the preflight, using `shutil.which` on the harness `PATH`, had correctly
+  found Git Bash. Every arm failed identically, which the gate reports as zero solved
+  pairs: the `assert 0 == 1` in `TestThreeWayMerge`. Fixed: the executable is resolved
+  on the harness's own `PATH` before it is run.
+
+**Residual.** `core.longpaths` fixes git's side only. A cache or workspace path past
+259 characters is still refused by anything else on the machine that lacks long-path
+support (Windows Explorer, some editors, other tools) unless Windows long paths are
+enabled. The cache directory name is still the full URL; a hash would shorten it, at the
+cost of orphaning existing caches, and was not needed to make the tests pass.
+
 ### The Makefile's dead targets were removed
 
 **Status: removed 2026-09-30.** `make report` and `make reproduce` called
@@ -1302,13 +1342,13 @@ makes four of its six tests fail. The command had no tests before.
 
 ### `causalmesh verify` trusts the keys inside the artifact
 
-**Status: narrowed, not closed (found and tested 2026-09-30; narrowed 2026-09-30).** With no `keyring.json` beside `run.json`, `verify` still builds its key ring from the `actor_public_key` in the records it is checking (`cli/commands_verify.py`, `_key_ring_for`). That proves the chain is internally consistent and each signature matches the embedded key. It does not prove the key belongs to the named actor, which is what `verify_chain`'s own docstring and `docs/security.md` say a verifier must not rely on. Test: a chain produced by a second `CausalMesh` with an attacker's seed verifies as valid against the ring `verify` builds, and is rejected against the operator's ring.
+**Status: narrowed, not closed (found and tested 2026-09-30; narrowed 2026-09-30; operator ring option closed 2026-10-12).** With no `keyring.json` beside `run.json`, `verify` still builds its key ring from the `actor_public_key` in the records it is checking (`cli/commands_verify.py`, `_key_ring_for`). That proves the chain is internally consistent and each signature matches the embedded key. It does not prove the key belongs to the named actor, which is what `verify_chain`'s own docstring and `docs/security.md` say a verifier must not rely on. Test: a chain produced by a second `CausalMesh` with an attacker's seed verifies as valid against the ring `verify` builds, and is rejected against the operator's ring.
 
-What changed: `verify` now prefers a `keyring.json` beside `run.json` (which `CausalMesh.export` writes), reports which source it used (`keys`: `keyring.json` or `embedded`), and fails a run whose `keyring.json` is present but unreadable rather than falling back. A chain re-signed under a foreign seed fails against the keyring, and the same forged chain with the keyring deleted still passes (pinned as the known limit). What is still not built: an operator-supplied ring from somewhere other than beside the run (`verify` has no `--keyring` option), automatic pinning of `key_ring_fingerprint`, and any of this for experiment runs unless a `keyring.json` is placed by hand. The keyring is only as trustworthy as the channel it arrives by; see "SDK export and verification". Not exploited.
+What changed: `verify` now prefers a `keyring.json` beside `run.json` (which `CausalMesh.export` writes), reports which source it used (`keys`: `keyring.json` or `embedded`), and fails a run whose `keyring.json` is present but unreadable rather than falling back. A chain re-signed under a foreign seed fails against the keyring, and the same forged chain with the keyring deleted still passes (pinned as the known limit). **Closed 2026-10-12:** `verify --keyring PATH` (the same option as `--keys`; both spellings are accepted) takes an operator-supplied ring from anywhere: a directory of `<agent>.pub` / `<agent>.key`, or one `keyring.json`, in the format `crypto/keyring.py` documents and `CausalMesh.export` writes. A chain signed by a key the ring does not hold fails with an ASCII message naming the mismatch, for `--run`, `--id`/`--all`/`--latest` and `--evidence` alike. Without it the output still exits as before and now says, once, that the signatures were checked against keys embedded in the artifact and are not pinned. Pinned by `tests/adversarial/test_verify_keyring.py` (a chain tampered, re-chained and re-signed under a fresh attacker key passes without `--keyring`, as documented, and fails with the legitimate ring) beside `tests/integration/test_cli_verify_attribution.py`. **What is still not built:** automatic pinning of `key_ring_fingerprint` (a run does not record the fingerprint it expects, so nothing compares it), and any of this for experiment runs unless a ring is passed or a `keyring.json` is placed by hand. The ring is only as trustworthy as the channel it arrives by. The keyring is only as trustworthy as the channel it arrives by; see "SDK export and verification". Not exploited.
 
 ### An SDK session cannot be verified from the CLI
 
-**Status: fixed for an exported session (2026-09-30).** `CausalMesh.export(directory)` writes `run.json` and `keyring.json`, and `causalmesh verify --run <directory>` verifies them, with no change to `verify`'s input format (see "SDK export and verification"). Verifying with a key ring the operator builds, as `examples/cli_demo/verify_evidence.py` does with `KeyPair.derive(seed, agent)` over `CausalMesh.agents`, is still available and is the stronger check. **What remains:** a session that was never exported (a crash) leaves `chain.jsonl` and `keyring.json` but no `run.json`, which `verify --run` cannot read, and `serve` exports nothing.
+**Status: fixed for an exported session (2026-09-30).** `CausalMesh.export(directory)` writes `run.json` and `keyring.json`, and `causalmesh verify --run <directory>` verifies them, with no change to `verify`'s input format (see "SDK export and verification"). Verifying with a key ring the operator builds, as `examples/cli_demo/verify_evidence.py` does with `KeyPair.derive(seed, agent)` over `CausalMesh.agents`, is the stronger check, and since 2026-10-12 `causalmesh verify --keyring PATH` does the same from the command line (see "`causalmesh verify` trusts the keys inside the artifact"). **What remains:** a session that was never exported (a crash) leaves `chain.jsonl` and `keyring.json` but no `run.json`, which `verify --run` cannot read, and `serve` exports nothing.
 
 ### The README's `policy check --agent buyer` example answered ALLOW
 
@@ -1344,7 +1384,7 @@ Recorded in full under "Timeout as a distinct run state": cancellation lands whe
 
 ### Ad-hoc scripts can import the wrong checkout
 
-**Status: open, environmental.** With an editable install, `python -c "import causalmesh"` from a git worktree can resolve to the main checkout's `src` (this happened during the scaling work). `pytest` is unaffected because `pyproject.toml` sets `pythonpath = src`; ad-hoc scripts need `PYTHONPATH=src`.
+**Status: fixed for the test suite (2026-10-12); open for ad-hoc use.** With an editable install, `python -c "import causalmesh"` from a git worktree can resolve to a different checkout's `src` (this happened during the scaling work, and again on 2026-10-12: the editable install pointed at a stale `.worktrees/real-agent-hardening` checkout). `pytest` itself is unaffected because `pyproject.toml` sets `pythonpath = src`, but a subprocess does not inherit that, so `tests/integration/test_cli_demo.py::TestTheJourney` ran `examples/cli_demo/run_demo.py` against the stale tree and died with `create_app() got an unexpected keyword argument 'agent_tokens'`. **Fixed in the tests:** that test and `TestTheImportOrderThatOnlyAFreshInterpreterSees` (`tests/gateway/test_resource_kinds.py`) now pass `PYTHONPATH=<this repo>/src`, ahead of any existing value, to the subprocess; the other subprocess tests that import `causalmesh` already did (`test_cli.py`, `test_evidence_crash.py`, `test_import_boundaries.py`, `test_cleanroom_verification.py`, `test_claim_exclusivity.py`, `tests/support/serve_process.py`). **What remains:** a person running `examples/cli_demo/run_demo.py` or any ad-hoc script directly still gets whichever checkout the editable install points at and needs `PYTHONPATH=src` (or `pip install -e .` from the intended tree); the demo does not guard against it. `causalmesh doctor` does not report which checkout is imported.
 
 ### The main-into-dev merge left the head broken, and nothing ran the gate on it (2026-10-03)
 
