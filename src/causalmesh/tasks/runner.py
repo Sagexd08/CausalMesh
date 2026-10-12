@@ -1,18 +1,3 @@
-"""Executing one task under one arm (spec §71, §79).
-
-This assembles the whole runtime — workspaces, relay, gate, channels,
-executors, mock agents — drives the lifecycle, and returns the outcome with
-its evidence. It is the piece the scheduler (§79) will call once per run and
-the piece the §37 quality gate calls to prove a task is coordination
-sensitive.
-
-Keeping assembly in one place matters for the experiment, not just for
-tidiness: every arm must be constructed the same way, differing only in the
-delivery policy, the gate and the channel. Three separate call sites
-building runtimes would eventually differ in a fourth way that nobody
-noticed.
-"""
-
 from __future__ import annotations
 
 import asyncio
